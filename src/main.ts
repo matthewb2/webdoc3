@@ -8,12 +8,12 @@ const worker = new Worker(new URL('./worker/doc.worker.ts', import.meta.url), {
 
 const containerEl = document.getElementById('editor-container') as HTMLDivElement;
 
+
 let savedCursor = {
   paragraphIndex: 0,
   charIndex: 0
 };
 
-// 커서 위치 저장 및 복원 로직 (기존 유지)
 function saveCursorPosition() {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0) return;
@@ -31,14 +31,22 @@ function restoreCursorPosition() {
   const selection = window.getSelection();
   if (!selection) return;
 
-  const targetParagraph = containerEl.querySelector(`p[data-p-idx="${savedCursor.paragraphIndex}"]`);
+  // 워커가 라인을 쪼개면서 pIdx가 미세하게 밀릴 수 있으므로 가장 근접한 엘리먼트 매칭
+  let targetParagraph = containerEl.querySelector(`p[data-p-idx="${savedCursor.paragraphIndex}"]`);
+  
+  // 만약 정확한 단락을 못 찾으면 이전 단락이나 첫 단락으로 포커스 안전장치
+  if (!targetParagraph) {
+    targetParagraph = containerEl.querySelector(`p[data-p-idx]`);
+  }
   if (!targetParagraph) return;
 
   const textNode = targetParagraph.querySelector('span')?.firstChild;
   if (!textNode || textNode.nodeType !== Node.TEXT_NODE) return;
 
   const range = document.createRange();
-  const offset = Math.min(savedCursor.charIndex, textNode.textContent?.length || 0);
+  // 잘려나간 라인의 길이에 맞춰 안전한 오프셋 제한
+  const maxLen = textNode.textContent?.length || 0;
+  const offset = Math.min(savedCursor.charIndex, maxLen);
   
   range.setStart(textNode, offset);
   range.collapse(true);
@@ -47,24 +55,32 @@ function restoreCursorPosition() {
   selection.addRange(range);
 }
 
-// 2. 워커 결과 수신 및 렌더링
+// ... 상단 커서 변수 및 포지션 함수 유지
+
 worker.addEventListener('message', (event: MessageEvent<any>) => {
   const message = event.data;
   if (message.type === 'RENDER_READY') {
+    console.groupCollapsed('🎨 [Main UI] 워커 데이터 수신 및 렌더링 시작');
+    console.log(`수신된 총 페이지 데이터 구조:`, message.payload);
+    
     renderPages(message.payload);
-    restoreCursorPosition(); // 편집 중 리렌더링 시 커서 복원
+    
+    console.log(`현재 커서 임시 기억 장치 위치: 단락 Index [${savedCursor.paragraphIndex}], 글자 Offset [${savedCursor.charIndex}]`);
+    restoreCursorPosition();
+    console.groupEnd();
   }
 });
 
 function renderPages(pages: PageModel[]) {
   containerEl.innerHTML = ''; 
   let globalParagraphIndex = 0;
+  let totalRenderedParagraphs = 0;
 
   pages.forEach((pageData, pIndex) => {
     const pageEl = document.createElement('div');
     pageEl.className = 'page';
     pageEl.dataset.pageNumber = (pIndex + 1).toString();
-    pageEl.contentEditable = 'true'; // 개별 페이지 편집 가능 설정
+    pageEl.contentEditable = 'true';
 
     pageData.forEach((paragraph) => {
       const p = document.createElement('p');
@@ -79,14 +95,45 @@ function renderPages(pages: PageModel[]) {
       
       pageEl.appendChild(p);
       globalParagraphIndex++;
+      totalRenderedParagraphs++;
     });
 
     containerEl.appendChild(pageEl);
   });
+
+  console.log(`[DOM Render 완료] 화면에 그려진 총 <p> 태그 수: ${totalRenderedParagraphs}개`);
 }
 
-// 3. 사용자 타이핑 인터셉트 및 워커로 전달
+// 1. 키보드 이벤트 리스너 추가 (엔터 키 감지)
+containerEl.addEventListener('keydown', (e: KeyboardEvent) => {
+  if (e.key === 'Enter') {
+    e.preventDefault(); // 브라우저 고유의 줄바꿈 기능 차단
+
+    saveCursorPosition(); // 현재 커서 위치(단락 인덱스, 글자 인덱스) 확보
+
+    // 워커에게 단락 분할 요청 전송
+    worker.postMessage({
+      type: 'EDIT_SPLIT',
+      payload: {
+        paragraphIndex: savedCursor.paragraphIndex,
+        charIndex: savedCursor.charIndex
+      }
+    });
+
+    // 엔터를 치면 커서는 다음 단락의 0번째 글자 위치로 이동해야 함
+    savedCursor.paragraphIndex += 1;
+    savedCursor.charIndex = 0;
+  }
+});
+
+// beforeinput 이벤트는 기존 글자 입력용으로 유지
 containerEl.addEventListener('beforeinput', (e: InputEvent) => {
+  // 엔터 이벤트는 keydown에서 처리하므로, 여기서는 글자 입력(insertText) 등만 처리
+  if (e.inputType === 'insertLineBreak') {
+    e.preventDefault();
+    return;
+  }
+
   e.preventDefault(); 
   saveCursorPosition();
 
@@ -103,18 +150,13 @@ containerEl.addEventListener('beforeinput', (e: InputEvent) => {
   }
 });
 
-document.addEventListener('selectionchange', () => {
-  if (document.activeElement?.closest('#editor-container')) {
-    saveCursorPosition();
-  }
-});
-
+// ... 하단 initWordProcessor 등 기존 코드 유지
 // 4. [수정됨] 페이지 로드 즉시 실행되는 초기화 함수 (자동 로드)
 function initWordProcessor() {
   const largeDummyData: DocumentModel = [];
   
   // 실행되자마자 150개의 대용량 단락 자동 생성
-  for (let i = 1; i <= 150; i++) {
+  for (let i = 1; i <= 15; i++) {
     largeDummyData.push({
       type: 'paragraph',
       children: [
