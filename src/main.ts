@@ -5,7 +5,18 @@ const worker = new Worker(new URL('./worker/doc.worker.ts', import.meta.url), {
   type: 'module'
 });
 
+
+// 최외곽 스크롤 뷰포트 내부에서 에디터 컨테이너 참조하도록 유지
 const containerEl = document.getElementById('editor-container') as HTMLDivElement;
+
+// 모바일 터치 입력 환경에서 스크롤 도중 선택 영역 추적이 끊기지 않도록 selectionchange 이벤트 보완
+document.addEventListener('selectionchange', () => {
+  // 현재 포커스된 엘리먼트가 에디터 컨테이너 내부에 있는지 검증
+  if (document.activeElement?.closest('#editor-container')) {
+    saveCursorPosition();
+  }
+});
+
 let savedCursor = { paragraphIndex: 0, charIndex: 0 };
 
 // [핵심] 브라우저 환경에서 폰트 너비를 측정하는 함수
@@ -31,7 +42,6 @@ function generateFontMetrics(fontStyle: string): FontMetrics {
   return metrics;
 }
 
-// ... 상단 커서 로직 유지
 
 worker.addEventListener('message', (event: MessageEvent<any>) => {
   const message = event.data;

@@ -2,29 +2,60 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>정밀 폰트 매트릭스 기반 웹 워커 워드프로세서</title>
     <style>
         body {
             background-color: #f0f3f6;
             margin: 0;
-            padding: 40px 20px;
+            padding: 0;
             font-family: 'Arial', sans-serif;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden; 
         }
+
+        /* [수정] 스크롤바와 패딩을 담당하는 뷰포트 */
+        .editor-viewport {
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: 40px 0; /* 상하 여백만 부여 (좌우 여백은 내부에서 통제) */
+            box-sizing: border-box;
+            /* ⚠️ 브라우저 버그를 유발하는 grid/flex 정렬을 완전히 제거합니다 */
+            display: block; 
+            text-align: center; /* 데스크톱 환경에서 자식을 중앙으로 보내기 위한 트리거 */
+        }
+
+        /* [수정] 에디터 컨테이너를 감싸는 안전 마진 래퍼 */
         #editor-container {
-            display: flex;
+            /* ⚠️ 인라인 블록으로 지정하여 text-align: center의 영향을 받게 함 (데스크톱 중앙 정렬) */
+            display: inline-flex; 
             flex-direction: column;
-            align-items: center;
             gap: 30px;
+            width: 800px;
+            min-width: 800px;
+            
+            /* ⚠️ 양옆에 실제 픽셀 여백을 패딩으로 강제 주입하여 모바일 좌우 여백 확보 */
+            padding: 0 20px; 
+            box-sizing: content-box; /* 패딩이 800px 바깥으로 더해져 총 840px이 되도록 설정 */
+            
+            /* 텍스트 정렬이 자식에게 상속되는 것을 방지하기 위해 왼쪽 정렬로 리셋 */
+            text-align: left; 
         }
+
+        /* .page 및 하위 요소 스타일은 그대로 유지합니다 */
         .page {
-            width: 800px; /* 가로 가용 폭 800px */
-            height: 900px; /* min-height 대신 고정 height로 A4 한 장 규격화 */
+            width: 800px;
+            height: 900px; 
             background: white;
-            padding: 60px; /* 좌우 패딩 60px * 2 = 120px 제외하면 본문 가로영역은 680px */
+            padding: 60px; 
             box-shadow: 0 4px 10px rgba(0,0,0,0.08);
             box-sizing: border-box;
             position: relative;
             outline: none;
+            -webkit-text-size-adjust: none;
         }
         .page::after {
             content: attr(data-page-number);
@@ -36,35 +67,34 @@
             color: #888;
         }
         p {
-            /* 워커의 폰트 측정 기준인 16px Arial과 정확히 일치시킵니다 */
             font-family: 'Arial', sans-serif;
             font-size: 16px;
-            line-height: 26px; /* 워커의 LINE_HEIGHT 상수와 일치 */
-            margin: 0; /* ⚠️ 브라우저 기본 마진을 0으로 만들어 워커 계산과 일치시킵니다 */
-    padding: 0;
+            line-height: 26px;
+            margin: 0; 
+            padding: 0;
             word-break: break-all;
         }
-        /* [핵심] 모든 단락 끝에 문단 부호(Pilcrow) 추가 */
-    p::after {
-        content: " ↵";
-        color: #c0c4cc; /* 평소에는 연한 회색으로 노출 */
-        font-weight: normal;
-        font-size: 14px;
-        user-select: none; /* 사용자가 마우스로 드래그해도 선택되지 않음 */
-        pointer-events: none; /* 클릭 이벤트 방해 금지 */
-    }
-
-    /* 빈 줄(엔터만 친 곳)에도 문단 부호가 자연스럽게 위치하도록 설정 */
-    p:has(span:empty)::after, 
-    p:has(span:contains('\u200B'))::after {
-        position: absolute;
-        left: 0;
-        top: 0;
-    }
+        p::after {
+            content: " ↵";
+            color: #c0c4cc;
+            font-weight: normal;
+            font-size: 14px;
+            user-select: none;
+            pointer-events: none;
+        }
+        p:has(span:empty)::after, 
+        p:has(span:contains('\u200B'))::after {
+            position: absolute;
+            left: 0;
+            top: 0;
+        }
     </style>
 </head>
 <body>
-    <div id="editor-container"></div>
-    <script type="module" src="/src/main.ts"></script>
+
+    <div class="editor-viewport">
+        <div id="editor-container"></div>
+    </div>
+<script type="module" src="/src/main.ts"></script>
 </body>
 </html>
