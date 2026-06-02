@@ -17,8 +17,7 @@ export interface FontMetrics {
   [char: string]: number;
 }
 
-type DocumentModel = ParagraphNode[];
-export default DocumentModel; // default로 내보냄
+export type DocumentModel = ParagraphNode[];
 
 // 스레드 간 통신 메시지 타입
 export type WorkerMessage =
