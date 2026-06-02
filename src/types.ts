@@ -12,6 +12,11 @@ export interface ParagraphNode {
   children: TextRun[];
 }
 
+// 글자별 너비를 저장할 딕셔너리 타입 (예: { "가": 14, "a": 8.5 })
+export interface FontMetrics {
+  [char: string]: number;
+}
+
 type DocumentModel = ParagraphNode[];
 export default DocumentModel; // default로 내보냄
 
