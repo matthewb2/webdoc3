@@ -88,6 +88,36 @@
             left: 0;
             top: 0;
         }
+        /* index.html <style> 내부의 표 스타일 부분을 아래 내용으로 덮어씌우세요 */
+
+table {
+    width: 680px; /* 본문 가용 최대 폭 (800px - 패딩 120px) */
+    border-collapse: collapse;
+    margin: 15px 0;
+    table-layout: fixed; /* 가로 고정 픽셀 분배 */
+    
+    /* [추가] 테이블 외곽 테두리를 확실하게 잡아줍니다 */
+    border: 1px solid #a0a4a8; 
+}
+
+/* ⚠️ td와 함께 th(존재할 경우)까지 완벽하게 테두리를 지정합니다 */
+table td, table th {
+    /* 기존 옅은 색(#dcdfe6) 대신 살짝 더 선명한 회색(#b0b4b8)으로 변경 */
+    border: 1px solid #b0b4b8 !important; 
+    padding: 7px 8px; /* 워커의 TABLE_CELL_PADDING 규격과 매칭 */
+    font-family: 'Arial', sans-serif;
+    font-size: 16px;
+    line-height: 26px; /* 워커의 LINE_HEIGHT */
+    color: #333;
+    word-break: break-all;
+    vertical-align: top;
+    text-align: left;
+}
+
+/* 짝수 행 배경 음영 (가독성 향상) */
+table tr:nth-child(even) {
+    background-color: #f7f9fa;
+}
     </style>
 </head>
 <body>
