@@ -1,5 +1,6 @@
 import type { DocumentModel, FontMetrics, TableNode } from './types';
 import type { PageModel } from './worker/doc.worker';
+import { parseHwpToDocumentModel } from './hwp/hwpParser';
 
 const worker = new Worker(new URL('./worker/doc.worker.ts', import.meta.url), {
   type: 'module'
@@ -68,15 +69,16 @@ function renderPages(pages: PageModel[]) {
     pageEl.contentEditable = 'true';
     pageEl.dataset.pageNumber = (pIndex + 1).toString();
 
-    pageData.forEach((item, itemIdx) => {
-      if (!item) return; // null/undefined 방어
+    pageData.forEach((item: any, itemIdx) => {
+      if (!item) return;
 
-      // 1. 단락 렌더링
+      const docIdx = item._docIdx ?? itemIdx;
+
       if (item.type === 'paragraph') {
         const p = document.createElement('p');
-        p.dataset.pIdx = itemIdx.toString(); // 커서 위치 저장/복원을 위한 인덱스
-        // children이 없을 경우를 대비해 기본값 빈 배열 처리
-        const children = item.children || [];
+        p.dataset.pIdx = docIdx.toString();
+        p.dataset.pOffset = (item._charOffset ?? 0).toString();
+        const children: Array<{ text: string; bold?: boolean }> = item.children || [];
         children.forEach((run) => {
           const span = document.createElement('span');
           span.innerText = run.text === '' ? '\u200B' : run.text;
@@ -85,27 +87,23 @@ function renderPages(pages: PageModel[]) {
         });
         pageEl.appendChild(p);
       } 
-      // 2. 표(Table) 렌더링
       else if (item.type === 'table') {
         const table = document.createElement('table');
-        // rows가 없을 경우를 대비해 기본값 빈 배열 처리
-        const rows = item.rows || [];
+        table.dataset.pIdx = docIdx.toString();
+        const rows: Array<any> = item.rows || [];
         
-        rows.forEach((row) => {
-          if (!row) return; // row가 undefined일 경우 방어
+        rows.forEach((row: any) => {
+          if (!row) return;
           const tr = document.createElement('tr');
+          const cells: Array<any> = row.cells || [];
           
-          // ⚠️ 오류 발생 지점 방어: cells가 없으면 빈 배열로 대체
-          const cells = row.cells || [];
-          
-          cells.forEach((cell) => {
+          cells.forEach((cell: any) => {
             if (!cell) return;
             const td = document.createElement('td');
-            // 셀의 폭 분배 (안전하게 분모가 0이 되는 것 방지)
             const cellCount = cells.length || 1;
             td.style.width = `${680 / cellCount}px`;
             
-            const cellChildren = cell.children || [];
+            const cellChildren: Array<any> = cell.children || [];
             const span = document.createElement('span');
             span.innerText = cellChildren[0]?.text || '';
             
@@ -115,7 +113,6 @@ function renderPages(pages: PageModel[]) {
           
           table.appendChild(tr);
         });
-        
         pageEl.appendChild(table);
       }
     });
@@ -126,8 +123,9 @@ function renderPages(pages: PageModel[]) {
 
 // [수정] 단락과 표 내부 셀을 모두 추적할 수 있도록 확장된 커서 상태 구조
 let savedCursor = { 
-  paragraphIndex: 0, 
+  docIdx: 0,
   charIndex: 0,
+  charOffset: 0,
   isInsideTable: false,
   rowIndex: 0,
   cellIndex: 0
@@ -141,12 +139,10 @@ function saveCursorPosition() {
   const range = selection.getRangeAt(0);
   const startContainer = range.startContainer;
   
-  // 현재 커서가 위치한 가장 가까운 블록 요소 찾기
   const currentParagraph = startContainer.parentElement?.closest('p');
   const currentCell = startContainer.parentElement?.closest('td');
 
   if (currentCell) {
-    // A. 표 내부 셀(td)에 커서가 있는 경우
     const currentTR = currentCell.closest('tr');
     const currentTable = currentCell.closest('table');
     const currentPage = currentCell.closest('.page');
@@ -154,20 +150,16 @@ function saveCursorPosition() {
     if (currentTR && currentTable && currentPage) {
       savedCursor.isInsideTable = true;
       savedCursor.charIndex = range.startOffset;
-      
-      // 행(Row)과 열(Cell) 인덱스 추출
+      savedCursor.charOffset = 0;
       savedCursor.rowIndex = Array.from(currentTable.querySelectorAll('tr')).indexOf(currentTR);
       savedCursor.cellIndex = Array.from(currentTR.querySelectorAll('td')).indexOf(currentCell);
-      
-      // 전역 아이템 인덱스 매핑을 위해 페이지 내 테이블 위치 파악
-      const allItems = Array.from(currentPage.querySelectorAll('p, table'));
-      savedCursor.paragraphIndex = allItems.indexOf(currentTable);
+      savedCursor.docIdx = parseInt((currentTable as HTMLElement).dataset.pIdx || '0', 10);
     }
   } else if (currentParagraph && currentParagraph.dataset.pIdx) {
-    // B. 일반 단락(p)에 커서가 있는 경우
     savedCursor.isInsideTable = false;
-    savedCursor.paragraphIndex = parseInt(currentParagraph.dataset.pIdx, 10);
-    savedCursor.charIndex = range.startOffset;
+    savedCursor.docIdx = parseInt(currentParagraph.dataset.pIdx, 10);
+    savedCursor.charOffset = parseInt(currentParagraph.dataset.pOffset || '0', 10);
+    savedCursor.charIndex = range.startOffset + savedCursor.charOffset;
   }
 }
 
@@ -178,22 +170,10 @@ function restoreCursorPosition() {
 
   let targetTextNode: Node | null = null;
   let targetLength = 0;
+  let targetOffset = 0;
 
   if (savedCursor.isInsideTable) {
-    // A. 표 내부 커서 복원 프로세스
-    // 전역 매핑된 테이블을 먼저 탐색
-    const allPages = Array.from(containerEl.querySelectorAll('.page'));
-    let targetTable: HTMLTableElement | null = null;
-    
-    // 페이지 전체를 순회하며 매칭되는 가상 순서의 테이블 탐색
-    for (const page of allPages) {
-      const items = Array.from(page.querySelectorAll('p, table'));
-      if (items[savedCursor.paragraphIndex] && items[savedCursor.paragraphIndex].nodeName === 'TABLE') {
-        targetTable = items[savedCursor.paragraphIndex] as HTMLTableElement;
-        break;
-      }
-    }
-
+    const targetTable = containerEl.querySelector(`table[data-p-idx="${savedCursor.docIdx}"]`) as HTMLTableElement | null;
     if (targetTable) {
       const rows = targetTable.querySelectorAll('tr');
       const targetRow = rows[savedCursor.rowIndex];
@@ -204,28 +184,32 @@ function restoreCursorPosition() {
           const span = targetCell.querySelector('span');
           targetTextNode = span?.firstChild || null;
           targetLength = span?.textContent?.length || 0;
+          targetOffset = Math.min(savedCursor.charIndex, targetLength);
         }
       }
     }
   } else {
-    // B. 일반 단락 커서 복원 프로세스
-    let targetParagraph = containerEl.querySelector(`p[data-p-idx="${savedCursor.paragraphIndex}"]`);
-    if (!targetParagraph) targetParagraph = containerEl.querySelector(`p[data-p-idx]`);
-    
+    const matches = Array.from(containerEl.querySelectorAll(`p[data-p-idx="${savedCursor.docIdx}"]`) as NodeListOf<HTMLParagraphElement>);
+    let targetParagraph: HTMLParagraphElement | null = null;
+    if (matches.length <= 1) {
+      targetParagraph = matches[0] || containerEl.querySelector('p[data-p-idx]') as HTMLParagraphElement;
+    } else {
+      targetParagraph = matches.find(p => parseInt(p.dataset.pOffset || '0', 10) === savedCursor.charOffset) || matches[0];
+    }
+
     if (targetParagraph) {
       const span = targetParagraph.querySelector('span');
       targetTextNode = span?.firstChild || null;
-      targetLength = span?.textContent?.length || 0;
+      const fragOffset = parseInt(targetParagraph.dataset.pOffset || '0', 10);
+      targetOffset = Math.min(savedCursor.charIndex - fragOffset, (span?.textContent?.length || 0));
+      targetOffset = Math.max(0, targetOffset);
     }
   }
 
-  // 🎯 최종 텍스트 노드에 포커스 바인딩 및 커서 노출
   if (targetTextNode && targetTextNode.nodeType === Node.TEXT_NODE) {
     const range = document.createRange();
-    const offset = Math.min(savedCursor.charIndex, targetLength);
-    
     try {
-      range.setStart(targetTextNode, offset);
+      range.setStart(targetTextNode, targetOffset);
       range.collapse(true);
       selection.removeAllRanges();
       selection.addRange(range);
@@ -251,8 +235,8 @@ containerEl.addEventListener('compositionend', (e: CompositionEvent) => {
     worker.postMessage({ 
       type: 'EDIT_INSERT', 
       payload: { 
-        paragraphIndex: savedCursor.paragraphIndex, 
-        charIndex: savedCursor.charIndex - e.data.length, // 이미 DOM에 입력된 길이를 보정
+        paragraphIndex: savedCursor.docIdx, 
+        charIndex: savedCursor.charIndex - e.data.length,
         text: e.data 
       } 
     });
@@ -266,27 +250,92 @@ containerEl.addEventListener('keydown', (e: KeyboardEvent) => {
   if (e.key === 'Enter') {
     e.preventDefault();
     saveCursorPosition();
-    worker.postMessage({ type: 'EDIT_SPLIT', payload: { paragraphIndex: savedCursor.paragraphIndex, charIndex: savedCursor.charIndex } });
-    savedCursor.paragraphIndex += 1;
+    worker.postMessage({ type: 'EDIT_SPLIT', payload: { paragraphIndex: savedCursor.docIdx, charIndex: savedCursor.charIndex } });
+    savedCursor.docIdx += 1;
     savedCursor.charIndex = 0;
+    savedCursor.charOffset = 0;
   }
 });
 
 containerEl.addEventListener('beforeinput', (e: InputEvent) => {
   if (e.inputType === 'insertLineBreak') return e.preventDefault();
-  
-  // [핵심] 한글 조합 중(isComposing === true)일 때는 브라우저의 기본 입력을 절대 막지(preventDefault) 않습니다.
-  // 이렇게 해야 브라우저 고유의 한글 조합창이 유지되어 자모 분리가 일어나지 않습니다.
+
   if (isComposing) return;
 
-  // 영문, 숫자, 스페이스바 등 일반 입력은 기존처럼 워커를 통해 즉시 처리합니다.
+  if (e.inputType === 'deleteContentBackward') {
+    e.preventDefault();
+    saveCursorPosition();
+    if (savedCursor.charIndex <= 0) return;
+    worker.postMessage({ type: 'EDIT_DELETE', payload: { paragraphIndex: savedCursor.docIdx, charIndex: savedCursor.charIndex } });
+    savedCursor.charIndex -= 1;
+    return;
+  }
+
   if (e.data) {
     e.preventDefault(); 
     saveCursorPosition();
-    worker.postMessage({ type: 'EDIT_INSERT', payload: { paragraphIndex: savedCursor.paragraphIndex, charIndex: savedCursor.charIndex, text: e.data } });
+    worker.postMessage({ type: 'EDIT_INSERT', payload: { paragraphIndex: savedCursor.docIdx, charIndex: savedCursor.charIndex, text: e.data } });
     savedCursor.charIndex += e.data.length;
   }
 });
+
+function initHwpFileOpen() {
+  const openHwpButton = document.getElementById('btn-open-hwp') as HTMLButtonElement;
+  const hwpFileInput = document.getElementById('hwp-file') as HTMLInputElement;
+  const hwpStatus = document.getElementById('hwp-status') as HTMLSpanElement;
+  const editorViewport = document.querySelector('.editor-viewport') as HTMLDivElement;
+
+  function renderHwpFile(file: File) {
+    if (!/\.hwp$/i.test(file.name)) {
+      hwpStatus.textContent = '.hwp 확장자 파일을 선택해 주세요';
+      return;
+    }
+    hwpStatus.textContent = `파싱 중... (${file.name})`;
+    file.arrayBuffer()
+      .then((buffer) => {
+        const model = parseHwpToDocumentModel(new Uint8Array(buffer));
+        worker.postMessage({ type: 'INIT_DOC', payload: model });
+        containerEl.style.display = 'inline-flex';
+        hwpStatus.textContent = `파싱 완료: ${file.name} (${model.length}개 항목)`;
+      })
+      .catch((err: Error) => {
+        hwpStatus.textContent = `파싱 실패: ${err.message}`;
+      });
+  }
+
+  openHwpButton.addEventListener('click', () => hwpFileInput.click());
+  hwpFileInput.addEventListener('change', () => {
+    const file = hwpFileInput.files?.[0];
+    if (file) renderHwpFile(file);
+    hwpFileInput.value = '';
+  });
+
+  let dragDepth = 0;
+  editorViewport.addEventListener('dragenter', (e) => {
+    e.preventDefault();
+    dragDepth += 1;
+    editorViewport.classList.add('is-dragging');
+  });
+  editorViewport.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  });
+  editorViewport.addEventListener('dragleave', () => {
+    dragDepth -= 1;
+    if (dragDepth <= 0) {
+      dragDepth = 0;
+      editorViewport.classList.remove('is-dragging');
+    }
+  });
+  editorViewport.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dragDepth = 0;
+    editorViewport.classList.remove('is-dragging');
+    const files = Array.from(e.dataTransfer?.files ?? []);
+    const file = files.find((f) => /\.hwp$/i.test(f.name) || f.type === 'application/x-hwp');
+    if (file) renderHwpFile(file);
+  });
+}
 
 function initWordProcessor() {
   const fontMetrics = generateFontMetrics('16px Arial');
@@ -344,3 +393,4 @@ function initWordProcessor() {
 }
 
 initWordProcessor();
+initHwpFileOpen();

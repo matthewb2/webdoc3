@@ -11,5 +11,9 @@
   "devDependencies": {
     "typescript": "~6.0.2",
     "vite": "^8.0.12"
+  },
+  "dependencies": {
+    "cfb": "1.2.2",
+    "pako": "1.0.11"
   }
 }

@@ -6,6 +6,8 @@ export interface TextRun {
 export interface ParagraphNode {
   type: 'paragraph';
   children: TextRun[];
+  _docIdx?: number;
+  _charOffset?: number;
 }
 
 // 👈 표(Table) 구조를 위한 인터페이스 정의
@@ -22,6 +24,7 @@ export interface TableRowNode {
 export interface TableNode {
   type: 'table';
   rows: TableRowNode[];
+  _docIdx?: number;
 }
 
 // 문서 모델은 단락 또는 표의 배열입니다.
@@ -36,4 +39,5 @@ export type WorkerMessage =
   | { type: 'INIT_METRICS'; payload: FontMetrics }
   | { type: 'INIT_DOC'; payload: DocumentModel }
   | { type: 'EDIT_INSERT'; payload: { paragraphIndex: number; charIndex: number; text: string } }
+  | { type: 'EDIT_DELETE'; payload: { paragraphIndex: number; charIndex: number } }
   | { type: 'EDIT_SPLIT'; payload: { paragraphIndex: number; charIndex: number } };
