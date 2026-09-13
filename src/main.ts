@@ -363,7 +363,27 @@ function initWordProcessor() {
   const fontMetrics = generateFontMetrics('16px Arial');
   worker.postMessage({ type: 'INIT_METRICS', payload: fontMetrics });
 
-  // 🧪 [시나리오] 3페이지 이상의 분량을 유도하는 대형 표 데이터
+  // 기본 문서: dev 실행 시 public의 입법예고 HWP를 바로 로드 (실패 시 더미로 폴백)
+  const defaultHwpUrl = encodeURI('/입법예고(울산광역시+남구+구세+조례+일부개정조례안).hwp');
+  fetch(defaultHwpUrl)
+    .then((res) => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.arrayBuffer();
+    })
+    .then((buffer) => {
+      const model = parseHwpToDocumentModel(new Uint8Array(buffer));
+      worker.postMessage({ type: 'INIT_DOC', payload: model });
+      containerEl.style.display = 'inline-flex';
+    })
+    .catch((err: Error) => {
+      worker.postMessage({ type: 'INIT_DOC', payload: buildMockDocument() });
+      const hwpStatus = document.getElementById('hwp-status') as HTMLSpanElement | null;
+      if (hwpStatus) hwpStatus.textContent = `기본 문서 로드 실패, 더미 표시: ${err.message}`;
+    });
+}
+
+// 🧪 [시나리오] 3페이지 이상의 분량을 유도하는 대형 표 데이터 (기본 문서 로드 실패 시 폴백)
+function buildMockDocument(): DocumentModel {
   const mockDocument: DocumentModel = [
     {
       type: 'paragraph',
@@ -411,8 +431,7 @@ function initWordProcessor() {
     children: [{ text: "표가 끝난 뒤에도 레이아웃 엔진은 멈추지 않고 남은 공간에 단락을 배치합니다. 만약 표가 페이지 끝에서 딱 맞게 끝났다면 이 문장은 다음 페이지 처음에 나타납니다." }]
   });
 
-  // 워커에 데이터 전송
-  worker.postMessage({ type: 'INIT_DOC', payload: mockDocument });
+  return mockDocument;
 }
 
 initWordProcessor();

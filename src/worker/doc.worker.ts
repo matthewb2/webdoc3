@@ -149,20 +149,47 @@ function runLayoutEngine() {
 }
 
 function buildParagraphFragment(lines: Glyph[][], docIdx: number, charOffset: number, align?: string): ParagraphNode | null {
+  const firstRun = lines[0]?.[0]?.run;
+  const baseFontSize = firstRun?.fontSize ?? BASE_FONT_PX;
+  const baseFontFamily = firstRun?.fontFamily;
+  const baseBold = firstRun?.bold;
+  const baseItalic = firstRun?.italic;
+  const baseUnderline = firstRun?.underline;
+  const baseStrike = firstRun?.strike;
+  const baseColor = firstRun?.color;
+
   const processedLines = lines.map((line) => {
     if (align === 'center') {
       const lineWidth = measureLineWidth(line);
       const remainingSpace = Math.max(0, EDITOR_MAX_WIDTH - lineWidth);
       const paddingWidth = remainingSpace / 2;
       if (paddingWidth > 0) {
-        const spacerRun: TextRun = { text: ' '.repeat(Math.round(paddingWidth / getSpaceWidth())) };
+        const spacerRun: TextRun = { 
+          text: ' '.repeat(Math.round(paddingWidth / getSpaceWidth(baseFontSize))), 
+          fontSize: baseFontSize,
+          fontFamily: baseFontFamily,
+          bold: baseBold,
+          italic: baseItalic,
+          underline: baseUnderline,
+          strike: baseStrike,
+          color: baseColor
+        };
         return [{ ch: ' ', run: spacerRun }, ...line];
       }
     } else if (align === 'right') {
       const lineWidth = measureLineWidth(line);
       const remainingSpace = Math.max(0, EDITOR_MAX_WIDTH - lineWidth);
       if (remainingSpace > 0) {
-        const spacerRun: TextRun = { text: ' '.repeat(Math.round(remainingSpace / getSpaceWidth())) };
+        const spacerRun: TextRun = { 
+          text: ' '.repeat(Math.round(remainingSpace / getSpaceWidth(baseFontSize))), 
+          fontSize: baseFontSize,
+          fontFamily: baseFontFamily,
+          bold: baseBold,
+          italic: baseItalic,
+          underline: baseUnderline,
+          strike: baseStrike,
+          color: baseColor
+        };
         return [{ ch: ' ', run: spacerRun }, ...line];
       }
     }
@@ -202,9 +229,10 @@ function measureLineWidth(line: Glyph[]): number {
   return width;
 }
 
-function getSpaceWidth(): number {
+function getSpaceWidth(fontSize?: number): number {
   const baseWidth = fontMetrics[' '] !== undefined ? fontMetrics[' '] : (fontMetrics['default_ko'] ?? 8);
-  return baseWidth * (BASE_FONT_PX / BASE_FONT_PX);
+  const scale = (fontSize ?? BASE_FONT_PX) / BASE_FONT_PX;
+  return baseWidth * scale;
 }
 
 function glyphLineToRuns(line: Glyph[]): TextRun[] {

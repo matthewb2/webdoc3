@@ -28,12 +28,14 @@ const FONT_ATTR_STRIKE_MASK = 0b111 << 18;
 // 1pt = 96/72 px = 4/3 px
 const PT_TO_PX = 4 / 3;
 
-// [오류 수정] 누락된 단락 정렬 맵 정의 추가
+// HWP 5.0 문단 모양 정렬값: 0 양쪽정렬, 1 왼쪽, 2 오른쪽, 3 가운데 (4 배분·5 나눔은 양쪽으로 처리)
 const PARAGRAPH_ALIGN_MAP: Record<number, 'left' | 'center' | 'right' | 'justify'> = {
-  0: 'left',
-  1: 'right',
-  2: 'center',
-  3: 'justify',
+  0: 'justify',
+  1: 'left',
+  2: 'right',
+  3: 'center',
+  4: 'justify',
+  5: 'justify',
 };
 
 type ParagraphSegment =
@@ -107,13 +109,16 @@ function paragraphToModelItems(
 
   flushText();
 
+  // 정렬은 문단 헤더의 shapeIndex가 가리키는 문단 모양(paragraphShapes)의 align을 따른다
+  const paraShapeAlign = docInfo.paragraphShapes[paragraph.shapeIndex]?.align;
+  const paraAlign = paraShapeAlign !== undefined ? PARAGRAPH_ALIGN_MAP[paraShapeAlign] : undefined;
+
   segments.forEach((segment, segIndex) => {
     if (segment.kind === 'text') {
       const runs = styledRuns(docInfo, segment.text, segment.shapeIndex);
       if (runs.length > 0) {
         const node: ParagraphNode = { type: 'paragraph', children: runs };
-        const align = PARAGRAPH_ALIGN_MAP[paragraph.align];
-        if (align) node.align = align;
+        if (paraAlign) node.align = paraAlign;
         model.push(node);
       }
     } else {

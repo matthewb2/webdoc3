@@ -58,10 +58,15 @@ declare module '@hwp.js/parser' {
     color: [number, number, number];
   }
 
+  export interface ParagraphShape {
+    align: number;
+  }
+
   export interface DocInfo {
     sectionSize: number;
     charShapes: CharShape[];
     fontFaces: FontFace[];
+    paragraphShapes: ParagraphShape[];
     getCharShpe(index: number): CharShape | undefined;
   }
 
