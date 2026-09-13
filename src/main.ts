@@ -54,6 +54,18 @@ worker.addEventListener('message', (event: MessageEvent<any>) => {
   }
 });
 
+function applyRunStyle(span: HTMLSpanElement, run: any) {
+  if (run.bold) span.style.fontWeight = 'bold';
+  if (run.italic) span.style.fontStyle = 'italic';
+  const decorations: string[] = [];
+  if (run.underline) decorations.push('underline');
+  if (run.strike) decorations.push('line-through');
+  if (decorations.length > 0) span.style.textDecoration = decorations.join(' ');
+  if (run.fontFamily) span.style.fontFamily = run.fontFamily;
+  if (run.fontSize) span.style.fontSize = `${run.fontSize}px`;
+  if (run.color) span.style.color = run.color;
+}
+
 function renderPages(pages: PageModel[]) {
   containerEl.innerHTML = ''; 
 
@@ -78,11 +90,18 @@ function renderPages(pages: PageModel[]) {
         const p = document.createElement('p');
         p.dataset.pIdx = docIdx.toString();
         p.dataset.pOffset = (item._charOffset ?? 0).toString();
+        if (item.lineHeight) p.style.lineHeight = `${item.lineHeight}px`;
+        
+        // [구현] 단락 정렬 반영 (중앙, 우측 등)
+        if (item.align) {
+          p.style.textAlign = item.align;
+        }
+
         const children: Array<{ text: string; bold?: boolean }> = item.children || [];
         children.forEach((run) => {
           const span = document.createElement('span');
           span.innerText = run.text === '' ? '\u200B' : run.text;
-          if (run.bold) span.style.fontWeight = 'bold';
+          applyRunStyle(span, run);
           p.appendChild(span);
         });
         pageEl.appendChild(p);
@@ -104,10 +123,13 @@ function renderPages(pages: PageModel[]) {
             td.style.width = `${680 / cellCount}px`;
             
             const cellChildren: Array<any> = cell.children || [];
-            const span = document.createElement('span');
-            span.innerText = cellChildren[0]?.text || '';
+            cellChildren.forEach((run: any) => {
+              const span = document.createElement('span');
+              span.innerText = run.text === '' ? '\u200B' : run.text;
+              applyRunStyle(span, run);
+              td.appendChild(span);
+            });
             
-            td.appendChild(span);
             tr.appendChild(td);
           });
           
@@ -345,6 +367,7 @@ function initWordProcessor() {
   const mockDocument: DocumentModel = [
     {
       type: 'paragraph',
+      align: 'center',
       children: [{ text: "표 레이아웃 엔진 테스트: 아래 표는 행 단위로 페이지를 분할합니다. 특정 행의 높이가 페이지의 남은 여백보다 크면, 해당 행은 통째로 다음 페이지로 넘어갑니다.", bold: true }]
     }
   ];

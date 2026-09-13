@@ -1,13 +1,23 @@
 export interface TextRun {
   text: string;
   bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strike?: boolean;
+  fontFamily?: string;
+  fontSize?: number;
+  color?: string;
 }
+
+export type TextAlign = 'left' | 'center' | 'right' | 'justify';
 
 export interface ParagraphNode {
   type: 'paragraph';
   children: TextRun[];
+  align?: TextAlign;
   _docIdx?: number;
   _charOffset?: number;
+  lineHeight?: number;
 }
 
 // 👈 표(Table) 구조를 위한 인터페이스 정의

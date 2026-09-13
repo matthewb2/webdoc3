@@ -4,11 +4,17 @@ declare module '@hwp.js/parser' {
     value: number | string;
   }
 
+  export interface ShapePointer {
+    pos: number;
+    shapeIndex: number;
+  }
+
   export interface Paragraph {
     content: HWPChar[];
     controls: Array<{ id: number }>;
     shapeIndex: number;
-    shapeBuffer: Array<{ pos: number; shapeIndex: number }>;
+    shapeBuffer: ShapePointer[];
+    getShapeEndPos(index: number): number;
   }
 
   export interface TableColumnOption {
@@ -34,6 +40,31 @@ declare module '@hwp.js/parser' {
     content: ParagraphList[][];
   }
 
+  export interface FontFace {
+    name: string;
+    alternative: string;
+    default: string;
+    getFontFamily(): string;
+  }
+
+  export interface CharShape {
+    fontId: number[];
+    fontScale: number[];
+    fontSpacing: number[];
+    fontRatio: number[];
+    fontLocation: number[];
+    fontBaseSize: number;
+    attr: number;
+    color: [number, number, number];
+  }
+
+  export interface DocInfo {
+    sectionSize: number;
+    charShapes: CharShape[];
+    fontFaces: FontFace[];
+    getCharShpe(index: number): CharShape | undefined;
+  }
+
   export interface Section {
     width: number;
     height: number;
@@ -48,7 +79,7 @@ declare module '@hwp.js/parser' {
 
   export interface HWPDocument {
     header: { version: number[] };
-    info: { sectionSize: number };
+    info: DocInfo;
     sections: Section[];
   }
 
