@@ -1,4 +1,5 @@
 import type { CursorState, DocumentModel, FontMetrics, TableNode } from './types';
+import { collectProbeItems, computeBreaks } from './probe';
 import { appendStreamPages, findCursorPageIndex, initRenderer, renderVirtualPages, updateVisiblePages } from './render';
 import { initEditorListeners, initHwpFileOpen, initSelectionListener, initViewportScrollListener, initWorkerListener } from './listener';
 
@@ -141,7 +142,7 @@ function restoreCursorPosition() {
 
 
 
-function initWordProcessor() {
+async function initWordProcessor() {
   const fontMetrics = generateFontMetrics('16px Arial');
   worker.postMessage({ type: 'INIT_METRICS', payload: fontMetrics });
 
@@ -153,8 +154,9 @@ function initWordProcessor() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.arrayBuffer();
     })
-    .then((buffer) => {
+    .then(async (buffer) => {
       const model = parseHwpToDocumentModel(new Uint8Array(buffer));
+      worker.postMessage({ type: 'BREAKS', payload: await computeBreaks(collectProbeItems(model)) });
       worker.postMessage({ type: 'INIT_DOC', payload: model });
       containerEl.style.display = 'inline-flex';
     })
@@ -164,8 +166,9 @@ function initWordProcessor() {
       if (hwpStatus) hwpStatus.textContent = `기본 문서 로드 실패, 더미 표시: ${err.message}`;
     });
     */
-      worker.postMessage({ type: 'INIT_DOC', payload: buildMockDocument() });
-    
+      const mockModel = buildMockDocument();
+      worker.postMessage({ type: 'BREAKS', payload: await computeBreaks(collectProbeItems(mockModel)) });
+      worker.postMessage({ type: 'INIT_DOC', payload: mockModel });
 }
 
 // 🧪 [시나리오] 3페이지 이상의 분량을 유도하는 대형 표 데이터 (기본 문서 로드 실패 시 폴백)

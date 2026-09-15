@@ -56,8 +56,11 @@ export interface FontMetrics {
   [char: string]: number;
 }
 
+export type BreakMap = Record<string, number[]>;
+
 export type WorkerMessage =
   | { type: 'INIT_METRICS'; payload: FontMetrics }
+  | { type: 'BREAKS'; payload: BreakMap }
   | { type: 'INIT_DOC'; payload: DocumentModel }
   | { type: 'EDIT_INSERT'; payload: { paragraphIndex: number; charIndex: number; text: string } }
   | { type: 'EDIT_DELETE'; payload: { paragraphIndex: number; charIndex: number } }

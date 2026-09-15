@@ -1,7 +1,23 @@
 // src/listener.ts - 이벤트 리스너 (워커 메시지·스크롤·선택·입력·HWP 열기)
 import type { PageModel } from './worker/doc.worker';
-import type { CursorState } from './types';
+import type { CursorState, TextRun } from './types';
 import { parseHwpToDocumentModel } from './hwp/hwpParser';
+import { breakKeyForRuns, collectProbeItems, computeBreaks } from './probe';
+import { getCachedPages } from './render';
+
+// 편집된 단락 전체 런을 캐시된 조각에서 복원해 분절점을 다시 재고 워커에 전달
+async function refreshParaBreaks(worker: Worker, docIdx: number) {
+  const frags: Array<any> = [];
+  getCachedPages().forEach((page) => page.forEach((item: any) => {
+    if (item.type === 'paragraph' && item._docIdx === docIdx) frags.push(item);
+  }));
+  if (frags.length === 0) return;
+  frags.sort((a, b) => (a._charOffset ?? 0) - (b._charOffset ?? 0));
+  if (frags.some((f) => f.align)) return;
+  const runs: TextRun[] = frags.flatMap((f) => f.children || []);
+  if (!runs.some((r) => r.text)) return;
+  worker.postMessage({ type: 'BREAKS', payload: await computeBreaks([{ key: breakKeyForRuns(runs, 600), runs, width: 600 }]) });
+}
 
 export function initWorkerListener(
   worker: Worker,
@@ -67,12 +83,13 @@ container.addEventListener('compositionstart', () => {
 });
 
 // 2. 한글 글자 조합이 완료됨을 감지 (ex: '가'를 쓰고 다음 글자로 넘어가거나 스페이스를 누를 때)
-container.addEventListener('compositionend', (e: CompositionEvent) => {
+container.addEventListener('compositionend', async (e: CompositionEvent) => {
   isComposing = false;
   
   // 글자가 완성되었으므로, 최종 완성된 글자를 워커로 전송하여 레이아웃을 다시 계산합니다.
   if (e.data) {
     saveCursorPosition();
+    await refreshParaBreaks(worker, cursor.docIdx);
     // 조합 중간에 들어간 임시 글자 offset을 고려하여 워커에 삽입 요청
     worker.postMessage({ 
       type: 'EDIT_INSERT', 
@@ -99,7 +116,7 @@ container.addEventListener('keydown', (e: KeyboardEvent) => {
   }
 });
 
-container.addEventListener('beforeinput', (e: InputEvent) => {
+container.addEventListener('beforeinput', async (e: InputEvent) => {
   if (e.inputType === 'insertLineBreak') return e.preventDefault();
 
   if (isComposing) return;
@@ -108,6 +125,7 @@ container.addEventListener('beforeinput', (e: InputEvent) => {
     e.preventDefault();
     saveCursorPosition();
     if (cursor.charIndex <= 0) return;
+    await refreshParaBreaks(worker, cursor.docIdx);
     worker.postMessage({ type: 'EDIT_DELETE', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
     cursor.charIndex -= 1;
     return;
@@ -116,6 +134,7 @@ container.addEventListener('beforeinput', (e: InputEvent) => {
   if (e.data) {
     e.preventDefault(); 
     saveCursorPosition();
+    await refreshParaBreaks(worker, cursor.docIdx);
     worker.postMessage({ type: 'EDIT_INSERT', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex, text: e.data } });
     cursor.charIndex += e.data.length;
   }
@@ -137,8 +156,9 @@ export function initHwpFileOpen(worker: Worker, containerEl: HTMLDivElement) {
     }
     hwpStatus.textContent = `파싱 중... (${file.name})`;
     file.arrayBuffer()
-      .then((buffer) => {
+      .then(async (buffer) => {
         const model = parseHwpToDocumentModel(new Uint8Array(buffer));
+        worker.postMessage({ type: 'BREAKS', payload: await computeBreaks(collectProbeItems(model)) });
         worker.postMessage({ type: 'INIT_DOC', payload: model });
         containerEl.style.display = 'inline-flex';
         hwpStatus.textContent = `파싱 완료: ${file.name} (${model.length}개 항목)`;

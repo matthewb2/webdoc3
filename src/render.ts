@@ -7,6 +7,10 @@ export function initRenderer(container: HTMLDivElement) {
   rendererContainer = container;
 }
 
+export function getCachedPages(): PageModel[] {
+  return cachedPages;
+}
+
 function applyRunStyle(span: HTMLSpanElement, run: any) {
   if (run.bold) span.style.fontWeight = 'bold';
   if (run.italic) span.style.fontStyle = 'italic';
@@ -24,6 +28,7 @@ const VIRTUAL_BUFFER = 2;
 
 let cachedPages: PageModel[] = [];
 const mountedPages = new Map<number, HTMLDivElement>();
+const loggedTableKeys = new Set<string>();
 let topSpacer: HTMLDivElement | null = null;
 let bottomSpacer: HTMLDivElement | null = null;
 
@@ -45,27 +50,39 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
   pageEl.dataset.pageNumber = (pIndex + 1).toString();
 
   // 여백 경계선: canvas로 본문 경계에 간극 없이 직선 표시 (편집 불가)
-  const padPx = parseFloat(getComputedStyle(pageEl).paddingLeft) || 0;
+  // 분리(detached) 노드에서도 padding은 스타일시트에서 정상 계산되나, 방어적으로 폴백 유지
+  const padRaw = parseFloat(getComputedStyle(pageEl).paddingLeft);
+  const padPx = Number.isFinite(padRaw) && padRaw > 0 ? padRaw : 100;
   const dpr = window.devicePixelRatio || 1;
   const marginCanvas = document.createElement('canvas');
   marginCanvas.className = 'margin-lines';
   marginCanvas.width = Math.round(800 * dpr);
   marginCanvas.height = Math.round(900 * dpr);
+  // 스타일시트 미적용 환경에서도 절대 배치되도록 인라인 지정
+  marginCanvas.style.position = 'absolute';
+  marginCanvas.style.top = '0';
+  marginCanvas.style.left = '0';
+  marginCanvas.style.width = '800px';
+  marginCanvas.style.height = '900px';
+  marginCanvas.style.pointerEvents = 'none';
   marginCanvas.contentEditable = 'false';
   const mctx = marginCanvas.getContext('2d');
   if (mctx) {
-    mctx.scale(dpr, dpr);
-    mctx.fillStyle = '#a6aeb5';
-    const tick = 18;
-    const x0 = padPx, x1 = 800 - padPx, y0 = padPx, y1 = 900 - padPx;
-    mctx.fillRect(x0 - tick, y0 - 1, tick, 1);
-    mctx.fillRect(x0 - 1, y0 - tick, 1, tick);
-    mctx.fillRect(x1, y0 - 1, tick, 1);
-    mctx.fillRect(x1, y0 - tick, 1, tick);
-    mctx.fillRect(x0 - tick, y1, tick, 1);
-    mctx.fillRect(x0 - 1, y1, 1, tick);
-    mctx.fillRect(x1, y1, tick, 1);
-    mctx.fillRect(x1, y1, 1, tick);
+	  console.log("mctx called");
+    // 디바이스 픽셀 스냅 (125%/150% 배율에서도 번짐 없이 표시)
+    const D = (v: number) => Math.round(v * dpr);
+    mctx.fillStyle = '#8a94a0';
+    const tick = Math.round(18 * dpr);
+    const lw = Math.max(1, Math.round(dpr));
+    const x0 = D(padPx), x1 = D(800 - padPx), y0 = D(padPx), y1 = D(900 - padPx);
+    mctx.fillRect(x0 - tick, y0 - lw, tick, lw);
+    mctx.fillRect(x0 - lw, y0 - tick, lw, tick);
+    mctx.fillRect(x1, y0 - lw, tick, lw);
+    mctx.fillRect(x1, y0 - tick, lw, tick);
+    mctx.fillRect(x0 - tick, y1, tick, lw);
+    mctx.fillRect(x0 - lw, y1, lw, tick);
+    mctx.fillRect(x1, y1, tick, lw);
+    mctx.fillRect(x1, y1, lw, tick);
   }
   pageEl.appendChild(marginCanvas);
 
@@ -153,6 +170,7 @@ export function renderVirtualPages(pages: PageModel[], isFinal: boolean) {
     // 최종본은 내용이 바뀌었으므로 기존 마운트 전부 해제
     mountedPages.forEach((el) => el.remove());
     mountedPages.clear();
+    loggedTableKeys.clear();
   }
   ensureSpacers();
   rendererContainer.style.gap = '0px';
@@ -220,6 +238,28 @@ export function updateVisiblePages(forceIdx?: number) {
   }
   topSpacer.style.height = `${start * PAGE_PITCH}px`;
   bottomSpacer.style.height = end >= n - 1 ? '0px' : `${(n - 1 - end) * PAGE_PITCH - 30}px`;
+
+  // 디버그: 표 하단 vs 하단 경계선 비교 (새로 마운트된 표만 1회 출력)
+  mountedPages.forEach((el, idx) => {
+    const pageItems = cachedPages[idx] || [];
+    const tableItems = pageItems.filter((it: any) => it.type === 'table');
+    el.querySelectorAll('table').forEach((table, ti) => {
+      const key = `${idx}:${ti}:${table.rows.length}`;
+      if (loggedTableKeys.has(key)) return;
+      loggedTableKeys.add(key);
+      const boundary = el.offsetHeight - parseFloat(getComputedStyle(el).paddingBottom);
+      const bottom = table.offsetTop + table.offsetHeight;
+      const cur = tableItems[ti] as any;
+      const posInPage = pageItems.indexOf(cur);
+      const after = posInPage >= 0 ? pageItems[posInPage + 1] : undefined;
+      const nextPage = cachedPages[idx + 1];
+      const next = (after || (nextPage && nextPage[0]) || null) as any;
+      const nextDesc = !next ? 'END' : next.type === 'paragraph'
+        ? `p(${(next.children || []).map((r: any) => r.text).join('').length}ch)`
+        : `t(rows=${(next.rows || []).length})`;
+      console.log(`[table-bottom] page=${idx + 1} table#${ti} bottom=${Math.round(bottom)} boundary=${Math.round(boundary)} gap=${Math.round(boundary - bottom)} cont=${!!cur?._continues} next=${nextDesc}`);
+    });
+  });
 }
 
 export function findCursorPageIndex(docIdx: number): number {
