@@ -62,14 +62,25 @@ function editSplit(docIdx: number, charIndex: number) {
   runLayoutEngine();
 }
 
+let layoutRunId = 0;
+const LAYOUT_CHUNK_ITEMS = 50;
+const LAYOUT_CHUNK_BUDGET_MS = 12;
+
 function runLayoutEngine() {
   if (Object.keys(fontMetrics).length === 0) return;
 
+  const runId = ++layoutRunId;
+  const totalItems = documentState.length;
   const pages: PageModel[] = [];
   let currentPage: PageModel = [];
   let currentHeight = 0;
+  let itemIndex = 0;
+  let lastStreamCount = 0;
+  let lastStreamTime = 0;
 
-  documentState.forEach((item, idx) => {
+  function processItem(idx: number) {
+    const item = documentState[idx];
+    if (!item) return;
     if (item.type === 'paragraph') {
       const runs = item.children || [];
       const lines = buildRunLines(runs, EDITOR_MAX_WIDTH);
@@ -139,13 +150,37 @@ function runLayoutEngine() {
         currentPage.push(currentTableInPage);
       }
     }
-  });
-
-  if (currentPage.length > 0) {
-    pages.push(currentPage);
   }
 
-  self.postMessage({ type: 'RENDER_READY', payload: pages });
+  function processChunk() {
+    if (runId !== layoutRunId) return;
+    const startTime = performance.now();
+    let processed = 0;
+    while (itemIndex < documentState.length && processed < LAYOUT_CHUNK_ITEMS && (performance.now() - startTime) < LAYOUT_CHUNK_BUDGET_MS) {
+      processItem(itemIndex);
+      itemIndex += 1;
+      processed += 1;
+    }
+
+    if (itemIndex < documentState.length) {
+      self.postMessage({ type: 'LAYOUT_PROGRESS', payload: { done: itemIndex, total: totalItems } });
+      const now = performance.now();
+      if (pages.length > lastStreamCount && now - lastStreamTime > 120) {
+        lastStreamTime = now;
+        const freshPages = pages.slice(lastStreamCount);
+        lastStreamCount = pages.length;
+        self.postMessage({ type: 'RENDER_STREAM', payload: { pages: freshPages, done: itemIndex, total: totalItems } });
+      }
+      setTimeout(processChunk, 0);
+    } else {
+      if (currentPage.length > 0) {
+        pages.push(currentPage);
+      }
+      self.postMessage({ type: 'RENDER_READY', payload: pages });
+    }
+  }
+
+  processChunk();
 }
 
 function buildParagraphFragment(lines: Glyph[][], docIdx: number, charOffset: number, align?: string): ParagraphNode | null {
