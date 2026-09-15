@@ -108,6 +108,31 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
   pageEl.contentEditable = 'true';
   pageEl.dataset.pageNumber = (pIndex + 1).toString();
 
+  // 여백 경계선: canvas로 본문 경계에 간극 없이 직선 표시 (편집 불가)
+  const padPx = parseFloat(getComputedStyle(pageEl).paddingLeft) || 0;
+  const dpr = window.devicePixelRatio || 1;
+  const marginCanvas = document.createElement('canvas');
+  marginCanvas.className = 'margin-lines';
+  marginCanvas.width = Math.round(800 * dpr);
+  marginCanvas.height = Math.round(900 * dpr);
+  marginCanvas.contentEditable = 'false';
+  const mctx = marginCanvas.getContext('2d');
+  if (mctx) {
+    mctx.scale(dpr, dpr);
+    mctx.fillStyle = '#a6aeb5';
+    const tick = 18;
+    const x0 = padPx, x1 = 800 - padPx, y0 = padPx, y1 = 900 - padPx;
+    mctx.fillRect(x0 - tick, y0 - 1, tick, 1);
+    mctx.fillRect(x0 - 1, y0 - tick, 1, tick);
+    mctx.fillRect(x1, y0 - 1, tick, 1);
+    mctx.fillRect(x1, y0 - tick, 1, tick);
+    mctx.fillRect(x0 - tick, y1, tick, 1);
+    mctx.fillRect(x0 - 1, y1, 1, tick);
+    mctx.fillRect(x1, y1, tick, 1);
+    mctx.fillRect(x1, y1, 1, tick);
+  }
+  pageEl.appendChild(marginCanvas);
+
   // 안전장치: pageData가 배열이 아니면 빈 페이지만 반환
   if (!Array.isArray(pageData)) return pageEl;
 
@@ -139,7 +164,11 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
     else if (item.type === 'table') {
       const table = document.createElement('table');
       table.dataset.pIdx = docIdx.toString();
+      // [이어진 표] 페이지 경계에 맞닿은 바깥 경계선 hidden (이어짐 표시)
+      if (item._continued) table.style.borderTop = 'hidden';
+      if (item._continues) table.style.borderBottom = 'hidden';
       const rows: Array<any> = item.rows || [];
+      const trEls: HTMLTableRowElement[] = [];
 
       rows.forEach((row: any) => {
         if (!row) return;
@@ -150,7 +179,7 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
           if (!cell) return;
           const td = document.createElement('td');
           const cellCount = cells.length || 1;
-          td.style.width = `${680 / cellCount}px`;
+            td.style.width = `${(600 - 1) / cellCount}px`;
 
           const cellChildren: Array<any> = cell.children || [];
           cellChildren.forEach((run: any) => {
@@ -164,7 +193,15 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
         });
 
         table.appendChild(tr);
+        trEls.push(tr);
       });
+      // 이어진 경계에 맞닿은 셀 경계선도 hidden (스타일시트 !important를 이기기 위해 important 지정)
+      if (item._continued && trEls.length > 0) {
+        trEls[0].querySelectorAll('td').forEach((td) => { td.style.setProperty('border-top-style', 'hidden', 'important'); });
+      }
+      if (item._continues && trEls.length > 0) {
+        trEls[trEls.length - 1].querySelectorAll('td').forEach((td) => { td.style.setProperty('border-bottom-style', 'hidden', 'important'); });
+      }
       pageEl.appendChild(table);
     }
   });
@@ -542,7 +579,7 @@ function buildMockDocument(): DocumentModel {
   });
 
   
-  for (let i = 1; i <= 250; i++) {
+  for (let i = 1; i <= 100; i++) {
     // 5번째 행마다 매우 긴 텍스트를 넣어 높이 변화를 줌
     const isLongRow = i % 5 === 0;
     const detailText = isLongRow 

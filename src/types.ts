@@ -35,6 +35,8 @@ export interface TableNode {
   type: 'table';
   rows: TableRowNode[];
   _docIdx?: number;
+  _continued?: boolean;
+  _continues?: boolean;
 }
 
 // 문서 모델은 단락 또는 표의 배열입니다.

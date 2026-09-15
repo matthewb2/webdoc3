@@ -5,10 +5,14 @@ export type PageModel = DocumentItem[];
 let documentState: DocumentModel = [];
 let fontMetrics: FontMetrics = {};
 
-const PAGE_MAX_HEIGHT = 780;
+const PAGE_MAX_HEIGHT = 700;
 const LINE_HEIGHT = 26;
-const EDITOR_MAX_WIDTH = 680;
+const EDITOR_MAX_WIDTH = 600;
 const TABLE_CELL_PADDING = 16;
+const TABLE_CELL_BORDER = 2;
+const TABLE_GRID_WIDTH = EDITOR_MAX_WIDTH - 1;
+const TABLE_CELL_VERTICAL_PADDING = 14;
+const TABLE_FRAGMENT_MARGIN = 30;
 const TABLE_BORDER_HEIGHT = 1;
 const BASE_FONT_PX = 16;
 
@@ -118,29 +122,82 @@ function runLayoutEngine() {
       let currentTableInPage: TableNode = { type: 'table', rows: [], _docIdx: idx };
 
       item.rows.forEach((row) => {
-        const cellWidth = EDITOR_MAX_WIDTH / row.cells.length;
+        const cellWidth = TABLE_GRID_WIDTH / row.cells.length;
+        const cellLineList = row.cells.map((cell) => buildRunLines(cell.children || [], cellWidth - TABLE_CELL_PADDING - TABLE_CELL_BORDER));
         let maxRowLines = 1;
-
-        row.cells.forEach((cell) => {
-          const cellLines = buildRunLines(cell.children || [], cellWidth - TABLE_CELL_PADDING);
+        cellLineList.forEach((cellLines) => {
           if (cellLines.length > maxRowLines) {
             maxRowLines = cellLines.length;
           }
         });
 
-        const rowHeight = (maxRowLines * LINE_HEIGHT) + TABLE_BORDER_HEIGHT;
+        // 실제 렌더 높이와 일치: 줄별 최대 높이 합 + 셀 수직 패딩 + 경계선
+        const lineHeights: number[] = [];
+        for (let li = 0; li < maxRowLines; li++) {
+          let lineH = LINE_HEIGHT;
+          cellLineList.forEach((cellLines) => {
+            const line = cellLines[li];
+            if (line) {
+              const h = lineHeightOfLine(line);
+              if (h > lineH) lineH = h;
+            }
+          });
+          lineHeights.push(lineH);
+        }
+        const contentHeight = lineHeights.reduce((acc, h) => acc + h, 0);
+        const rowHeight = contentHeight + TABLE_CELL_VERTICAL_PADDING + TABLE_BORDER_HEIGHT;
 
-        if (currentHeight + rowHeight > PAGE_MAX_HEIGHT) {
-          if (currentTableInPage.rows.length > 0) {
-            currentPage.push(currentTableInPage);
+        // 새 조각의 첫 행이면 표 상하 마진도 함께 검사
+        const overhead = currentTableInPage.rows.length === 0 ? TABLE_FRAGMENT_MARGIN : 0;
+        if (currentHeight + overhead + rowHeight > PAGE_MAX_HEIGHT) {
+          // 글자(줄) 높이 기준 분할: 남은 공간에 들어가는 줄 수 (뒷부분에 최소 1줄 남김)
+          const remaining = PAGE_MAX_HEIGHT - currentHeight - overhead;
+          let splitLines = 0;
+          let headAcc = TABLE_CELL_VERTICAL_PADDING + TABLE_BORDER_HEIGHT;
+          while (splitLines < maxRowLines - 1 && headAcc + lineHeights[splitLines] <= remaining) {
+            headAcc += lineHeights[splitLines];
+            splitLines += 1;
           }
-          pages.push(currentPage);
-          currentPage = [];
-          currentHeight = 0;
 
-          currentTableInPage = { type: 'table', rows: [row], _docIdx: idx };
-          currentHeight += rowHeight;
+          if (splitLines >= 1) {
+            // 앞부분은 현재 페이지에, 나머지는 다음 페이지에 (여백 없이 채움)
+            const headCells = row.cells.map((cell, ci) => ({
+              ...cell,
+              children: runsFromLines(cellLineList[ci].slice(0, splitLines)),
+            }));
+            const tailCells = row.cells.map((cell, ci) => ({
+              ...cell,
+              children: runsFromLines(cellLineList[ci].slice(splitLines)),
+            }));
+            currentTableInPage.rows.push({ ...row, cells: headCells });
+            currentTableInPage._continues = true;
+            currentPage.push(currentTableInPage);
+            pages.push(currentPage);
+            currentPage = [];
+            currentHeight = 0;
+            currentTableInPage = { type: 'table', rows: [{ ...row, cells: tailCells }], _docIdx: idx, _continued: true };
+            const tailContent = contentHeight - (headAcc - TABLE_CELL_VERTICAL_PADDING - TABLE_BORDER_HEIGHT);
+            currentHeight += TABLE_FRAGMENT_MARGIN + tailContent + TABLE_CELL_VERTICAL_PADDING + TABLE_BORDER_HEIGHT;
+          } else {
+            const broke = currentTableInPage.rows.length > 0 || currentPage.length > 0;
+            if (currentTableInPage.rows.length > 0) {
+              currentTableInPage._continues = true;
+              currentPage.push(currentTableInPage);
+            }
+            if (broke) {
+              pages.push(currentPage);
+              currentPage = [];
+              currentHeight = 0;
+              currentTableInPage = { type: 'table', rows: [row], _docIdx: idx, _continued: true };
+              currentHeight += TABLE_FRAGMENT_MARGIN + rowHeight;
+            } else {
+              // 빈 페이지에 거대 행 하나: 빈 페이지 푸시 없이 그대로 배치
+              currentTableInPage = { type: 'table', rows: [row], _docIdx: idx };
+              currentHeight += TABLE_FRAGMENT_MARGIN + rowHeight;
+            }
+          }
         } else {
+          if (currentTableInPage.rows.length === 0) currentHeight += TABLE_FRAGMENT_MARGIN;
           currentTableInPage.rows.push(row);
           currentHeight += rowHeight;
         }
@@ -306,6 +363,11 @@ function mergeRuns(runs: TextRun[]): TextRun[] {
     }
   });
   return merged;
+}
+
+function runsFromLines(lines: Glyph[][]): TextRun[] {
+  if (lines.length === 0) return [{ text: '' }];
+  return mergeRuns(lines.flatMap(glyphLineToRuns));
 }
 
 function lineHeightOfLine(line: Glyph[]): number {

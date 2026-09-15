@@ -132,14 +132,23 @@
         /* .page 및 하위 요소 스타일은 그대로 유지합니다 */
         .page {
             width: 800px;
-            height: 900px; 
+            height: 900px;
             background: white;
-            padding: 60px; 
+            padding: 6.25rem;
             box-shadow: 0 4px 10px rgba(0,0,0,0.08);
             box-sizing: border-box;
             position: relative;
             outline: none;
             -webkit-text-size-adjust: none;
+        }
+        /* 여백 경계선 (canvas 직선, 본문 경계에 간극 없이 표시) */
+        .page canvas.margin-lines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 800px;
+            height: 900px;
+            pointer-events: none;
         }
         .page::after {
             content: attr(data-page-number);
@@ -175,17 +184,19 @@
         /* index.html <style> 내부의 표 스타일 부분을 아래 내용으로 덮어씌우세요 */
 
 table {
-    width: 680px; /* 본문 가용 최대 폭 (800px - 패딩 120px) */
+    width: 599px; /* 본문 600px - collapse 외곽 절반 테두리 1px */
     border-collapse: collapse;
     margin: 15px 0;
     table-layout: fixed; /* 가로 고정 픽셀 분배 */
-    
-    /* [추가] 테이블 외곽 테두리를 확실하게 잡아줍니다 */
-    border: 1px solid #a0a4a8; 
+
+    /* 외곽선은 셀 테두리로 형성 (표 자체 테두리는 600px을 초과하므로 제거) */
+    border: none;
 }
 
 /* ⚠️ td와 함께 th(존재할 경우)까지 완벽하게 테두리를 지정합니다 */
 table td, table th {
+    /* 지정 너비에 패딩·테두리 포함 (워커 줄바꿈 폭과 일치) */
+    box-sizing: border-box;
     /* 기존 옅은 색(#dcdfe6) 대신 살짝 더 선명한 회색(#b0b4b8)으로 변경 */
     border: 1px solid #b0b4b8 !important; 
     padding: 7px 8px; /* 워커의 TABLE_CELL_PADDING 규격과 매칭 */
