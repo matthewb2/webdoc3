@@ -43,6 +43,15 @@ export interface TableNode {
 export type DocumentItem = ParagraphNode | TableNode;
 export type DocumentModel = DocumentItem[];
 
+export interface CursorState {
+  docIdx: number;
+  charIndex: number;
+  charOffset: number;
+  isInsideTable: boolean;
+  rowIndex: number;
+  cellIndex: number;
+}
+
 export interface FontMetrics {
   [char: string]: number;
 }
