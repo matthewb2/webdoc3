@@ -117,11 +117,10 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
     else if (item.type === 'table') {
       const table = document.createElement('table');
       table.dataset.pIdx = docIdx.toString();
-      // [이어진 표] 페이지 경계에 맞닿은 바깥 경계선 hidden (이어짐 표시)
-      if (item._continued) table.style.borderTop = 'hidden';
-      if (item._continues) table.style.borderBottom = 'hidden';
+      // 이어진 조각은 맞닿은 쪽 마진 제거 (경계선에 딱 붙음)
+      if (item._continued) table.style.marginTop = '0';
+      if (item._continues) table.style.marginBottom = '0';
       const rows: Array<any> = item.rows || [];
-      const trEls: HTMLTableRowElement[] = [];
 
       rows.forEach((row: any) => {
         if (!row) return;
@@ -146,15 +145,7 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
         });
 
         table.appendChild(tr);
-        trEls.push(tr);
       });
-      // 이어진 경계에 맞닿은 셀 경계선도 hidden (스타일시트 !important를 이기기 위해 important 지정)
-      if (item._continued && trEls.length > 0) {
-        trEls[0].querySelectorAll('td').forEach((td) => { td.style.setProperty('border-top-style', 'hidden', 'important'); });
-      }
-      if (item._continues && trEls.length > 0) {
-        trEls[trEls.length - 1].querySelectorAll('td').forEach((td) => { td.style.setProperty('border-bottom-style', 'hidden', 'important'); });
-      }
       pageEl.appendChild(table);
     }
   });

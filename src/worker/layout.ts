@@ -10,7 +10,7 @@ const TABLE_CELL_PADDING = 16;
 const TABLE_CELL_BORDER = 1;
 const TABLE_GRID_WIDTH = EDITOR_MAX_WIDTH - 1;
 const TABLE_CELL_VERTICAL_PADDING = 14;
-const TABLE_FRAGMENT_MARGIN = 30;
+const TABLE_MARGIN_EDGE = 15;
 const TABLE_BORDER_HEIGHT = 1;
 const BASE_FONT_PX = 16;
 
@@ -102,8 +102,8 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
         const contentHeight = lineHeights.reduce((acc, h) => acc + h, 0);
         const rowHeight = contentHeight + TABLE_CELL_VERTICAL_PADDING + TABLE_BORDER_HEIGHT;
 
-        // 새 조각의 첫 행이면 표 상하 마진도 함께 검사
-        const overhead = currentTableInPage.rows.length === 0 ? TABLE_FRAGMENT_MARGIN : 0;
+        // 새 조각의 첫 행이면 상단 마진도 함께 검사 (이어진 조각은 상단 마진 없음)
+        const overhead = currentTableInPage.rows.length === 0 ? (currentTableInPage._continued ? 0 : TABLE_MARGIN_EDGE) : 0;
         if (currentHeight + overhead + rowHeight > PAGE_MAX_HEIGHT) {
           // 글자(줄) 높이 기준 분할: 남은 공간에 들어가는 줄 수 (뒷부분에 최소 1줄 남김)
           const remaining = PAGE_MAX_HEIGHT - currentHeight - overhead;
@@ -133,7 +133,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
             currentHeight = 0;
             currentTableInPage = { type: 'table', rows: [{ ...row, cells: tailCells }], _docIdx: idx, _continued: true };
             const tailContent = contentHeight - (headAcc - TABLE_CELL_VERTICAL_PADDING - TABLE_BORDER_HEIGHT);
-            currentHeight += TABLE_FRAGMENT_MARGIN + tailContent + TABLE_CELL_VERTICAL_PADDING + TABLE_BORDER_HEIGHT;
+            currentHeight += tailContent + TABLE_CELL_VERTICAL_PADDING + TABLE_BORDER_HEIGHT;
           } else {
             const broke = currentTableInPage.rows.length > 0 || currentPage.length > 0;
             if (currentTableInPage.rows.length > 0) {
@@ -145,21 +145,23 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
               currentPage = [];
               currentHeight = 0;
               currentTableInPage = { type: 'table', rows: [row], _docIdx: idx, _continued: true };
-              currentHeight += TABLE_FRAGMENT_MARGIN + rowHeight;
+              currentHeight += rowHeight;
             } else {
               // 빈 페이지에 거대 행 하나: 빈 페이지 푸시 없이 그대로 배치
               currentTableInPage = { type: 'table', rows: [row], _docIdx: idx };
-              currentHeight += TABLE_FRAGMENT_MARGIN + rowHeight;
+              currentHeight += TABLE_MARGIN_EDGE + rowHeight;
             }
           }
         } else {
-          if (currentTableInPage.rows.length === 0) currentHeight += TABLE_FRAGMENT_MARGIN;
+          if (currentTableInPage.rows.length === 0) currentHeight += currentTableInPage._continued ? 0 : TABLE_MARGIN_EDGE;
           currentTableInPage.rows.push(row);
           currentHeight += rowHeight;
         }
       });
 
       if (currentTableInPage.rows.length > 0) {
+        // 표가 끝나면 하단 마진 (뒤에 내용이 올 것을 대비, 이어지는 조각은 마진 없음)
+        if (!currentTableInPage._continues) currentHeight += TABLE_MARGIN_EDGE;
         currentPage.push(currentTableInPage);
       }
     }
