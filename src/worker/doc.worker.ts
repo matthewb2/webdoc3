@@ -25,6 +25,8 @@ self.addEventListener('message', (event: MessageEvent<any>) => {
     editDelete(message.payload.paragraphIndex, message.payload.charIndex);
   } else if (message.type === 'EDIT_SPLIT') {
     editSplit(message.payload.paragraphIndex, message.payload.charIndex);
+  } else if (message.type === 'GET_DOC') {
+    self.postMessage({ type: 'DOC_SNAPSHOT', payload: documentState });
   }
 });
 

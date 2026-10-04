@@ -219,6 +219,7 @@ table tr:nth-child(even) {
 
     <div class="toolbar">
         <button id="btn-open-hwp" class="toolbar-btn" type="button">HWP 파일 열기</button>
+        <button id="btn-save-odt" class="toolbar-btn" type="button">ODT 저장</button>
         <input id="hwp-file" type="file" accept=".hwp,application/x-hwp" hidden />
         <label class="toolbar-label" for="font-family-select">글꼴</label>
         <select id="font-family-select" class="toolbar-select" disabled></select>
@@ -230,6 +231,8 @@ table tr:nth-child(even) {
     <div class="editor-viewport">
         <div id="editor-container"></div>
     </div>
+<script src="/odt/jszip.bundle.js"></script>
+<script src="/odt/odt.js"></script>
 <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

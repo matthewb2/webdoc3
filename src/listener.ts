@@ -4,6 +4,7 @@ import type { CursorState, TextRun } from './types';
 import { parseHwpToDocumentModel } from './hwp/hwpParser';
 import { breakKeyForRuns, collectProbeItems, computeBreaks } from './probe';
 import { getCachedPages } from './render';
+import { saveCurrentDocument } from './odtExport';
 
 // 편집된 단락 전체 런을 캐시된 조각에서 복원해 분절점을 다시 재고 워커에 전달
 async function refreshParaBreaks(worker: Worker, docIdx: number) {
@@ -199,5 +200,11 @@ export function initHwpFileOpen(worker: Worker, containerEl: HTMLDivElement) {
     const files = Array.from(e.dataTransfer?.files ?? []);
     const file = files.find((f) => /\.hwp$/i.test(f.name) || f.type === 'application/x-hwp');
     if (file) renderHwpFile(file);
+  });
+}
+
+export function initOdtExport(worker: Worker) {
+  document.getElementById('btn-save-odt')?.addEventListener('click', () => {
+    saveCurrentDocument(worker).catch(() => {});
   });
 }

@@ -1,7 +1,7 @@
 import type { CursorState, DocumentModel, FontMetrics, TableNode } from './types';
 import { collectProbeItems, computeBreaks } from './probe';
 import { appendStreamPages, findCursorPageIndex, initRenderer, renderVirtualPages, updateVisiblePages } from './render';
-import { initEditorListeners, initHwpFileOpen, initSelectionListener, initViewportScrollListener, initWorkerListener } from './listener';
+import { initEditorListeners, initHwpFileOpen, initOdtExport, initSelectionListener, initViewportScrollListener, initWorkerListener } from './listener';
 
 const worker = new Worker(new URL('./worker/doc.worker.ts', import.meta.url), {
   type: 'module'
@@ -235,3 +235,4 @@ initWorkerListener(worker, (pages) => {
 initViewportScrollListener(() => updateVisiblePages());
 initSelectionListener(() => saveCursorPosition());
 initEditorListeners(containerEl, worker, savedCursor, saveCursorPosition);
+initOdtExport(worker);

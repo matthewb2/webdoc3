@@ -64,4 +64,5 @@ export type WorkerMessage =
   | { type: 'INIT_DOC'; payload: DocumentModel }
   | { type: 'EDIT_INSERT'; payload: { paragraphIndex: number; charIndex: number; text: string } }
   | { type: 'EDIT_DELETE'; payload: { paragraphIndex: number; charIndex: number } }
-  | { type: 'EDIT_SPLIT'; payload: { paragraphIndex: number; charIndex: number } };
+  | { type: 'EDIT_SPLIT'; payload: { paragraphIndex: number; charIndex: number } }
+  | { type: 'GET_DOC' };
