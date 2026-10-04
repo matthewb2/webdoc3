@@ -1,5 +1,5 @@
 // src/odtExport.ts - 문서 모델(DocumentModel) → ODT 저장 (codexa/odt.js 벤더 번들 사용)
-import type { DocumentItem, DocumentModel, TableNode, TextRun } from './types';
+import type { DocumentItem, DocumentModel, TableNode, TextRun } from '../types';
 
 const PX_TO_CM = 2.54 / 96;
 const PX_TO_PT = 72 / 96;
