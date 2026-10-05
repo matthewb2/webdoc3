@@ -3,6 +3,9 @@ import type { DocumentModel, DocumentItem, ParagraphNode, TableNode, FontMetrics
 
 export type PageModel = DocumentItem[];
 
+// 워커는 HMR 대상이 아니라 전체 새로고침해야 교체됨 — 실행 중인 엔진 식별용
+console.log('[worker] boot, engine bytes:', runLayoutEngineAsync.toString().length);
+
 const PAGE_MAX_HEIGHT = 700;
 const LINE_HEIGHT = 26;
 const EDITOR_MAX_WIDTH = 600;
@@ -50,6 +53,9 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
         const lineHeight = lineHeightOfLine(line);
 
         if (currentHeight + lineHeight > PAGE_MAX_HEIGHT) {
+          if (currentParagraphLines.length === 0 && currentPage.length > 0) {
+            console.log(`[para-break] docIdx=${idx} cur=${currentHeight} lh=${lineHeight} text=${JSON.stringify(runs.map((r) => r.text).join('').slice(0, 30))}`);
+          }
           if (currentParagraphLines.length > 0) {
             const fragment = buildParagraphFragment(currentParagraphLines, idx, charOffset, item.align);
             if (fragment && fragment.children.length > 0) {

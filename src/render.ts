@@ -230,6 +230,23 @@ export function updateVisiblePages(forceIdx?: number) {
   topSpacer.style.height = `${start * PAGE_PITCH}px`;
   bottomSpacer.style.height = end >= n - 1 ? '0px' : `${(n - 1 - end) * PAGE_PITCH - 30}px`;
 
+  // 디버그: 페이지 전체 자식 하단 (표 다음에 단락이 같은 페이지에 있는지 확정)
+  mountedPages.forEach((el, pidx) => {
+    const pkey = `pg${pidx}:${el.children.length}`;
+    if (!loggedTableKeys.has(pkey)) {
+      loggedTableKeys.add(pkey);
+      const pr = el.getBoundingClientRect();
+      const desc = Array.from(el.children)
+        .filter((c) => !(c as HTMLElement).classList.contains('margin-lines') && c.tagName !== 'CANVAS')
+        .map((c) => {
+          const r = (c as HTMLElement).getBoundingClientRect();
+          const e = c as HTMLElement;
+          const txt = c.tagName === 'P' ? JSON.stringify((c.textContent || '').slice(0, 40)) : '';
+          return `${c.tagName}[${(e.dataset as any).pIdx ?? '-'}]:${Math.round(r.bottom - pr.top)}${txt}`;
+        }).join(' ');
+      console.log(`[page-bottom] page=${pidx + 1} kids: ${desc} contentEnd=800`);
+    }
+  });
   // 디버그: 표 하단 vs 하단 경계선 비교 (새로 마운트된 표만 1회 출력)
   mountedPages.forEach((el, idx) => {
     const pageItems = cachedPages[idx] || [];
