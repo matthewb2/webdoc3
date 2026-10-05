@@ -16,6 +16,12 @@ const TABLE_CELL_VERTICAL_PADDING = 14;
 const TABLE_MARGIN_EDGE = 15;
 const TABLE_BORDER_HEIGHT = 1;
 const BASE_FONT_PX = 16;
+const COLUMN_GAP = 20;
+
+function columnWidth(columns: number): number {
+  const n = Math.max(1, columns);
+  return (EDITOR_MAX_WIDTH - COLUMN_GAP * (n - 1)) / n;
+}
 
 type Glyph = { ch: string; run: TextRun; w?: number };
 
@@ -36,6 +42,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
   const pages: PageModel[] = [];
   let currentPage: PageModel = [];
   let currentHeight = 0;
+  let pendingCols: { columns: number; total: number } | null = null;
   let itemIndex = 0;
   let lastStreamCount = 0;
   let lastStreamTime = 0;
@@ -44,6 +51,39 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
     const item = documentState[idx];
     if (!item) return;
     if (item.type === 'paragraph') {
+      const columns = item.columns && item.columns > 1 ? item.columns : 1;
+      if (columns > 1) {
+        const runs = item.children || [];
+        const lines = buildRunLines(runs, columnWidth(columns));
+        let paraTotal = 0;
+        lines.forEach((line) => {
+          paraTotal += lineHeightOfLine(line);
+        });
+        let charge: number;
+        if (!pendingCols || pendingCols.columns !== columns) {
+          charge = Math.ceil(paraTotal / columns) + LINE_HEIGHT;
+          pendingCols = { columns, total: paraTotal };
+        } else {
+          const prevBalanced = Math.ceil(pendingCols.total / columns);
+          pendingCols.total += paraTotal;
+          charge = Math.ceil(pendingCols.total / columns) - prevBalanced;
+        }
+        if (currentHeight + charge > PAGE_MAX_HEIGHT) {
+          if (currentPage.length > 0) {
+            pages.push(currentPage);
+            currentPage = [];
+            currentHeight = 0;
+          }
+          charge = Math.ceil(paraTotal / columns) + LINE_HEIGHT;
+          pendingCols = { columns, total: paraTotal };
+        }
+        const colFragment = buildParagraphFragment(lines, idx, 0, item.align, columns);
+        if (colFragment && colFragment.children.length > 0) {
+          currentPage.push(colFragment);
+        }
+        currentHeight += charge;
+      } else {
+      pendingCols = null;
       const runs = item.children || [];
       const lines = buildRunLines(runs, EDITOR_MAX_WIDTH);
       let currentParagraphLines: Glyph[][] = [];
@@ -79,7 +119,9 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
           currentPage.push(fragment);
         }
       }
+      }
     } else if (item.type === 'table') {
+      pendingCols = null;
       let currentTableInPage: TableNode = { type: 'table', rows: [], _docIdx: idx };
 
       item.rows.forEach((row) => {
@@ -203,7 +245,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
 
   processChunk();
 }
-function buildParagraphFragment(lines: Glyph[][], docIdx: number, charOffset: number, align?: string): ParagraphNode | null {
+function buildParagraphFragment(lines: Glyph[][], docIdx: number, charOffset: number, align?: string, columns?: number): ParagraphNode | null {
   // 정렬은 CSS text-align으로 처리한다. 스페이서 런을 넣으면 fragment 텍스트가
   // 원문과 달라져 커서 오프셋과 편집 인덱스가 어긋나므로 절대 추가하지 않는다.
   const runs = mergeRuns(lines.flatMap(glyphLineToRuns));
@@ -218,6 +260,9 @@ function buildParagraphFragment(lines: Glyph[][], docIdx: number, charOffset: nu
 
   if (align) {
     fragment.align = align as any;
+  }
+  if (columns && columns > 1) {
+    fragment.columns = columns;
   }
 
   let maxLineHeight = LINE_HEIGHT;

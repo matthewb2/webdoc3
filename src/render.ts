@@ -89,8 +89,21 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
   // 안전장치: pageData가 배열이 아니면 빈 페이지만 반환
   if (!Array.isArray(pageData)) return pageEl;
 
+  // 다단 그룹: 연속된 동일 단수 단락을 하나의 컬럼 박스로 묶음
+  let colDiv: HTMLDivElement | null = null;
+  let colDivN = 0;
+  const flushColDiv = () => {
+    if (colDiv) {
+      pageEl.appendChild(colDiv);
+      colDiv = null;
+      colDivN = 0;
+    }
+  };
+  const colCountOf = (it: any) => (it.type === 'paragraph' && it.columns && it.columns > 1 ? it.columns : 0);
+
   pageData.forEach((item: any, itemIdx: number) => {
     if (!item) return;
+    if (colCountOf(item) === 0 || (colDiv && colDivN !== colCountOf(item))) flushColDiv();
 
     const docIdx = item._docIdx ?? itemIdx;
 
@@ -103,6 +116,7 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
       // [구현] 단락 정렬 반영 (중앙, 우측 등)
       if (item.align) {
         p.style.textAlign = item.align;
+        p.dataset.align = item.align;
       }
 
       const children: Array<{ text: string; bold?: boolean }> = item.children || [];
@@ -112,7 +126,18 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
         applyRunStyle(span, run);
         p.appendChild(span);
       });
-      pageEl.appendChild(p);
+      const colN = colCountOf(item);
+      if (colN > 0) {
+        if (!colDiv) {
+          colDiv = document.createElement('div');
+          colDiv.className = `doc-cols-${colN}`;
+          colDiv.dataset.cols = String(colN);
+          colDivN = colN;
+        }
+        colDiv.appendChild(p);
+      } else {
+        pageEl.appendChild(p);
+      }
     }
     else if (item.type === 'table') {
       const table = document.createElement('table');
@@ -149,6 +174,7 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
       pageEl.appendChild(table);
     }
   });
+  flushColDiv();
 
   return pageEl;
 }

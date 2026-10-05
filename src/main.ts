@@ -1,8 +1,8 @@
-import type { CursorState, DocumentModel, FontMetrics, TableNode } from './types';
+import type { CursorState, DocumentModel, FontMetrics } from './types';
 import type { PageModel } from './worker/doc.worker';
 import { collectProbeItems, computeBreaks } from './probe';
 import { appendStreamPages, findCursorPageIndices, initRenderer, renderVirtualPages, updateVisiblePages } from './render';
-import { initEditorListeners, initFontCombos, initHwpFileOpen, initOdtExport, initSelectionListener, initViewportScrollListener, initWorkerListener, isComposingActive, setAwaitingRender, syncFontCombos } from './listener';
+import { initAlignCombo, initColumnCombo, initEditorListeners, initFontCombos, initHwpFileOpen, initOdtExport, initSelectionListener, initViewportScrollListener, initWorkerListener, isComposingActive, setAwaitingRender, syncAlignCombo, syncColumnCombo, syncFontCombos } from './listener';
 
 const worker = new Worker(new URL('./worker/doc.worker.ts', import.meta.url), {
   type: 'module'
@@ -242,7 +242,7 @@ function buildMockDocument(): DocumentModel {
       children: [{ text: "표 레이아웃 엔진 테스트: 아래 표는 행 단위로 페이지를 분할합니다. 특정 행의 높이가 페이지의 남은 여백보다 크면, 해당 행은 통째로 다음 페이지로 넘어갑니다.", bold: true }]
     }
   ];
-
+  /*
   // 1. 대형 사양 명세 표 생성
   const tableNode: TableNode = { type: 'table', rows: [] };
 
@@ -275,7 +275,23 @@ function buildMockDocument(): DocumentModel {
   }
 
   mockDocument.push(tableNode);
-
+  */
+  // 다단 테스트: 연속된 2단 단락 3개 (하나의 컬럼 박스로 그룹화됨)
+  mockDocument.push({
+    type: 'paragraph',
+    columns: 2,
+    children: [{ text: "다단 테스트 첫 번째 문단입니다. 이 문단과 이어지는 두 문단은 2단으로 나란히 표시됩니다. 단 너비가 절반으로 줄어들기 때문에 같은 분량이라도 한 단보다 더 많은 줄에 걸쳐 배치되고, 세 문단의 전체 높이를 균등하게 나누어 좌우 단에 채웁니다." }]
+  });
+  mockDocument.push({
+    type: 'paragraph',
+    columns: 2,
+    children: [{ text: "다단 테스트 두 번째 문단입니다. 앞 문단에 이어 같은 컬럼 박스 안에 배치되므로, 앞 문단의 텍스트가 왼쪽 단을 채우고 남으면 이 문단이 그 뒤를 이어 흐릅니다. 단 사이 간격은 스무 픽셀로 고정되어 있습니다." }]
+  });
+  mockDocument.push({
+    type: 'paragraph',
+    columns: 2,
+    children: [{ text: "다단 테스트 세 번째 문단입니다. 이 문단이 끝나면 컬럼 박스가 닫히고, 이후의 문단은 다시 한 단으로 표시됩니다. 커서를 이 영역 안에 두면 상단 콤보박스가 2단으로 표시되는지 확인할 수 있습니다." }]
+  });
   // 표 이후에 오는 단락 테스트
   mockDocument.push({
     type: 'paragraph',
@@ -298,6 +314,8 @@ function applyReadyPages(pages: PageModel[]) {
   if (viewport) viewport.scrollTop = prevTop;
   restoreCursorPosition();
   syncFontCombos();
+  syncColumnCombo();
+  syncAlignCombo();
 }
 
 function flushPendingRender() {
@@ -321,7 +339,9 @@ initWorkerListener(worker, (pages) => {
   appendStreamPages(pages);
 });
 initViewportScrollListener(() => updateVisiblePages());
-initSelectionListener(() => { saveCursorPosition(); syncFontCombos(); });
+initSelectionListener(() => { saveCursorPosition(); syncFontCombos(); syncColumnCombo(); syncAlignCombo(); });
 initEditorListeners(containerEl, worker, savedCursor, saveCursorPosition, flushPendingRender, () => { pendingPages = null; });
 initFontCombos(containerEl, worker, savedCursor);
+initColumnCombo(containerEl, worker, savedCursor);
+initAlignCombo(containerEl, worker, savedCursor);
 initOdtExport(worker);

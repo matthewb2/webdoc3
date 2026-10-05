@@ -29,6 +29,10 @@ self.addEventListener('message', (event: MessageEvent<any>) => {
     self.postMessage({ type: 'DOC_SNAPSHOT', payload: documentState });
   } else if (message.type === 'EDIT_FONT') {
     editFont(message.payload.paragraphIndex, message.payload.fontFamily, message.payload.fontSize);
+  } else if (message.type === 'EDIT_COLUMNS') {
+    editColumns(message.payload.paragraphIndices, message.payload.columns);
+  } else if (message.type === 'EDIT_ALIGN') {
+    editAlign(message.payload.paragraphIndices, message.payload.align);
   }
 });
 
@@ -61,6 +65,34 @@ function editFont(docIdx: number, fontFamily?: string, fontSize?: number) {
   item.children.forEach((run) => {
     if (fontFamily !== undefined) run.fontFamily = fontFamily;
     if (fontSize !== undefined) run.fontSize = fontSize;
+  });
+  requestLayout();
+}
+
+function editAlign(docIndices: number[], align?: string) {
+  const value = align && align !== 'left' ? align : undefined;
+  (Array.isArray(docIndices) ? docIndices : []).forEach((docIdx) => {
+    const item = documentState[docIdx];
+    if (item?.type !== 'paragraph') return;
+    if (value === undefined) {
+      delete item.align;
+    } else {
+      item.align = value as any;
+    }
+  });
+  requestLayout();
+}
+
+function editColumns(docIndices: number[], columns: number) {
+  const value = columns && columns > 1 ? columns : undefined;
+  (Array.isArray(docIndices) ? docIndices : []).forEach((docIdx) => {
+    const item = documentState[docIdx];
+    if (item?.type !== 'paragraph') return;
+    if (value === undefined) {
+      delete item.columns;
+    } else {
+      item.columns = value;
+    }
   });
   requestLayout();
 }
@@ -101,8 +133,8 @@ function editSplit(docIdx: number, charIndex: number) {
       right.push({ ...run, text: t.slice(localIndex) });
     }
   });
-  documentState[docIdx] = { type: 'paragraph', children: left.length > 0 ? left : [{ text: '' }] };
-  documentState.splice(docIdx + 1, 0, { type: 'paragraph', children: right.length > 0 ? right : [{ text: '' }] });
+  documentState[docIdx] = { type: 'paragraph', children: left.length > 0 ? left : [{ text: '' }], align: item.align, columns: item.columns };
+  documentState.splice(docIdx + 1, 0, { type: 'paragraph', children: right.length > 0 ? right : [{ text: '' }], align: item.align, columns: item.columns });
   requestLayout();
 }
 

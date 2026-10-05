@@ -8,9 +8,7 @@ import { saveCurrentDocument } from './odt/odtExport';
 import { saveCurrentDocumentDocx } from './docx/docxExport';
 
 const FONT_FAMILIES = [
-  'Arial', 'Verdana', 'Tahoma', 'Times New Roman', 'Georgia', 'Courier New',
-  '맑은 고딕', 'Malgun Gothic', '굴림', 'Gulim', '돋움', 'Dotum',
-  '바탕', 'Batang', '궁서', 'Gungsuh', '나눔고딕', 'NanumGothic', 'Noto Sans KR',
+  'Arial', 'Verdana', 'Tahoma', 'Times New Roman', 'Georgia', 'Courier New', '맑은 고딕', '굴림', '돋움', '바탕',  '궁서', '나눔고딕', 'Noto Sans KR'
 ];
 const FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 32, 36, 48, 72];
 
@@ -338,6 +336,87 @@ export function initHwpFileOpen(worker: Worker, containerEl: HTMLDivElement) {
     const file = files.find((f) => /\.hwp$/i.test(f.name) || f.type === 'application/x-hwp');
     if (file) renderHwpFile(file);
   });
+}
+
+const COLUMN_GAP = 20;
+
+export function columnWidth(columns: number): number {
+  const n = Math.max(1, columns);
+  return (600 - COLUMN_GAP * (n - 1)) / n;
+}
+
+// 선택 영역에 걸친 단락들의 문서 인덱스 수집 (없으면 커서 단락)
+function selectedParagraphIndices(container: HTMLDivElement, cursorDocIdx: number): number[] {
+  const selection = window.getSelection();
+  if (selection && selection.rangeCount > 0) {
+    const range = selection.getRangeAt(0);
+    const found: number[] = [];
+    container.querySelectorAll('p[data-p-idx]').forEach((p) => {
+      try {
+        if (range.intersectsNode(p)) {
+          const idx = parseInt((p as HTMLElement).dataset.pIdx || '', 10);
+          if (!isNaN(idx) && !found.includes(idx)) found.push(idx);
+        }
+      } catch { /* ignore */ }
+    });
+    if (found.length > 0) return found;
+  }
+  return [cursorDocIdx];
+}
+
+export function initColumnCombo(container: HTMLDivElement, worker: Worker, cursor: CursorState) {
+  const select = document.getElementById('column-count-select') as HTMLSelectElement | null;
+  if (!select) return;
+  select.addEventListener('change', () => {
+    const n = parseInt(select.value, 10) || 1;
+    worker.postMessage({ type: 'EDIT_COLUMNS', payload: { paragraphIndices: selectedParagraphIndices(container, cursor.docIdx), columns: n } });
+  });
+  syncColumnCombo();
+}
+
+// 커서 위치 단락의 다단 설정을 콤보박스에 반영
+export function syncColumnCombo() {
+  const select = document.getElementById('column-count-select') as HTMLSelectElement | null;
+  if (!select) return;
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return;
+  const node = selection.anchorNode;
+  if (!node) return;
+  const container = document.getElementById('editor-container');
+  if (!container || !container.contains(node)) return;
+  const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element | null);
+  const p = el?.closest?.('p');
+  if (!p || !container.contains(p)) return;
+  const wrap = p.closest('div[data-cols]');
+  select.value = (wrap && wrap.getAttribute('data-cols')) || '1';
+  if (!['1', '2', '3'].includes(select.value)) select.value = '1';
+}
+
+export function initAlignCombo(container: HTMLDivElement, worker: Worker, cursor: CursorState) {
+  const select = document.getElementById('align-select') as HTMLSelectElement | null;
+  if (!select) return;
+  select.addEventListener('change', () => {
+    const align = ['left', 'center', 'right', 'justify'].includes(select.value) ? select.value : 'left';
+    worker.postMessage({ type: 'EDIT_ALIGN', payload: { paragraphIndices: selectedParagraphIndices(container, cursor.docIdx), align } });
+  });
+  syncAlignCombo();
+}
+
+// 커서 위치 단락의 정렬 설정을 콤보박스에 반영
+export function syncAlignCombo() {
+  const select = document.getElementById('align-select') as HTMLSelectElement | null;
+  if (!select) return;
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return;
+  const node = selection.anchorNode;
+  if (!node) return;
+  const container = document.getElementById('editor-container');
+  if (!container || !container.contains(node)) return;
+  const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element | null);
+  const p = el?.closest?.('p');
+  if (!p || !container.contains(p)) return;
+  select.value = (p as HTMLElement).dataset.align || 'left';
+  if (!['left', 'center', 'right', 'justify'].includes(select.value)) select.value = 'left';
 }
 
 export function initOdtExport(worker: Worker) {

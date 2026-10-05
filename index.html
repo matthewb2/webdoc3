@@ -141,6 +141,9 @@
             outline: none;
             -webkit-text-size-adjust: none;
         }
+        /* 다단 컬럼 (선택 영역 플로우) */
+        .doc-cols-2 { column-count: 2; column-gap: 20px; }
+        .doc-cols-3 { column-count: 3; column-gap: 20px; }
         /* 여백 경계선 (canvas 직선, 본문 경계에 간극 없이 표시) */
         .page canvas.margin-lines {
             position: absolute;
@@ -226,6 +229,19 @@ table tr:nth-child(even) {
         <select id="font-family-select" class="toolbar-select" disabled></select>
         <label class="toolbar-label" for="font-size-select">크기</label>
         <select id="font-size-select" class="toolbar-select" disabled></select>
+        <label class="toolbar-label" for="column-count-select">다단</label>
+        <select id="column-count-select" class="toolbar-select">
+          <option value="1">1단</option>
+          <option value="2">2단</option>
+          <option value="3">3단</option>
+        </select>
+        <label class="toolbar-label" for="align-select">정렬</label>
+        <select id="align-select" class="toolbar-select">
+          <option value="left">왼쪽</option>
+          <option value="center">가운데</option>
+          <option value="right">오른쪽</option>
+          <option value="justify">양쪽</option>
+        </select>
         <span id="hwp-status" class="status"></span>
     </div>
 

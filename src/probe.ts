@@ -30,7 +30,9 @@ export function collectProbeItems(model: DocumentModel): ProbeItem[] {
   };
   model.forEach((item) => {
     if (item.type === 'paragraph') {
-      add(item.children || [], EDITOR_W);
+      const columns = item.columns && item.columns > 1 ? item.columns : 1;
+      const width = columns > 1 ? (EDITOR_W - 20 * (columns - 1)) / columns : EDITOR_W;
+      add(item.children || [], width);
     } else {
       item.rows.forEach((row) => {
         const cw = TABLE_GRID_W / row.cells.length - CELL_PAD - CELL_BD;

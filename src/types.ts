@@ -14,6 +14,7 @@ export type TextAlign = 'left' | 'center' | 'right' | 'justify';
 export interface ParagraphNode {
   type: 'paragraph';
   children: TextRun[];
+  columns?: number;
   align?: TextAlign;
   _docIdx?: number;
   _charOffset?: number;
@@ -67,4 +68,6 @@ export type WorkerMessage =
   | { type: 'EDIT_DELETE'; payload: { paragraphIndex: number; charIndex: number } }
   | { type: 'EDIT_SPLIT'; payload: { paragraphIndex: number; charIndex: number } }
   | { type: 'GET_DOC' }
-  | { type: 'EDIT_FONT'; payload: { paragraphIndex: number; fontFamily?: string; fontSize?: number } };
+  | { type: 'EDIT_FONT'; payload: { paragraphIndex: number; fontFamily?: string; fontSize?: number } }
+  | { type: 'EDIT_COLUMNS'; payload: { paragraphIndices: number[]; columns: number } }
+  | { type: 'EDIT_ALIGN'; payload: { paragraphIndices: number[]; align: TextAlign } };
