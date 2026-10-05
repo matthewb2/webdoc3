@@ -176,7 +176,7 @@ export function appendStreamPages(newPages: PageModel[]) {
   updateVisiblePages();
 }
 
-function visibleRange(forceIdx?: number): [number, number] {
+function visibleRange(forceIdx?: number | number[]): [number, number] {
   const n = cachedPages.length;
   if (n === 0) return [0, -1];
   let start = 0;
@@ -191,13 +191,16 @@ function visibleRange(forceIdx?: number): [number, number] {
     end = Math.floor(bottomInContent / PAGE_PITCH) + VIRTUAL_BUFFER;
   }
   if (forceIdx !== undefined) {
-    start = Math.min(start, forceIdx);
-    end = Math.max(end, forceIdx);
+    const list = Array.isArray(forceIdx) ? forceIdx : [forceIdx];
+    list.forEach((f) => {
+      start = Math.min(start, f);
+      end = Math.max(end, f);
+    });
   }
   return [Math.max(0, start), Math.min(n - 1, end)];
 }
 
-export function updateVisiblePages(forceIdx?: number) {
+export function updateVisiblePages(forceIdx?: number | number[]) {
   if (!topSpacer || !bottomSpacer) return;
   const n = cachedPages.length;
   if (n === 0) {
@@ -224,7 +227,10 @@ export function updateVisiblePages(forceIdx?: number) {
       mountedPages.set(i, el);
     }
     el.style.marginBottom = i === n - 1 ? '0px' : '30px';
-    rendererContainer.insertBefore(el, anchor);
+    // 이미 올바른 위치면 DOM 이동 생략 (선택 영역 보존)
+    if (el.parentNode !== rendererContainer || el.nextSibling !== anchor) {
+      rendererContainer.insertBefore(el, anchor);
+    }
     anchor = el;
   }
   topSpacer.style.height = `${start * PAGE_PITCH}px`;
@@ -271,12 +277,21 @@ export function updateVisiblePages(forceIdx?: number) {
 }
 
 export function findCursorPageIndex(docIdx: number): number {
+  const all = findCursorPageIndices(docIdx);
+  return all.length > 0 ? all[0] : -1;
+}
+
+export function findCursorPageIndices(docIdx: number): number[] {
+  const out: number[] = [];
   for (let i = 0; i < cachedPages.length; i++) {
     const page = cachedPages[i];
     for (let k = 0; k < page.length; k++) {
-      if ((page[k] as any)._docIdx === docIdx) return i;
+      if ((page[k] as any)._docIdx === docIdx) {
+        out.push(i);
+        break;
+      }
     }
   }
-  return -1;
+  return out;
 }
 

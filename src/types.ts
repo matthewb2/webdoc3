@@ -50,6 +50,7 @@ export interface CursorState {
   isInsideTable: boolean;
   rowIndex: number;
   cellIndex: number;
+  pageNumber: number;
 }
 
 export interface FontMetrics {
@@ -65,4 +66,5 @@ export type WorkerMessage =
   | { type: 'EDIT_INSERT'; payload: { paragraphIndex: number; charIndex: number; text: string } }
   | { type: 'EDIT_DELETE'; payload: { paragraphIndex: number; charIndex: number } }
   | { type: 'EDIT_SPLIT'; payload: { paragraphIndex: number; charIndex: number } }
-  | { type: 'GET_DOC' };
+  | { type: 'GET_DOC' }
+  | { type: 'EDIT_FONT'; payload: { paragraphIndex: number; fontFamily?: string; fontSize?: number } };

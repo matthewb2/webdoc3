@@ -1,7 +1,8 @@
 import type { CursorState, DocumentModel, FontMetrics, TableNode } from './types';
+import type { PageModel } from './worker/doc.worker';
 import { collectProbeItems, computeBreaks } from './probe';
-import { appendStreamPages, findCursorPageIndex, initRenderer, renderVirtualPages, updateVisiblePages } from './render';
-import { initEditorListeners, initHwpFileOpen, initOdtExport, initSelectionListener, initViewportScrollListener, initWorkerListener } from './listener';
+import { appendStreamPages, findCursorPageIndices, initRenderer, renderVirtualPages, updateVisiblePages } from './render';
+import { initEditorListeners, initFontCombos, initHwpFileOpen, initOdtExport, initSelectionListener, initViewportScrollListener, initWorkerListener, isComposingActive, setAwaitingRender, syncFontCombos } from './listener';
 
 const worker = new Worker(new URL('./worker/doc.worker.ts', import.meta.url), {
   type: 'module'
@@ -39,13 +40,14 @@ function generateFontMetrics(fontStyle: string): FontMetrics {
 
 
 // [수정] 단락과 표 내부 셀을 모두 추적할 수 있도록 확장된 커서 상태 구조
-let savedCursor: CursorState = { 
+let savedCursor: CursorState = {
   docIdx: 0,
   charIndex: 0,
   charOffset: 0,
   isInsideTable: false,
   rowIndex: 0,
-  cellIndex: 0
+  cellIndex: 0,
+  pageNumber: 0
 };
 
 // 1. 커서 위치 저장 보고화
@@ -55,15 +57,18 @@ function saveCursorPosition() {
   
   const range = selection.getRangeAt(0);
   const startContainer = range.startContainer;
-  
-  const currentParagraph = startContainer.parentElement?.closest('p');
-  const currentCell = startContainer.parentElement?.closest('td');
+  const startEl = startContainer.nodeType === Node.TEXT_NODE
+    ? startContainer.parentElement
+    : (startContainer as Element);
+
+  const currentParagraph = startEl?.closest('p');
+  const currentCell = startEl?.closest('td');
 
   if (currentCell) {
     const currentTR = currentCell.closest('tr');
     const currentTable = currentCell.closest('table');
     const currentPage = currentCell.closest('.page');
-    
+
     if (currentTR && currentTable && currentPage) {
       savedCursor.isInsideTable = true;
       savedCursor.charIndex = range.startOffset;
@@ -76,8 +81,26 @@ function saveCursorPosition() {
     savedCursor.isInsideTable = false;
     savedCursor.docIdx = parseInt(currentParagraph.dataset.pIdx, 10);
     savedCursor.charOffset = parseInt(currentParagraph.dataset.pOffset || '0', 10);
-    savedCursor.charIndex = range.startOffset + savedCursor.charOffset;
+    // 단락 시작부터 캐럿까지의 실제 텍스트 길이로 계산 (span 경계를 초월, ''런 ZWSP 제외)
+    const pre = document.createRange();
+    pre.selectNodeContents(currentParagraph);
+    try {
+      pre.setEnd(startContainer, range.startOffset);
+    } catch {
+      savedCursor.charIndex = savedCursor.charOffset;
+      return;
+    }
+    const raw = pre.toString();
+    let zwsp = 0;
+    for (const ch of raw) if (ch === '\u200B') zwsp++;
+    savedCursor.charIndex = (raw.length - zwsp) + savedCursor.charOffset;
   }
+
+  const currentPage = startEl?.closest('.page') as HTMLElement | null;
+  if (currentPage?.dataset.pageNumber) {
+    savedCursor.pageNumber = parseInt(currentPage.dataset.pageNumber, 10);
+  }
+  console.log(`[save] docIdx=${savedCursor.docIdx} charIndex=${savedCursor.charIndex}`);
 }
 
 // 2. 커서 위치 복원 고도화
@@ -85,16 +108,47 @@ function restoreCursorPosition() {
   const selection = window.getSelection();
   if (!selection) return;
 
-  // [가상화] 커서가 있는 페이지를 먼저 마운트
-  const cursorPage = findCursorPageIndex(savedCursor.docIdx);
-  if (cursorPage >= 0) updateVisiblePages(cursorPage);
+  // [가상화] 커서가 있는 페이지를 먼저 마운트 (분할된 단락/표의 모든 조각)
+  const cursorPages = findCursorPageIndices(savedCursor.docIdx);
+  if (cursorPages.length > 0) updateVisiblePages(cursorPages);
 
   let targetTextNode: Node | null = null;
-  let targetLength = 0;
   let targetOffset = 0;
 
+  const placeInElement = (root: Element, modelIndex: number) => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let tn = walker.nextNode();
+    let remaining = Math.max(0, modelIndex);
+    let lastText: Node | null = null;
+    let lastLen = 0;
+    while (tn) {
+      const t = tn.textContent || '';
+      let zw = 0;
+      for (const ch of t) if (ch === '\u200B') zw++;
+      const modelLen = t.length - zw;
+      lastText = tn;
+      lastLen = t.length;
+      if (remaining <= modelLen) {
+        targetTextNode = tn;
+        targetOffset = Math.min(remaining, t.length);
+        return;
+      }
+      remaining -= modelLen;
+      tn = walker.nextNode();
+    }
+    if (lastText) {
+      targetTextNode = lastText;
+      targetOffset = lastLen;
+    }
+  };
+
   if (savedCursor.isInsideTable) {
-    const targetTable = containerEl.querySelector(`table[data-p-idx="${savedCursor.docIdx}"]`) as HTMLTableElement | null;
+    // 저장된 페이지의 표를 우선 탐색 (분할된 표의 조각 인덱스 일치 보장)
+    const pageEl = savedCursor.pageNumber > 0
+      ? containerEl.querySelector(`.page[data-page-number="${savedCursor.pageNumber}"]`)
+      : null;
+    const scope = (pageEl || containerEl) as HTMLElement;
+    const targetTable = scope.querySelector(`table[data-p-idx="${savedCursor.docIdx}"]`) as HTMLTableElement | null;
     if (targetTable) {
       const rows = targetTable.querySelectorAll('tr');
       const targetRow = rows[savedCursor.rowIndex];
@@ -104,30 +158,38 @@ function restoreCursorPosition() {
         if (targetCell) {
           const span = targetCell.querySelector('span');
           targetTextNode = span?.firstChild || null;
-          targetLength = span?.textContent?.length || 0;
-          targetOffset = Math.min(savedCursor.charIndex, targetLength);
+          targetOffset = Math.min(savedCursor.charIndex, span?.textContent?.length || 0);
         }
       }
     }
   } else {
     const matches = Array.from(containerEl.querySelectorAll(`p[data-p-idx="${savedCursor.docIdx}"]`) as NodeListOf<HTMLParagraphElement>);
+    // 분할 이동으로 조각 경계가 바뀌었을 수 있으므로 charIndex가 들어가는 조각을 범위로 탐색
     let targetParagraph: HTMLParagraphElement | null = null;
-    if (matches.length <= 1) {
-      targetParagraph = matches[0] || containerEl.querySelector('p[data-p-idx]') as HTMLParagraphElement;
-    } else {
-      targetParagraph = matches.find(p => parseInt(p.dataset.pOffset || '0', 10) === savedCursor.charOffset) || matches[0];
+    for (const m of matches) {
+      const off = parseInt(m.dataset.pOffset || '0', 10);
+      const len = m.textContent?.length || 0;
+      if (savedCursor.charIndex >= off) targetParagraph = m;
+      if (savedCursor.charIndex <= off + len) break;
     }
-
+    targetParagraph = targetParagraph || matches[0] || null;
+    console.log(`[restore] docIdx=${savedCursor.docIdx} charIndex=${savedCursor.charIndex} matches=${matches.length} target=${targetParagraph ? (targetParagraph.dataset.pIdx + ':' + targetParagraph.dataset.pOffset) : 'null'}`);
     if (targetParagraph) {
-      const span = targetParagraph.querySelector('span');
-      targetTextNode = span?.firstChild || null;
-      const fragOffset = parseInt(targetParagraph.dataset.pOffset || '0', 10);
-      targetOffset = Math.min(savedCursor.charIndex - fragOffset, (span?.textContent?.length || 0));
-      targetOffset = Math.max(0, targetOffset);
+      const fragOffset = parseInt((targetParagraph as HTMLElement).dataset.pOffset || '0', 10);
+      placeInElement(targetParagraph as HTMLElement, savedCursor.charIndex - fragOffset);
     }
   }
 
   if (targetTextNode && targetTextNode.nodeType === Node.TEXT_NODE) {
+    // 이미 같은 위치면 DOM을 건드리지 않음 (불필요한 스크롤·selectionchange 방지)
+    if (
+      selection.rangeCount > 0 &&
+      selection.isCollapsed &&
+      selection.anchorNode === targetTextNode &&
+      selection.anchorOffset === targetOffset
+    ) {
+      return;
+    }
     const range = document.createRange();
     try {
       range.setStart(targetTextNode, targetOffset);
@@ -226,13 +288,40 @@ function buildMockDocument(): DocumentModel {
 initRenderer(containerEl);
 initWordProcessor();
 initHwpFileOpen(worker, containerEl);
-initWorkerListener(worker, (pages) => {
+let pendingPages: PageModel[] | null = null;
+
+function applyReadyPages(pages: PageModel[]) {
+  // 리마운트로 인한 스크롤 점프 방지: 렌더 전 위치를 복원한 뒤 커서 복원
+  const viewport = document.querySelector('.editor-viewport') as HTMLDivElement | null;
+  const prevTop = viewport ? viewport.scrollTop : 0;
   renderVirtualPages(pages, true);
+  if (viewport) viewport.scrollTop = prevTop;
   restoreCursorPosition();
+  syncFontCombos();
+}
+
+function flushPendingRender() {
+  if (pendingPages) {
+    const stashed = pendingPages;
+    pendingPages = null;
+    applyReadyPages(stashed);
+  }
+}
+
+initWorkerListener(worker, (pages) => {
+  setAwaitingRender(false);
+  // 조합 중에는 렌더를 보류 (조합 노드가 날아가 자모가 깨짐)
+  if (isComposingActive()) {
+    pendingPages = pages;
+    return;
+  }
+  applyReadyPages(pages);
 }, (pages) => {
+  if (isComposingActive()) return;
   appendStreamPages(pages);
 });
 initViewportScrollListener(() => updateVisiblePages());
-initSelectionListener(() => saveCursorPosition());
-initEditorListeners(containerEl, worker, savedCursor, saveCursorPosition);
+initSelectionListener(() => { saveCursorPosition(); syncFontCombos(); });
+initEditorListeners(containerEl, worker, savedCursor, saveCursorPosition, flushPendingRender, () => { pendingPages = null; });
+initFontCombos(containerEl, worker, savedCursor);
 initOdtExport(worker);

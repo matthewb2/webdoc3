@@ -204,54 +204,9 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
   processChunk();
 }
 function buildParagraphFragment(lines: Glyph[][], docIdx: number, charOffset: number, align?: string): ParagraphNode | null {
-  const firstRun = lines[0]?.[0]?.run;
-  const baseFontSize = firstRun?.fontSize ?? BASE_FONT_PX;
-  const baseFontFamily = firstRun?.fontFamily;
-  const baseBold = firstRun?.bold;
-  const baseItalic = firstRun?.italic;
-  const baseUnderline = firstRun?.underline;
-  const baseStrike = firstRun?.strike;
-  const baseColor = firstRun?.color;
-
-  const processedLines = lines.map((line) => {
-    if (align === 'center') {
-      const lineWidth = measureLineWidth(line);
-      const remainingSpace = Math.max(0, EDITOR_MAX_WIDTH - lineWidth);
-      const paddingWidth = remainingSpace / 2;
-      if (paddingWidth > 0) {
-        const spacerRun: TextRun = { 
-          text: ' '.repeat(Math.round(paddingWidth / getSpaceWidth(baseFontSize))), 
-          fontSize: baseFontSize,
-          fontFamily: baseFontFamily,
-          bold: baseBold,
-          italic: baseItalic,
-          underline: baseUnderline,
-          strike: baseStrike,
-          color: baseColor
-        };
-        return [{ ch: ' ', run: spacerRun }, ...line];
-      }
-    } else if (align === 'right') {
-      const lineWidth = measureLineWidth(line);
-      const remainingSpace = Math.max(0, EDITOR_MAX_WIDTH - lineWidth);
-      if (remainingSpace > 0) {
-        const spacerRun: TextRun = { 
-          text: ' '.repeat(Math.round(remainingSpace / getSpaceWidth(baseFontSize))), 
-          fontSize: baseFontSize,
-          fontFamily: baseFontFamily,
-          bold: baseBold,
-          italic: baseItalic,
-          underline: baseUnderline,
-          strike: baseStrike,
-          color: baseColor
-        };
-        return [{ ch: ' ', run: spacerRun }, ...line];
-      }
-    }
-    return line;
-  });
-
-  const runs = mergeRuns(processedLines.flatMap(glyphLineToRuns));
+  // 정렬은 CSS text-align으로 처리한다. 스페이서 런을 넣으면 fragment 텍스트가
+  // 원문과 달라져 커서 오프셋과 편집 인덱스가 어긋나므로 절대 추가하지 않는다.
+  const runs = mergeRuns(lines.flatMap(glyphLineToRuns));
   if (runs.length === 0) return null;
 
   const fragment: ParagraphNode = {
@@ -273,21 +228,6 @@ function buildParagraphFragment(lines: Glyph[][], docIdx: number, charOffset: nu
   fragment.lineHeight = maxLineHeight;
 
   return fragment;
-}
-
-function measureLineWidth(line: Glyph[]): number {
-  let width = 0;
-  line.forEach((glyph) => {
-    const baseWidth = fontMetrics[glyph.ch] !== undefined ? fontMetrics[glyph.ch] : fontMetrics['default_ko'];
-    width += glyph.w ?? baseWidth * ((glyph.run.fontSize ?? BASE_FONT_PX) / BASE_FONT_PX);
-  });
-  return width;
-}
-
-function getSpaceWidth(fontSize?: number): number {
-  const baseWidth = fontMetrics[' '] !== undefined ? fontMetrics[' '] : (fontMetrics['default_ko'] ?? 8);
-  const scale = (fontSize ?? BASE_FONT_PX) / BASE_FONT_PX;
-  return baseWidth * scale;
 }
 
 function glyphLineToRuns(line: Glyph[]): TextRun[] {

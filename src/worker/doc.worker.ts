@@ -1,4 +1,4 @@
-import type { DocumentModel } from '../types';
+import type { DocumentModel, TextRun } from '../types';
 import { runLayoutEngineAsync, setBreaks, setFontMetrics } from './layout';
 export type { PageModel } from './layout';
 
@@ -27,38 +27,82 @@ self.addEventListener('message', (event: MessageEvent<any>) => {
     editSplit(message.payload.paragraphIndex, message.payload.charIndex);
   } else if (message.type === 'GET_DOC') {
     self.postMessage({ type: 'DOC_SNAPSHOT', payload: documentState });
+  } else if (message.type === 'EDIT_FONT') {
+    editFont(message.payload.paragraphIndex, message.payload.fontFamily, message.payload.fontSize);
   }
 });
 
+function locateRun(children: TextRun[], charIndex: number): { runIndex: number; localIndex: number } {
+  let acc = 0;
+  for (let i = 0; i < children.length; i++) {
+    const len = children[i].text?.length || 0;
+    if (charIndex <= acc + len) return { runIndex: i, localIndex: Math.max(0, charIndex - acc) };
+    acc += len;
+  }
+  const last = Math.max(0, children.length - 1);
+  return { runIndex: last, localIndex: children[last]?.text?.length || 0 };
+}
+
 function editInsert(docIdx: number, charIndex: number, text: string) {
+  console.log(`[edit] insert p=${docIdx} at=${charIndex} text=${JSON.stringify(text.slice(0, 30))}`);
   const item = documentState[docIdx];
   if (item?.type !== 'paragraph') return;
-  const fullText = item.children[0]?.text || '';
-  const before = fullText.slice(0, charIndex);
-  const after = fullText.slice(charIndex);
-  item.children[0] = { text: before + text + after, bold: item.children[0]?.bold };
+  if (item.children.length === 0) item.children.push({ text: '' });
+  const { runIndex, localIndex } = locateRun(item.children, Math.max(0, charIndex));
+  const run = item.children[runIndex];
+  const t = run.text || '';
+  run.text = t.slice(0, localIndex) + text + t.slice(localIndex);
+  requestLayout();
+}
+
+function editFont(docIdx: number, fontFamily?: string, fontSize?: number) {
+  const item = documentState[docIdx];
+  if (item?.type !== 'paragraph') return;
+  item.children.forEach((run) => {
+    if (fontFamily !== undefined) run.fontFamily = fontFamily;
+    if (fontSize !== undefined) run.fontSize = fontSize;
+  });
   requestLayout();
 }
 
 function editDelete(docIdx: number, charIndex: number) {
   const item = documentState[docIdx];
   if (item?.type !== 'paragraph') return;
-  const fullText = item.children[0]?.text || '';
   if (charIndex <= 0) return;
-  const before = fullText.slice(0, charIndex - 1);
-  const after = fullText.slice(charIndex);
-  item.children[0] = { text: before + after, bold: item.children[0]?.bold };
+  const total = item.children.reduce((acc, r) => acc + (r.text?.length || 0), 0);
+  if (charIndex - 1 >= total) return;
+  const { runIndex, localIndex } = locateRun(item.children, charIndex - 1);
+  let ri = runIndex;
+  let run = item.children[ri];
+  while (run && (run.text || '').length === 0 && ri > 0) {
+    ri -= 1;
+    run = item.children[ri];
+  }
+  if (!run) return;
+  const t = run.text || '';
+  if (t.length === 0) return;
+  const delAt = Math.min(localIndex, t.length - 1);
+  run.text = t.slice(0, Math.max(0, delAt)) + t.slice(delAt + 1);
   requestLayout();
 }
 
 function editSplit(docIdx: number, charIndex: number) {
   const item = documentState[docIdx];
   if (item?.type !== 'paragraph') return;
-  const fullText = item.children[0]?.text || '';
-  const before = fullText.slice(0, charIndex);
-  const after = fullText.slice(charIndex);
-  documentState[docIdx] = { type: 'paragraph', children: [{ text: before, bold: item.children[0]?.bold }] };
-  documentState.splice(docIdx + 1, 0, { type: 'paragraph', children: [{ text: after, bold: item.children[0]?.bold }] });
+  const { runIndex, localIndex } = locateRun(item.children, Math.max(0, charIndex));
+  const left: TextRun[] = [];
+  const right: TextRun[] = [];
+  item.children.forEach((run, i) => {
+    const t = run.text || '';
+    if (i < runIndex) left.push(run);
+    else if (i > runIndex) right.push(run);
+    else {
+      left.push({ ...run, text: t.slice(0, localIndex) });
+      right.push({ ...run, text: t.slice(localIndex) });
+    }
+  });
+  documentState[docIdx] = { type: 'paragraph', children: left.length > 0 ? left : [{ text: '' }] };
+  documentState.splice(docIdx + 1, 0, { type: 'paragraph', children: right.length > 0 ? right : [{ text: '' }] });
   requestLayout();
 }
 
