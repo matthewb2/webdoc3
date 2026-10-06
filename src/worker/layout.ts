@@ -77,7 +77,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
           charge = Math.ceil(paraTotal / columns) + LINE_HEIGHT;
           pendingCols = { columns, total: paraTotal };
         }
-        const colFragment = buildParagraphFragment(lines, idx, 0, item.align, columns);
+        const colFragment = buildParagraphFragment(lines, idx, 0, item.align, columns, item.indent);
         if (colFragment && colFragment.children.length > 0) {
           currentPage.push(colFragment);
         }
@@ -97,7 +97,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
             console.log(`[para-break] docIdx=${idx} cur=${currentHeight} lh=${lineHeight} text=${JSON.stringify(runs.map((r) => r.text).join('').slice(0, 30))}`);
           }
           if (currentParagraphLines.length > 0) {
-            const fragment = buildParagraphFragment(currentParagraphLines, idx, charOffset, item.align);
+            const fragment = buildParagraphFragment(currentParagraphLines, idx, charOffset, item.align, undefined, item.indent);
             if (fragment && fragment.children.length > 0) {
               currentPage.push(fragment);
               charOffset += fragment.children.reduce((acc, run) => acc + run.text.length, 0);
@@ -114,7 +114,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
       });
 
       if (currentParagraphLines.length > 0) {
-        const fragment = buildParagraphFragment(currentParagraphLines, idx, charOffset, item.align);
+        const fragment = buildParagraphFragment(currentParagraphLines, idx, charOffset, item.align, undefined, item.indent);
         if (fragment && fragment.children.length > 0) {
           currentPage.push(fragment);
         }
@@ -245,7 +245,14 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
 
   processChunk();
 }
-function buildParagraphFragment(lines: Glyph[][], docIdx: number, charOffset: number, align?: string, columns?: number): ParagraphNode | null {
+function buildParagraphFragment(
+  lines: Glyph[][],
+  docIdx: number,
+  charOffset: number,
+  align?: string,
+  columns?: number,
+  indent?: number,
+): ParagraphNode | null {
   // 정렬은 CSS text-align으로 처리한다. 스페이서 런을 넣으면 fragment 텍스트가
   // 원문과 달라져 커서 오프셋과 편집 인덱스가 어긋나므로 절대 추가하지 않는다.
   const runs = mergeRuns(lines.flatMap(glyphLineToRuns));
@@ -263,6 +270,9 @@ function buildParagraphFragment(lines: Glyph[][], docIdx: number, charOffset: nu
   }
   if (columns && columns > 1) {
     fragment.columns = columns;
+  }
+  if (indent) {
+    fragment.indent = indent;
   }
 
   let maxLineHeight = LINE_HEIGHT;
@@ -297,7 +307,8 @@ function isSameStyle(a: TextRun, b: TextRun): boolean {
     a.strike === b.strike &&
     a.fontFamily === b.fontFamily &&
     a.fontSize === b.fontSize &&
-    a.color === b.color;
+    a.color === b.color &&
+    a.backgroundColor === b.backgroundColor;
 }
 
 function mergeRuns(runs: TextRun[]): TextRun[] {

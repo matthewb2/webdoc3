@@ -157,6 +157,7 @@ interface ShapeDef {
   underline: boolean;
   strike: boolean;
   color: number; // ColorRef (R | G<<8 | B<<16)
+  shadeColor: number; // 배경색 (없으면 0)
 }
 
 function parseColor(color: string | undefined): number {
@@ -179,8 +180,10 @@ function shapeOfRun(run: TextRun): ShapeDef {
   const strike = !!run.strike;
   const fontFamily = run.fontFamily || 'Arial';
   const color = parseColor(run.color);
+  // 배경 없음 = 0xFFFFFFFF (0은 검정으로 렌더링됨)
+  const shadeColor = run.backgroundColor ? parseColor(run.backgroundColor) : 0xffffffff;
   return {
-    key: [fontFamily, fontSizePx, bold ? 1 : 0, italic ? 1 : 0, underline ? 1 : 0, strike ? 1 : 0, color].join('|'),
+    key: [fontFamily, fontSizePx, bold ? 1 : 0, italic ? 1 : 0, underline ? 1 : 0, strike ? 1 : 0, color, shadeColor].join('|'),
     fontFamily,
     fontSizePx,
     bold,
@@ -188,6 +191,7 @@ function shapeOfRun(run: TextRun): ShapeDef {
     underline,
     strike,
     color,
+    shadeColor,
   };
 }
 
@@ -395,8 +399,8 @@ function buildCfbFile(specs: CfbEntrySpec[]): Uint8Array {
 export class HwpWriter {
   private shapes: ShapeDef[] = [];
   private shapeIndexByKey = new Map<string, number>();
-  private paraShapes: number[] = []; // 사용 순서대로 HWP align 값
-  private paraShapeIndexByAlign = new Map<number, number>();
+  private paraShapes: Array<{ align: number; indentPx: number }> = []; // 사용 순서대로 문단 모양
+  private paraShapeIndexByAlign = new Map<string, number>();
   private koFaces: string[] = [];
 
   private docModel: DocumentModel;
@@ -469,9 +473,11 @@ export class HwpWriter {
     const addPara = (para: ParagraphNode) => {
       (para.children || []).forEach(addRun);
       const hwpAlign = ALIGN_TO_HWP[para.align ?? 'left'];
-      if (!this.paraShapeIndexByAlign.has(hwpAlign)) {
-        this.paraShapeIndexByAlign.set(hwpAlign, this.paraShapes.length);
-        this.paraShapes.push(hwpAlign);
+      const indentPx = para.indent ?? 0;
+      const key = `${hwpAlign}|${indentPx}`;
+      if (!this.paraShapeIndexByAlign.has(key)) {
+        this.paraShapeIndexByAlign.set(key, this.paraShapes.length);
+        this.paraShapes.push({ align: hwpAlign, indentPx });
       }
     };
     this.docModel.forEach((item) => {
@@ -483,6 +489,11 @@ export class HwpWriter {
             (cell.children || []).forEach(addRun);
           });
         });
+        // 셀 문단은 왼쪽 모양 사용 (DocInfo 기록 전 보장)
+        if (!this.paraShapeIndexByAlign.has('1|0')) {
+          this.paraShapeIndexByAlign.set('1|0', this.paraShapes.length);
+          this.paraShapes.push({ align: 1, indentPx: 0 });
+        }
       }
     });
     if (this.koFaces.length === 0) this.koFaces.push('Arial');
@@ -559,8 +570,8 @@ export class HwpWriter {
     // 탭 정의 1개 (기본값 8B, 글자 모양 뒤)
     parts.push(packRecord(TAG_TAB_DEF, 1, new Uint8Array(8)));
     // 문단 모양
-    this.paraShapes.forEach((align) => {
-      parts.push(packRecord(TAG_PARA_SHAPE, 1, this.buildParaShape(align)));
+    this.paraShapes.forEach((def) => {
+      parts.push(packRecord(TAG_PARA_SHAPE, 1, this.buildParaShape(def)));
     });
     // 스타일 1개
     parts.push(packRecord(TAG_STYLE, 1, this.buildStyle()));
@@ -607,19 +618,19 @@ export class HwpWriter {
     out.u8(0); // shadow offsets
     out.u32le(def.color);
     out.u32le(0); // underlineColor
-    out.u32le(0); // shadeColor
+    out.u32le(def.shadeColor); // shadeColor (배경색)
     out.u32le(0); // shadowColor
     out.u16le(0); // borderFillId (5.0.2.1+)
     out.u32le(0); // strikeColor (5.0.3.0+)
     return out.build();
   }
 
-  private buildParaShape(hwpAlign: number): Uint8Array {
+  private buildParaShape(def: { align: number; indentPx: number }): Uint8Array {
     const out = new ByteBuilder();
-    out.u32le(0x180 | ((hwpAlign & 0x7) << 2)); // attribute (실파일 관용값 + 정렬 비트)
+    out.u32le(0x180 | ((def.align & 0x7) << 2)); // attribute (실파일 관용값 + 정렬 비트)
     out.i32le(0); // paddingLeft
     out.i32le(0); // paddingRight
-    out.i32le(0); // indent
+    out.i32le(Math.round(def.indentPx * 75)); // indent (px → HWPUNIT, 음수=내어쓰기)
     out.i32le(0); // marginTop
     out.i32le(0); // marginBottom
     out.i32le(160); // lineSpaceOld
@@ -680,10 +691,18 @@ export class HwpWriter {
   }
 
   // 선행 컨트롤 확장 문자 (코드 2 + 12B 버퍼 + 에코)
-  private controlChar(out: ByteBuilder): void {
+  // 버퍼는 원본과 동일 바이트 (0 채움 시 한컴이 공백으로 렌더링할 수 있음)
+  private controlChar(out: ByteBuilder, bufHex: string | null = null): void {
     out.u16le(2);
-    for (let i = 0; i < 12; i++) out.u8(0);
+    if (bufHex) out.raw(hexBytes(bufHex));
+    else for (let i = 0; i < 12; i++) out.u8(0);
     out.u16le(2);
+  }
+
+  private leadingBuf(name: string): string | null {
+    if (name === 'secd') return '646365730000000000000000';
+    if (name === 'cold') return '646c6f630000000000000000';
+    return null;
   }
 
   // 구역 정의 레코드 묶음 (SECD + 하위 + COLD)
@@ -722,7 +741,7 @@ export class HwpWriter {
     );
     if (hasBody) {
       const textBuf = new ByteBuilder();
-      leading.forEach(() => this.controlChar(textBuf));
+      leading.forEach((name) => this.controlChar(textBuf, this.leadingBuf(name)));
       textBuf.utf16Units(text);
       if (text.length > 0) textBuf.u16le(13); // 단락 끝 문자
       parts.push(packRecord(TAG_PARA_TEXT, base + 1, textBuf.build()));
@@ -763,7 +782,8 @@ export class HwpWriter {
   }
 
   private paraShapeOf(para: ParagraphNode): number {
-    return this.paraShapeIndexByAlign.get(ALIGN_TO_HWP[para.align ?? 'left']) ?? 0;
+    const key = `${ALIGN_TO_HWP[para.align ?? 'left']}|${para.indent ?? 0}`;
+    return this.paraShapeIndexByAlign.get(key) ?? 0;
   }
 
   private runsWithShape(para: ParagraphNode): Array<{ start: number; shapeId: number }> {
@@ -813,7 +833,7 @@ export class HwpWriter {
     if (isLast) hostChars |= 0x80000000;
     header.u32le(hostChars);
     header.u32le(leading.includes('secd') ? 0x4 : 0); // ctrlMask
-    header.u16le(this.paraShapeIndexByAlign.get(1) ?? 0); // 왼쪽 문단 모양
+    header.u16le(this.paraShapeIndexByAlign.get('1|0') ?? 0); // 왼쪽 문단 모양
     header.u8(0);
     header.u8(leading.length > 0 ? 3 : 0); // breakOptions
     header.u16le(0); // charShapes (호스트 텍스트 모양 없음)
@@ -823,7 +843,7 @@ export class HwpWriter {
     header.u16le(0); // trackingChangeMerged (5.0.3.2+)
     parts.push(packRecord(TAG_PARA_HEADER, 0, header.build()));
     const text = new ByteBuilder();
-    leading.forEach(() => this.controlChar(text));
+    leading.forEach((name) => this.controlChar(text, this.leadingBuf(name)));
     this.controlChar(text); // 표 컨트롤
     text.u16le(13); // 단락 끝 문자
     parts.push(packRecord(TAG_PARA_TEXT, 1, text.build()));
@@ -909,10 +929,6 @@ export class HwpWriter {
     parts.push(packRecord(TAG_LIST_HEADER, 1, list.build()));
     if (hasText) {
       const para: ParagraphNode = { type: 'paragraph', children: children as TextRun[] };
-      if (!this.paraShapeIndexByAlign.has(1)) {
-        this.paraShapeIndexByAlign.set(1, this.paraShapes.length);
-        this.paraShapes.push(1);
-      }
       parts.push(...this.buildParagraph(para, 2));
     }
     return parts;

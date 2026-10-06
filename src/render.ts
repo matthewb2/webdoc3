@@ -21,6 +21,7 @@ function applyRunStyle(span: HTMLSpanElement, run: any) {
   if (run.fontFamily) span.style.fontFamily = run.fontFamily;
   if (run.fontSize) span.style.fontSize = `${run.fontSize}px`;
   if (run.color) span.style.color = run.color;
+  if (run.backgroundColor) span.style.backgroundColor = run.backgroundColor;
 }
 // [가상화] 고정 페이지 규격 기반 렌더링 (CSS .page height 900 + gap 30)
 const PAGE_PITCH = 930;
@@ -117,6 +118,17 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
       if (item.align) {
         p.style.textAlign = item.align;
         p.dataset.align = item.align;
+      }
+
+      // [구현] 왼쪽 들여쓰기 (양수=첫 줄 들여쓰기, 음수=내어쓰기)
+      if (item.indent) {
+        if (item.indent > 0) {
+          p.style.textIndent = `${item.indent}px`;
+        } else {
+          p.style.paddingLeft = `${-item.indent}px`;
+          p.style.textIndent = `${item.indent}px`;
+        }
+        p.dataset.indent = String(item.indent);
       }
 
       const children: Array<{ text: string; bold?: boolean }> = item.children || [];

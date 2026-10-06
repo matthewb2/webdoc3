@@ -33,6 +33,8 @@ self.addEventListener('message', (event: MessageEvent<any>) => {
     editColumns(message.payload.paragraphIndices, message.payload.columns);
   } else if (message.type === 'EDIT_ALIGN') {
     editAlign(message.payload.paragraphIndices, message.payload.align);
+  } else if (message.type === 'EDIT_COLOR') {
+    editColor(message.payload.paragraphIndices, message.payload.color, message.payload.backgroundColor);
   }
 });
 
@@ -56,6 +58,24 @@ function editInsert(docIdx: number, charIndex: number, text: string) {
   const run = item.children[runIndex];
   const t = run.text || '';
   run.text = t.slice(0, localIndex) + text + t.slice(localIndex);
+  requestLayout();
+}
+
+function editColor(docIndices: number[], color?: string, backgroundColor?: string) {
+  (Array.isArray(docIndices) ? docIndices : []).forEach((docIdx) => {
+    const item = documentState[docIdx];
+    if (item?.type !== 'paragraph') return;
+    item.children.forEach((run) => {
+      if (color !== undefined) {
+        if (color === '') delete run.color;
+        else run.color = color;
+      }
+      if (backgroundColor !== undefined) {
+        if (backgroundColor === '') delete run.backgroundColor;
+        else run.backgroundColor = backgroundColor;
+      }
+    });
+  });
   requestLayout();
 }
 
@@ -133,8 +153,8 @@ function editSplit(docIdx: number, charIndex: number) {
       right.push({ ...run, text: t.slice(localIndex) });
     }
   });
-  documentState[docIdx] = { type: 'paragraph', children: left.length > 0 ? left : [{ text: '' }], align: item.align, columns: item.columns };
-  documentState.splice(docIdx + 1, 0, { type: 'paragraph', children: right.length > 0 ? right : [{ text: '' }], align: item.align, columns: item.columns });
+  documentState[docIdx] = { type: 'paragraph', children: left.length > 0 ? left : [{ text: '' }], align: item.align, columns: item.columns, indent: item.indent };
+  documentState.splice(docIdx + 1, 0, { type: 'paragraph', children: right.length > 0 ? right : [{ text: '' }], align: item.align, columns: item.columns, indent: item.indent });
   requestLayout();
 }
 

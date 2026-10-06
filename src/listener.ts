@@ -2,6 +2,8 @@
 import type { PageModel } from './worker/doc.worker';
 import type { CursorState, TextRun } from './types';
 import { parseHwpToDocumentModel } from './hwp/hwpParser';
+import { parseDocxToDocumentModel } from './docx/docxParser';
+import { parseOdtToDocumentModel } from './odt/odtParser';
 import { breakKeyForRuns, collectProbeItems, computeBreaks } from './probe';
 import { getCachedPages } from './render';
 import { saveCurrentDocument } from './odt/odtExport';
@@ -278,37 +280,45 @@ container.addEventListener('beforeinput', async (e: InputEvent) => {
 
 }
 
-export function initHwpFileOpen(worker: Worker, containerEl: HTMLDivElement) {
+export function initFileOpen(worker: Worker, containerEl: HTMLDivElement) {
 
-  const openHwpButton = document.getElementById('btn-open-hwp') as HTMLButtonElement;
-  const hwpFileInput = document.getElementById('hwp-file') as HTMLInputElement;
+  const openFileButton = document.getElementById('btn-open-file') as HTMLButtonElement;
+  const fileInput = document.getElementById('file-input') as HTMLInputElement;
   const hwpStatus = document.getElementById('hwp-status') as HTMLSpanElement;
   const editorViewport = document.querySelector('.editor-viewport') as HTMLDivElement;
 
-  function renderHwpFile(file: File) {
-    if (!/\.hwp$/i.test(file.name)) {
-      hwpStatus.textContent = '.hwp 확장자 파일을 선택해 주세요';
+  function renderFile(file: File) {
+    const lower = file.name.toLowerCase();
+    const kind = /\.hwp$/i.test(lower) ? 'hwp' : /\.docx$/i.test(lower) ? 'docx' : /\.odt$/i.test(lower) ? 'odt' : null;
+    if (!kind) {
+      hwpStatus.textContent = '.hwp, .docx, .odt 파일을 선택해 주세요';
       return;
     }
     hwpStatus.textContent = `파싱 중... (${file.name})`;
     file.arrayBuffer()
       .then(async (buffer) => {
-        const model = parseHwpToDocumentModel(new Uint8Array(buffer));
+        const bytes = new Uint8Array(buffer);
+        const model =
+          kind === 'hwp'
+            ? parseHwpToDocumentModel(bytes)
+            : kind === 'docx'
+              ? parseDocxToDocumentModel(bytes)
+              : parseOdtToDocumentModel(bytes);
         worker.postMessage({ type: 'BREAKS', payload: await computeBreaks(collectProbeItems(model)) });
         worker.postMessage({ type: 'INIT_DOC', payload: model });
         containerEl.style.display = 'inline-flex';
         hwpStatus.textContent = `파싱 완료: ${file.name} (${model.length}개 항목)`;
       })
       .catch((err: Error) => {
-        hwpStatus.textContent = `파싱 실패: ${err.message}`;
+        hwpStatus.textContent = `파싱 실패: ${(err as Error).message}`;
       });
   }
 
-  openHwpButton.addEventListener('click', () => hwpFileInput.click());
-  hwpFileInput.addEventListener('change', () => {
-    const file = hwpFileInput.files?.[0];
-    if (file) renderHwpFile(file);
-    hwpFileInput.value = '';
+  openFileButton.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files?.[0];
+    if (file) renderFile(file);
+    fileInput.value = '';
   });
 
   let dragDepth = 0;
@@ -333,8 +343,8 @@ export function initHwpFileOpen(worker: Worker, containerEl: HTMLDivElement) {
     dragDepth = 0;
     editorViewport.classList.remove('is-dragging');
     const files = Array.from(e.dataTransfer?.files ?? []);
-    const file = files.find((f) => /\.hwp$/i.test(f.name) || f.type === 'application/x-hwp');
-    if (file) renderHwpFile(file);
+    const file = files.find((f) => /\.(hwp|docx|odt)$/i.test(f.name));
+    if (file) renderFile(file);
   });
 }
 
@@ -417,6 +427,53 @@ export function syncAlignCombo() {
   if (!p || !container.contains(p)) return;
   select.value = (p as HTMLElement).dataset.align || 'left';
   if (!['left', 'center', 'right', 'justify'].includes(select.value)) select.value = 'left';
+}
+
+function cssColorToHex(color: string): string | null {
+  const m = color.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+  if (m) {
+    const h = (n: number) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0');
+    return `#${h(+m[1])}${h(+m[2])}${h(+m[3])}`;
+  }
+  if (/^#[0-9a-fA-F]{6}$/.test(color)) return color.toLowerCase();
+  return null;
+}
+
+export function initColorControls(container: HTMLDivElement, worker: Worker, cursor: CursorState) {
+  const textInput = document.getElementById('text-color-input') as HTMLInputElement | null;
+  const bgInput = document.getElementById('bg-color-input') as HTMLInputElement | null;
+  if (!textInput || !bgInput) return;
+  textInput.addEventListener('input', () => {
+    worker.postMessage({ type: 'EDIT_COLOR', payload: { paragraphIndices: selectedParagraphIndices(container, cursor.docIdx), color: textInput.value } });
+  });
+  bgInput.addEventListener('input', () => {
+    worker.postMessage({ type: 'EDIT_COLOR', payload: { paragraphIndices: selectedParagraphIndices(container, cursor.docIdx), backgroundColor: bgInput.value } });
+  });
+  textInput.addEventListener('dblclick', () => {
+    worker.postMessage({ type: 'EDIT_COLOR', payload: { paragraphIndices: selectedParagraphIndices(container, cursor.docIdx), color: '' } });
+  });
+  bgInput.addEventListener('dblclick', () => {
+    worker.postMessage({ type: 'EDIT_COLOR', payload: { paragraphIndices: selectedParagraphIndices(container, cursor.docIdx), backgroundColor: '' } });
+  });
+  syncColorControls();
+}
+
+// 커서 위치 run의 색상 설정을 컬러 인풋에 반영
+export function syncColorControls() {
+  const textInput = document.getElementById('text-color-input') as HTMLInputElement | null;
+  const bgInput = document.getElementById('bg-color-input') as HTMLInputElement | null;
+  if (!textInput || !bgInput) return;
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return;
+  const node = selection.anchorNode;
+  if (!node) return;
+  const container = document.getElementById('editor-container');
+  if (!container || !container.contains(node)) return;
+  const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element | null);
+  const span = el?.closest?.('span') as HTMLSpanElement | null;
+  if (!span || !container.contains(span)) return;
+  textInput.value = cssColorToHex(span.style.color || '') || '#000000';
+  bgInput.value = cssColorToHex(span.style.backgroundColor || '') || '#ffffff';
 }
 
 export function initOdtExport(worker: Worker) {

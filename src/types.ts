@@ -7,6 +7,7 @@ export interface TextRun {
   fontFamily?: string;
   fontSize?: number;
   color?: string;
+  backgroundColor?: string;
 }
 
 export type TextAlign = 'left' | 'center' | 'right' | 'justify';
@@ -16,6 +17,8 @@ export interface ParagraphNode {
   children: TextRun[];
   columns?: number;
   align?: TextAlign;
+  /** 왼쪽(첫 줄) 들여쓰기(px). 양수=들여쓰기, 음수=내어쓰기, 기본값 0 */
+  indent?: number;
   _docIdx?: number;
   _charOffset?: number;
   lineHeight?: number;
@@ -70,4 +73,5 @@ export type WorkerMessage =
   | { type: 'GET_DOC' }
   | { type: 'EDIT_FONT'; payload: { paragraphIndex: number; fontFamily?: string; fontSize?: number } }
   | { type: 'EDIT_COLUMNS'; payload: { paragraphIndices: number[]; columns: number } }
-  | { type: 'EDIT_ALIGN'; payload: { paragraphIndices: number[]; align: TextAlign } };
+  | { type: 'EDIT_ALIGN'; payload: { paragraphIndices: number[]; align: TextAlign } }
+  | { type: 'EDIT_COLOR'; payload: { paragraphIndices: number[]; color?: string; backgroundColor?: string } };

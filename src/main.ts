@@ -2,7 +2,7 @@ import type { CursorState, DocumentModel, FontMetrics } from './types';
 import type { PageModel } from './worker/doc.worker';
 import { collectProbeItems, computeBreaks } from './probe';
 import { appendStreamPages, findCursorPageIndices, initRenderer, renderVirtualPages, updateVisiblePages } from './render';
-import { initAlignCombo, initColumnCombo, initEditorListeners, initFontCombos, initHwpFileOpen, initOdtExport, initSelectionListener, initViewportScrollListener, initWorkerListener, isComposingActive, setAwaitingRender, syncAlignCombo, syncColumnCombo, syncFontCombos } from './listener';
+import { initAlignCombo, initColorControls, initColumnCombo, initEditorListeners, initFontCombos, initFileOpen, initOdtExport, initSelectionListener, initViewportScrollListener, initWorkerListener, isComposingActive, setAwaitingRender, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos } from './listener';
 import { initHwpSave } from './hwp/hwpExport';
 
 const worker = new Worker(new URL('./worker/doc.worker.ts', import.meta.url), {
@@ -283,7 +283,7 @@ function buildMockDocument(): DocumentModel {
 
 initRenderer(containerEl);
 initWordProcessor();
-initHwpFileOpen(worker, containerEl);
+initFileOpen(worker, containerEl);
 let pendingPages: PageModel[] | null = null;
 
 function applyReadyPages(pages: PageModel[]) {
@@ -296,6 +296,7 @@ function applyReadyPages(pages: PageModel[]) {
   syncFontCombos();
   syncColumnCombo();
   syncAlignCombo();
+  syncColorControls();
 }
 
 function flushPendingRender() {
@@ -319,10 +320,11 @@ initWorkerListener(worker, (pages) => {
   appendStreamPages(pages);
 });
 initViewportScrollListener(() => updateVisiblePages());
-initSelectionListener(() => { saveCursorPosition(); syncFontCombos(); syncColumnCombo(); syncAlignCombo(); });
+initSelectionListener(() => { saveCursorPosition(); syncFontCombos(); syncColumnCombo(); syncAlignCombo(); syncColorControls(); });
 initEditorListeners(containerEl, worker, savedCursor, saveCursorPosition, flushPendingRender, () => { pendingPages = null; });
 initFontCombos(containerEl, worker, savedCursor);
 initColumnCombo(containerEl, worker, savedCursor);
 initAlignCombo(containerEl, worker, savedCursor);
+initColorControls(containerEl, worker, savedCursor);
 initOdtExport(worker);
 initHwpSave(worker);

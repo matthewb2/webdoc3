@@ -59,6 +59,16 @@
             background: #f0f2f4;
             color: #a6aeb5;
         }
+        .toolbar-color {
+            width: 34px;
+            height: 30px;
+            border: 1px solid #ccd3da;
+            border-radius: 6px;
+            background: #ffffff;
+            padding: 2px;
+            box-sizing: border-box;
+            cursor: pointer;
+        }
         .status {
             font-size: 12px;
             color: #888;
@@ -70,7 +80,7 @@
 
 /* 드래그 앤 드롭 오버레이 */
         .editor-viewport.is-dragging::before {
-            content: 'HWP 파일을 놓아주세요';
+            content: '파일을 놓아주세요';
             position: fixed;
             inset: 0;
             z-index: 20;
@@ -221,11 +231,11 @@ table tr:nth-child(even) {
 <body>
 
     <div class="toolbar">
-        <button id="btn-open-hwp" class="toolbar-btn" type="button">HWP 파일 가져오기</button>
+        <button id="btn-open-file" class="toolbar-btn" type="button">파일열기</button>
         <button id="btn-save-odt" class="toolbar-btn" type="button">ODT 저장</button>
         <button id="btn-save-docx" class="toolbar-btn" type="button">DOCX 저장</button>
         <button id="btn-save-hwp" class="toolbar-btn" type="button">HWP로 저장</button>
-        <input id="hwp-file" type="file" accept=".hwp,application/x-hwp" hidden />
+        <input id="file-input" type="file" accept=".hwp,.docx,.odt" hidden />
         <label class="toolbar-label" for="font-family-select">글꼴</label>
         <select id="font-family-select" class="toolbar-select" disabled></select>
         <label class="toolbar-label" for="font-size-select">크기</label>
@@ -243,6 +253,10 @@ table tr:nth-child(even) {
           <option value="right">오른쪽</option>
           <option value="justify">양쪽</option>
         </select>
+        <label class="toolbar-label" for="text-color-input">글자색</label>
+        <input id="text-color-input" class="toolbar-color" type="color" value="#000000" title="글자색 (두 번 클릭하면 기본값)">
+        <label class="toolbar-label" for="bg-color-input">배경색</label>
+        <input id="bg-color-input" class="toolbar-color" type="color" value="#ffffff" title="배경색 (두 번 클릭하면 없음)">
         <span id="hwp-status" class="status"></span>
     </div>
 
