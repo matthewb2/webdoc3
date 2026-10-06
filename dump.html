@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HWP 덤프 - OLE 디플레이트 + 레코드 워크</title>
+    <style>
+        body { font-family: 'Malgun Gothic', sans-serif; margin: 0; padding: 16px 20px; background: #f0f3f6; color: #222; }
+        h1 { font-size: 18px; margin: 0 0 12px; }
+        h2 { font-size: 15px; margin: 20px 0 8px; border-bottom: 1px solid #ccd3da; padding-bottom: 4px; }
+        .bar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+        .bar input[type="text"] { width: 220px; height: 28px; }
+        button { height: 30px; padding: 0 14px; cursor: pointer; }
+        table { border-collapse: collapse; font-size: 13px; background: #fff; }
+        th, td { border: 1px solid #ccd3da; padding: 3px 8px; text-align: left; }
+        th { background: #eef2f5; }
+        pre { background: #fff; border: 1px solid #ccd3da; padding: 8px; font-size: 12px; white-space: pre-wrap; word-break: break-all; }
+        .warn { color: #b00; }
+        .meta { font-size: 13px; }
+        details { margin: 6px 0; }
+        summary { cursor: pointer; font-size: 13px; font-weight: bold; }
+        #status { font-size: 13px; color: #555; }
+        textarea { width: 100%; height: 120px; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <h1>HWP 덤프 (OLE → 디플레이트 → 레코드/텍스트)</h1>
+    <div class="bar">
+        <label>public 파일: <input id="file-name" type="text" value="Sample.hwp"></label>
+        <button id="btn-load" type="button">불러오기 (?file=)</button>
+        <label>로컬 파일: <input id="file-input" type="file" accept=".hwp"></label>
+    </div>
+    <div id="status">대기 중</div>
+    <div id="out"></div>
+    <script type="module" src="/src/dump.ts"></script>
+</body>
+</html>

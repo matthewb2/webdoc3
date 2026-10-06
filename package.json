@@ -13,6 +13,7 @@
     "vite": "^8.0.12"
   },
   "dependencies": {
+    "@hwp.js/parser": "^0.0.4-alpha.0",
     "cfb": "1.2.2",
     "docx": "^9.8.1",
     "jszip": "^2.5.0",
