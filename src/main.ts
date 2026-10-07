@@ -2,7 +2,7 @@ import type { CursorState, DocumentModel, FontMetrics } from './types';
 import type { PageModel } from './worker/doc.worker';
 import { collectProbeItems, computeBreaks } from './probe';
 import { appendStreamPages, findCursorPageIndices, initRenderer, renderVirtualPages, updateVisiblePages } from './render';
-import { initAlignCombo, initColorControls, initColumnCombo, initEditorListeners, initFontCombos, initFileOpen, initOdtExport, initSelectionListener, initViewportScrollListener, initWorkerListener, isComposingActive, setAwaitingRender, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos } from './listener';
+import { initAlignCombo, initColorControls, initColumnCombo, initEditorListeners, initFontCombos, initFileOpen, initOdtExport, initSelectionListener, initViewportScrollListener, initWorkerListener, initZoomControls, isComposingActive, refreshZoomLayout, setAwaitingRender, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos } from './listener';
 import { initHwpSave } from './hwp/hwpExport';
 
 const worker = new Worker(new URL('./worker/doc.worker.ts', import.meta.url), {
@@ -291,12 +291,15 @@ function applyReadyPages(pages: PageModel[]) {
   const viewport = document.querySelector('.editor-viewport') as HTMLDivElement | null;
   const prevTop = viewport ? viewport.scrollTop : 0;
   renderVirtualPages(pages, true);
+  refreshZoomLayout(containerEl);
   if (viewport) viewport.scrollTop = prevTop;
   restoreCursorPosition();
   syncFontCombos();
   syncColumnCombo();
   syncAlignCombo();
   syncColorControls();
+  const pageCount = document.getElementById('page-count');
+  if (pageCount) pageCount.textContent = `총 ${pages.length}페이지`;
 }
 
 function flushPendingRender() {
@@ -326,5 +329,6 @@ initFontCombos(containerEl, worker, savedCursor);
 initColumnCombo(containerEl, worker, savedCursor);
 initAlignCombo(containerEl, worker, savedCursor);
 initColorControls(containerEl, worker, savedCursor);
+initZoomControls(containerEl);
 initOdtExport(worker);
 initHwpSave(worker);

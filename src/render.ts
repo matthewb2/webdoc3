@@ -27,6 +27,13 @@ function applyRunStyle(span: HTMLSpanElement, run: any) {
 const PAGE_PITCH = 930;
 const VIRTUAL_BUFFER = 2;
 
+// 줌 스케일 (transform 기준). 가상화의 시각 px를 레이아웃 px로 환산할 때 사용
+let renderZoom = 1;
+
+export function setRenderZoom(z: number): void {
+  renderZoom = z > 0 ? z : 1;
+}
+
 let cachedPages: PageModel[] = [];
 const mountedPages = new Map<number, HTMLDivElement>();
 const loggedTableKeys = new Set<string>();
@@ -223,7 +230,7 @@ function visibleRange(forceIdx?: number | number[]): [number, number] {
   if (viewportEl) {
     const vRect = viewportEl.getBoundingClientRect();
     const cRect = rendererContainer.getBoundingClientRect();
-    const topInContent = vRect.top - cRect.top;
+    const topInContent = (vRect.top - cRect.top) / renderZoom;
     const bottomInContent = topInContent + viewportEl.clientHeight;
     start = Math.floor(topInContent / PAGE_PITCH) - VIRTUAL_BUFFER;
     end = Math.floor(bottomInContent / PAGE_PITCH) + VIRTUAL_BUFFER;

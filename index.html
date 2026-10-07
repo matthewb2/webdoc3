@@ -109,9 +109,56 @@
         }
 
         /* [수정] 스크롤바와 패딩을 담당하는 뷰포트 (툴바 높이만큼 상단 여백) */
+        .statusbar {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 28px;
+            background: #ffffff;
+            border-top: 1px solid #d8dde3;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 0 12px;
+            z-index: 10;
+            box-sizing: border-box;
+            font-size: 12px;
+            color: #555;
+        }
+        .statusbar-info {
+            white-space: nowrap;
+        }
+        .statusbar-spacer {
+            flex: 1;
+        }
+        .statusbar-btn {
+            min-width: 26px;
+            height: 22px;
+            border: 1px solid #ccd3da;
+            border-radius: 4px;
+            background: #f7f9fa;
+            color: #333;
+            font-size: 13px;
+            line-height: 1;
+            cursor: pointer;
+            padding: 0 6px;
+        }
+        .statusbar-btn:hover { background: #eef2f5; }
+        .statusbar-zoom {
+            min-width: 52px;
+            height: 22px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            background: transparent;
+            color: #333;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .statusbar-zoom:hover { background: #eef2f5; }
         .editor-viewport {
             width: 100%;
-            height: calc(100% - 46px);
+            height: calc(100% - 46px - 28px);
             margin-top: 46px;
             overflow: auto;
             -webkit-overflow-scrolling: touch;
@@ -136,7 +183,11 @@
             box-sizing: content-box; /* 패딩이 800px 바깥으로 더해져 총 840px이 되도록 설정 */
             
             /* 텍스트 정렬이 자식에게 상속되는 것을 방지하기 위해 왼쪽 정렬로 리셋 */
-            text-align: left; 
+            text-align: left;
+        }
+        /* 줌 높이 고정 시 페이지·스페이서가 찌그러지지 않게 수축 금지 */
+        #editor-container > * {
+            flex-shrink: 0;
         }
 
         /* .page 및 하위 요소 스타일은 그대로 유지합니다 */
@@ -262,6 +313,14 @@ table tr:nth-child(even) {
 
     <div class="editor-viewport">
         <div id="editor-container"></div>
+    </div>
+
+    <div class="statusbar">
+        <span id="page-count" class="statusbar-info">-</span>
+        <span class="statusbar-spacer"></span>
+        <button id="btn-zoom-out" class="statusbar-btn" type="button" title="축소">−</button>
+        <button id="zoom-label" class="statusbar-zoom" type="button">100%</button>
+        <button id="btn-zoom-in" class="statusbar-btn" type="button" title="확대">＋</button>
     </div>
 <script src="/odt/jszip.bundle.js"></script>
 <script src="/odt/odt.js"></script>

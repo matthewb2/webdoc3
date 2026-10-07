@@ -5,7 +5,7 @@ import { parseHwpToDocumentModel } from './hwp/hwpParser';
 import { parseDocxToDocumentModel } from './docx/docxParser';
 import { parseOdtToDocumentModel } from './odt/odtParser';
 import { breakKeyForRuns, collectProbeItems, computeBreaks } from './probe';
-import { getCachedPages } from './render';
+import { getCachedPages, setRenderZoom, updateVisiblePages } from './render';
 import { saveCurrentDocument } from './odt/odtExport';
 import { saveCurrentDocumentDocx } from './docx/docxExport';
 
@@ -474,6 +474,45 @@ export function syncColorControls() {
   if (!span || !container.contains(span)) return;
   textInput.value = cssColorToHex(span.style.color || '') || '#000000';
   bgInput.value = cssColorToHex(span.style.backgroundColor || '') || '#ffffff';
+}
+
+let zoomLevel = 1;
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 2;
+const ZOOM_STEP = 0.1;
+
+export function getZoomLevel(): number {
+  return zoomLevel;
+}
+
+// 스케일은 레이아웃 크기를 바꾸지 않으므로 스크롤 영역을 시각 크기에 맞춤.
+// 렌더 후에도 호출해야 함 (초기 빈 컨테이너 기준으로 고정되면 페이지가 찌그러짐)
+export function refreshZoomLayout(container: HTMLDivElement): void {
+  container.style.height = '';
+  // flex-shrink로 자식이 찌그러지지 않게 강제 후 측정
+  const h = container.scrollHeight;
+  container.style.height = `${Math.ceil(h * zoomLevel)}px`;
+}
+
+export function initZoomControls(container: HTMLDivElement) {
+  const outBtn = document.getElementById('btn-zoom-out') as HTMLButtonElement | null;
+  const inBtn = document.getElementById('btn-zoom-in') as HTMLButtonElement | null;
+  const label = document.getElementById('zoom-label') as HTMLButtonElement | null;
+  if (!outBtn || !inBtn || !label) return;
+  const apply = (z: number) => {
+    zoomLevel = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z * 100) / 100));
+    label.textContent = `${Math.round(zoomLevel * 100)}%`;
+    container.style.transform = `scale(${zoomLevel})`;
+    container.style.transformOrigin = 'top center';
+    refreshZoomLayout(container);
+    setRenderZoom(zoomLevel);
+    updateVisiblePages();
+  };
+  outBtn.addEventListener('click', () => apply(zoomLevel - ZOOM_STEP));
+  inBtn.addEventListener('click', () => apply(zoomLevel + ZOOM_STEP));
+  label.addEventListener('click', () => apply(1));
+  label.title = '클릭하면 100%';
+  apply(1);
 }
 
 export function initOdtExport(worker: Worker) {
