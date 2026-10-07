@@ -38,8 +38,3 @@ export async function saveCurrentDocumentHwp(worker: Worker, filename = 'documen
   }
 }
 
-export function initHwpSave(worker: Worker) {
-  document.getElementById('btn-save-hwp')?.addEventListener('click', () => {
-    saveCurrentDocumentHwp(worker).catch(() => {});
-  });
-}

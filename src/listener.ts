@@ -8,6 +8,7 @@ import { breakKeyForRuns, collectProbeItems, computeBreaks } from './probe';
 import { getCachedPages, setRenderZoom, updateVisiblePages } from './render';
 import { saveCurrentDocument } from './odt/odtExport';
 import { saveCurrentDocumentDocx } from './docx/docxExport';
+import { saveCurrentDocumentHwp } from './hwp/hwpExport';
 
 const FONT_FAMILIES = [
   'Arial', 'Verdana', 'Tahoma', 'Times New Roman', 'Georgia', 'Courier New', '맑은 고딕', '굴림', '돋움', '바탕',  '궁서', '나눔고딕', 'Noto Sans KR'
@@ -307,6 +308,7 @@ export function initFileOpen(worker: Worker, containerEl: HTMLDivElement) {
         worker.postMessage({ type: 'BREAKS', payload: await computeBreaks(collectProbeItems(model)) });
         worker.postMessage({ type: 'INIT_DOC', payload: model });
         containerEl.style.display = 'inline-flex';
+        currentFileName = file.name;
         hwpStatus.textContent = `파싱 완료: ${file.name} (${model.length}개 항목)`;
       })
       .catch((err: Error) => {
@@ -515,11 +517,22 @@ export function initZoomControls(container: HTMLDivElement) {
   apply(1);
 }
 
-export function initOdtExport(worker: Worker) {
-  document.getElementById('btn-save-odt')?.addEventListener('click', () => {
-    saveCurrentDocument(worker).catch(() => {});
-  });
-  document.getElementById('btn-save-docx')?.addEventListener('click', () => {
-    saveCurrentDocumentDocx(worker).catch(() => {});
+// 현재 문서 파일명 (파일열기로 열린 파일 기준, 없으면 document.hwp)
+let currentFileName: string | null = null;
+
+export function getCurrentFileName(): string {
+  return currentFileName ?? 'document.hwp';
+}
+
+export function initSave(worker: Worker) {
+  document.getElementById('btn-save')?.addEventListener('click', () => {
+    const filename = getCurrentFileName();
+    const lower = filename.toLowerCase();
+    const save = /\.docx$/i.test(lower)
+      ? saveCurrentDocumentDocx(worker, filename)
+      : /\.odt$/i.test(lower)
+        ? saveCurrentDocument(worker, filename)
+        : saveCurrentDocumentHwp(worker, filename);
+    save.catch(() => {});
   });
 }
