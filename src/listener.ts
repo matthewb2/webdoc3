@@ -1,6 +1,7 @@
 // src/listener.ts - 이벤트 리스너 (워커 메시지·스크롤·선택·입력·HWP 열기)
 import type { PageModel } from './worker/doc.worker';
 import type { CursorState, TextRun } from './types';
+import { defaultFontFamily, defaultFontSize } from './settings';
 import { parseHwpToDocumentModel } from './hwp/hwpParser';
 import { parseDocxToDocumentModel } from './docx/docxParser';
 import { parseOdtToDocumentModel } from './odt/odtParser';
@@ -81,9 +82,9 @@ export function syncFontCombos() {
   const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element | null);
   const span = el?.closest?.('span') as HTMLSpanElement | null;
   if (!span || !fontContainer.contains(span)) return;
-  setSelectValue(familySelect, span.style.fontFamily || 'Arial');
+  setSelectValue(familySelect, span.style.fontFamily || defaultFontFamily());
   const size = parseFloat(span.style.fontSize);
-  setSelectValue(sizeSelect, isNaN(size) ? '16' : String(Math.round(size * 100) / 100));
+  setSelectValue(sizeSelect, isNaN(size) ? String(defaultFontSize()) : String(Math.round(size * 100) / 100));
 }
 
 // 편집된 단락 전체 런을 캐시된 조각에서 복원해 분절점을 다시 재고 워커에 전달

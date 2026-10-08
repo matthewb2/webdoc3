@@ -2,6 +2,7 @@
 // @hwp.js/parser 가 읽는 레코드 구조의 역순 구현. 버전 5.0.5.0, 압축 저장,
 // CFB 컨테이너는 외부 의존 없이 최소 구현(FAT 전용, 전 스트림 4096B 패딩)으로 내장.
 import { deflateRaw } from 'pako';
+import { defaultFontFamily } from '../settings';
 import {
   BLOB_DEFAULTJSCRIPT,
   BLOB_JSCRIPTVERSION,
@@ -178,7 +179,7 @@ function shapeOfRun(run: TextRun): ShapeDef {
   const italic = !!run.italic;
   const underline = !!run.underline;
   const strike = !!run.strike;
-  const fontFamily = run.fontFamily || 'Arial';
+  const fontFamily = run.fontFamily || defaultFontFamily();
   const color = parseColor(run.color);
   // 배경 없음 = 0xFFFFFFFF (0은 검정으로 렌더링됨)
   const shadeColor = run.backgroundColor ? parseColor(run.backgroundColor) : 0xffffffff;
@@ -496,7 +497,7 @@ export class HwpWriter {
         }
       }
     });
-    if (this.koFaces.length === 0) this.koFaces.push('Arial');
+    if (this.koFaces.length === 0) this.koFaces.push(defaultFontFamily());
     if (this.shapes.length === 0) {
       const def = shapeOfRun({ text: '' });
       this.shapeIndexByKey.set(def.key, 0);

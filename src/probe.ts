@@ -1,5 +1,6 @@
 // src/probe.ts - 브라우저 실측 줄바꿈 (숨김 probe로 런별 분절점을 재서 워커에 전달)
 import type { BreakMap, DocumentModel, TextRun } from './types';
+import { defaultFontFamily } from './settings';
 
 // 워커(doc.worker.ts)의 기하 상수와 동일해야 함
 const EDITOR_W = 600;
@@ -57,7 +58,7 @@ export async function computeBreaks(items: ProbeItem[], onProgress?: (done: numb
       const blocks: HTMLDivElement[] = [];
       slice.forEach((it) => {
         const div = document.createElement('div');
-        div.style.cssText = `position:relative;width:${it.width}px;font:16px Arial;word-break:break-all;line-height:26px;letter-spacing:normal;`;
+        div.style.cssText = `position:relative;width:${it.width}px;font:16px "${defaultFontFamily()}", Arial, sans-serif;word-break:break-all;line-height:26px;letter-spacing:normal;`;
         it.runs.forEach((run) => {
           const fs = run.fontSize ?? 16;
           for (const ch of run.text) {

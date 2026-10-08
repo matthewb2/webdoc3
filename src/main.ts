@@ -1,5 +1,6 @@
 import type { CursorState, DocumentModel, FontMetrics } from './types';
 import type { PageModel } from './worker/doc.worker';
+import { defaultFontFamily } from './settings';
 import { collectProbeItems, computeBreaks } from './probe';
 import { appendStreamPages, findCursorPageIndices, initRenderer, renderVirtualPages, updateVisiblePages } from './render';
 import { initAlignCombo, initColorControls, initColumnCombo, initEditorListeners, initFontCombos, initFileOpen, initSave, initSelectionListener, initViewportScrollListener, initWorkerListener, initZoomControls, isComposingActive, refreshZoomLayout, setAwaitingRender, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos } from './listener';
@@ -205,7 +206,7 @@ function restoreCursorPosition() {
 
 
 async function initWordProcessor() {
-  const fontMetrics = generateFontMetrics('16px Arial');
+  const fontMetrics = generateFontMetrics(`16px "${defaultFontFamily()}", Arial`);
   worker.postMessage({ type: 'INIT_METRICS', payload: fontMetrics });
 
   // 기본 문서: dev 실행 시 public의 입법예고 HWP를 바로 로드 (실패 시 더미로 폴백)
