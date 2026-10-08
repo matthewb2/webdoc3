@@ -45,6 +45,8 @@
         }
         .toolbar-btn:hover { background: #eef2f5; }
         .toolbar-btn:active { background: #e2e8ee; }
+        .toolbar-btn-style { padding: 0 10px; font-size: 14px; }
+        .toolbar-btn.active { background: #d7e3f4; border-color: #4a90d9; color: #1b4f9c; }
         .toolbar-select {
             height: 30px;
             border: 1px solid #ccd3da;
@@ -291,6 +293,10 @@ table tr:nth-child(even) {
         <select id="font-family-select" class="toolbar-select" disabled></select>
         <label class="toolbar-label" for="font-size-select">크기</label>
         <select id="font-size-select" class="toolbar-select" disabled></select>
+        <button id="btn-style-normal" class="toolbar-btn" type="button" title="보통 (서식 지우기)">보통</button>
+        <button id="btn-style-bold" class="toolbar-btn toolbar-btn-style" type="button" title="굵게"><b>B</b></button>
+        <button id="btn-style-italic" class="toolbar-btn toolbar-btn-style" type="button" title="기울임"><i>I</i></button>
+        <button id="btn-style-underline" class="toolbar-btn toolbar-btn-style" type="button" title="밑줄"><u>U</u></button>
         <label class="toolbar-label" for="column-count-select">다단</label>
         <select id="column-count-select" class="toolbar-select">
           <option value="1">1단</option>

@@ -3,7 +3,7 @@ import type { PageModel } from './worker/doc.worker';
 import { defaultFontFamily, defaultUiFontFamily, initSettings } from './settings';
 import { collectProbeItems, computeBreaks } from './probe';
 import { appendStreamPages, findCursorPageIndices, initRenderer, renderVirtualPages, updateVisiblePages } from './render';
-import { initAlignCombo, initColorControls, initColumnCombo, initEditorListeners, initFontCombos, initFileOpen, initSave, initSelectionListener, initViewportScrollListener, initWorkerListener, initZoomControls, isComposingActive, refreshZoomLayout, setAwaitingRender, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos } from './listener';
+import { initAlignCombo, initColorControls, initColumnCombo, initEditorListeners, initFontCombos, initFileOpen, initSave, initSelectionListener, initStyleButtons, initViewportScrollListener, initWorkerListener, initZoomControls, isComposingActive, refreshZoomLayout, setAwaitingRender, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncStyleButtons } from './listener';
 
 const worker = new Worker(new URL('./worker/doc.worker.ts', import.meta.url), {
   type: 'module'
@@ -301,6 +301,7 @@ function applyReadyPages(pages: PageModel[]) {
   syncColumnCombo();
   syncAlignCombo();
   syncColorControls();
+  syncStyleButtons();
   const pageCount = document.getElementById('page-count');
   if (pageCount) pageCount.textContent = `총 ${pages.length}페이지`;
 }
@@ -326,11 +327,12 @@ initWorkerListener(worker, (pages) => {
   appendStreamPages(pages);
 });
 initViewportScrollListener(() => updateVisiblePages());
-initSelectionListener(() => { saveCursorPosition(); syncFontCombos(); syncColumnCombo(); syncAlignCombo(); syncColorControls(); });
+initSelectionListener(() => { saveCursorPosition(); syncFontCombos(); syncColumnCombo(); syncAlignCombo(); syncColorControls(); syncStyleButtons(); });
 initEditorListeners(containerEl, worker, savedCursor, saveCursorPosition, flushPendingRender, () => { pendingPages = null; });
 initFontCombos(containerEl, worker, savedCursor);
 initColumnCombo(containerEl, worker, savedCursor);
 initAlignCombo(containerEl, worker, savedCursor);
 initColorControls(containerEl, worker, savedCursor);
+initStyleButtons(containerEl, worker, savedCursor);
 initZoomControls(containerEl);
 initSave(worker);

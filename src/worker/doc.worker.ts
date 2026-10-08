@@ -30,7 +30,7 @@ self.addEventListener('message', (event: MessageEvent<any>) => {
   } else if (message.type === 'GET_DOC') {
     self.postMessage({ type: 'DOC_SNAPSHOT', payload: documentState });
   } else if (message.type === 'EDIT_FONT') {
-    editFont(message.payload.paragraphIndex, message.payload.fontFamily, message.payload.fontSize);
+    editFont(message.payload.paragraphIndex, message.payload);
   } else if (message.type === 'EDIT_COLUMNS') {
     editColumns(message.payload.paragraphIndices, message.payload.columns);
   } else if (message.type === 'EDIT_ALIGN') {
@@ -38,7 +38,7 @@ self.addEventListener('message', (event: MessageEvent<any>) => {
   } else if (message.type === 'EDIT_COLOR') {
     editColor(message.payload.paragraphIndices, message.payload.color, message.payload.backgroundColor);
   } else if (message.type === 'EDIT_FONT_RANGE') {
-    editFontRange(message.payload.paragraphIndex, message.payload.fromCharIndex, message.payload.endCharIndex, message.payload.fontFamily, message.payload.fontSize);
+    editFontRange(message.payload.paragraphIndex, message.payload.fromCharIndex, message.payload.endCharIndex, message.payload);
   } else if (message.type === 'EDIT_COLOR_RANGE') {
     editColorRange(message.payload.paragraphIndex, message.payload.fromCharIndex, message.payload.endCharIndex, message.payload.color, message.payload.backgroundColor);
   }
@@ -106,7 +106,16 @@ function applyRunAttrs(
   item: any,
   from: number,
   to: number,
-  attrs: { fontFamily?: string; fontSize?: number; color?: string; backgroundColor?: string },
+  attrs: {
+    fontFamily?: string;
+    fontSize?: number;
+    color?: string;
+    backgroundColor?: string;
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
+    strike?: boolean;
+  },
 ): boolean {
   if (!item || item.type !== 'paragraph') return false;
   if (item.children.length === 0) item.children.push({ text: '' });
@@ -114,8 +123,9 @@ function applyRunAttrs(
   const f = Math.max(0, Math.min(from, total));
   const t = Math.max(f, Math.min(to, total));
   if (t <= f) return false;
-  const endIdx = splitRunAt(item.children, t);
+  // 낮은 쪽 먼저 분할해야 뒤쪽 인덱스가 어긋나지 않음
   const startIdx = splitRunAt(item.children, f);
+  const endIdx = splitRunAt(item.children, t);
   for (let i = startIdx; i < endIdx; i++) {
     const run = item.children[i];
     if (attrs.fontFamily !== undefined) run.fontFamily = attrs.fontFamily;
@@ -128,24 +138,71 @@ function applyRunAttrs(
       if (attrs.backgroundColor === '') delete run.backgroundColor;
       else run.backgroundColor = attrs.backgroundColor;
     }
+    if (attrs.bold !== undefined) {
+      if (attrs.bold) run.bold = true;
+      else delete run.bold;
+    }
+    if (attrs.italic !== undefined) {
+      if (attrs.italic) run.italic = true;
+      else delete run.italic;
+    }
+    if (attrs.underline !== undefined) {
+      if (attrs.underline) run.underline = true;
+      else delete run.underline;
+    }
+    if (attrs.strike !== undefined) {
+      if (attrs.strike) run.strike = true;
+      else delete run.strike;
+    }
   }
   return true;
 }
 
-function editFontRange(docIdx: number, from: number, to: number, fontFamily?: string, fontSize?: number) {
-  if (applyRunAttrs(documentState[docIdx], from, to, { fontFamily, fontSize })) requestLayout();
+function editFontRange(
+  docIdx: number,
+  from: number,
+  to: number,
+  attrs: { fontFamily?: string; fontSize?: number; bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean },
+) {
+  if (applyRunAttrs(documentState[docIdx], from, to, attrs)) requestLayout();
 }
 
 function editColorRange(docIdx: number, from: number, to: number, color?: string, backgroundColor?: string) {
   if (applyRunAttrs(documentState[docIdx], from, to, { color, backgroundColor })) requestLayout();
 }
 
-function editFont(docIdx: number, fontFamily?: string, fontSize?: number) {
+function editFont(
+  docIdx: number,
+  attrs: {
+    fontFamily?: string;
+    fontSize?: number;
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
+    strike?: boolean;
+  },
+) {
   const item = documentState[docIdx];
   if (item?.type !== 'paragraph') return;
   item.children.forEach((run) => {
-    if (fontFamily !== undefined) run.fontFamily = fontFamily;
-    if (fontSize !== undefined) run.fontSize = fontSize;
+    if (attrs.fontFamily !== undefined) run.fontFamily = attrs.fontFamily;
+    if (attrs.fontSize !== undefined) run.fontSize = attrs.fontSize;
+    if (attrs.bold !== undefined) {
+      if (attrs.bold) run.bold = true;
+      else delete run.bold;
+    }
+    if (attrs.italic !== undefined) {
+      if (attrs.italic) run.italic = true;
+      else delete run.italic;
+    }
+    if (attrs.underline !== undefined) {
+      if (attrs.underline) run.underline = true;
+      else delete run.underline;
+    }
+    if (attrs.strike !== undefined) {
+      if (attrs.strike) run.strike = true;
+      else delete run.strike;
+    }
   });
   requestLayout();
 }

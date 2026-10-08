@@ -113,11 +113,20 @@ function selectionRangeInParagraph(
 }
 
 // 글꼴 스타일을 선택 영역(범위) 단위로 전송 (범위 없으면 문단 전체)
+export interface FontStyleAttrs {
+  fontFamily?: string;
+  fontSize?: number;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strike?: boolean;
+}
+
 function postFontStyle(
   container: HTMLDivElement,
   worker: Worker,
   cursor: CursorState,
-  attrs: { fontFamily?: string; fontSize?: number },
+  attrs: FontStyleAttrs,
 ) {
   selectedParagraphIndices(container, cursor.docIdx).forEach((docIdx) => {
     const r = selectionRangeInParagraph(container, docIdx);
@@ -668,6 +677,63 @@ let currentFileName: string | null = null;
 
 export function getCurrentFileName(): string {
   return currentFileName ?? 'document.hwp';
+}
+
+function anchorSpan(): HTMLSpanElement | null {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return null;
+  const node = selection.anchorNode;
+  if (!node || !fontContainer || !fontContainer.contains(node)) return null;
+  const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element | null);
+  const span = el?.closest?.('span') as HTMLSpanElement | null;
+  if (!span || !fontContainer.contains(span)) return null;
+  return span;
+}
+
+function spanStyleState(span: HTMLSpanElement): { bold: boolean; italic: boolean; underline: boolean } {
+  const weight = span.style.fontWeight;
+  return {
+    bold: weight === 'bold' || (weight !== '' && !isNaN(Number(weight)) && Number(weight) >= 700),
+    italic: span.style.fontStyle === 'italic',
+    underline: (span.style.textDecoration || '').includes('underline'),
+  };
+}
+
+export function initStyleButtons(container: HTMLDivElement, worker: Worker, cursor: CursorState) {
+  const normalBtn = document.getElementById('btn-style-normal') as HTMLButtonElement | null;
+  const boldBtn = document.getElementById('btn-style-bold') as HTMLButtonElement | null;
+  const italicBtn = document.getElementById('btn-style-italic') as HTMLButtonElement | null;
+  const underlineBtn = document.getElementById('btn-style-underline') as HTMLButtonElement | null;
+  if (!normalBtn || !boldBtn || !italicBtn || !underlineBtn) return;
+  normalBtn.addEventListener('click', () => {
+    postFontStyle(container, worker, cursor, { bold: false, italic: false, underline: false, strike: false });
+  });
+  boldBtn.addEventListener('click', () => {
+    const span = anchorSpan();
+    postFontStyle(container, worker, cursor, { bold: !(span && spanStyleState(span).bold) });
+  });
+  italicBtn.addEventListener('click', () => {
+    const span = anchorSpan();
+    postFontStyle(container, worker, cursor, { italic: !(span && spanStyleState(span).italic) });
+  });
+  underlineBtn.addEventListener('click', () => {
+    const span = anchorSpan();
+    postFontStyle(container, worker, cursor, { underline: !(span && spanStyleState(span).underline) });
+  });
+  syncStyleButtons();
+}
+
+// 커서 위치 run의 스타일을 버튼 활성 상태에 반영
+export function syncStyleButtons() {
+  const boldBtn = document.getElementById('btn-style-bold');
+  const italicBtn = document.getElementById('btn-style-italic');
+  const underlineBtn = document.getElementById('btn-style-underline');
+  if (!boldBtn || !italicBtn || !underlineBtn) return;
+  const span = anchorSpan();
+  const state = span ? spanStyleState(span) : { bold: false, italic: false, underline: false };
+  boldBtn.classList.toggle('active', state.bold);
+  italicBtn.classList.toggle('active', state.italic);
+  underlineBtn.classList.toggle('active', state.underline);
 }
 
 export function initSave(worker: Worker) {
