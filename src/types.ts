@@ -73,5 +73,6 @@ export type WorkerMessage =
   | { type: 'GET_DOC' }
   | { type: 'EDIT_FONT'; payload: { paragraphIndex: number; fontFamily?: string; fontSize?: number } }
   | { type: 'EDIT_COLUMNS'; payload: { paragraphIndices: number[]; columns: number } }
+  | { type: 'EDIT_DELETE_FWD'; payload: { paragraphIndex: number; charIndex: number } }
   | { type: 'EDIT_ALIGN'; payload: { paragraphIndices: number[]; align: TextAlign } }
   | { type: 'EDIT_COLOR'; payload: { paragraphIndices: number[]; color?: string; backgroundColor?: string } };

@@ -23,6 +23,8 @@ self.addEventListener('message', (event: MessageEvent<any>) => {
     editInsert(message.payload.paragraphIndex, message.payload.charIndex, message.payload.text);
   } else if (message.type === 'EDIT_DELETE') {
     editDelete(message.payload.paragraphIndex, message.payload.charIndex);
+  } else if (message.type === 'EDIT_DELETE_FWD') {
+    editDeleteForward(message.payload.paragraphIndex, message.payload.charIndex);
   } else if (message.type === 'EDIT_SPLIT') {
     editSplit(message.payload.paragraphIndex, message.payload.charIndex);
   } else if (message.type === 'GET_DOC') {
@@ -120,7 +122,22 @@ function editColumns(docIndices: number[], columns: number) {
 function editDelete(docIdx: number, charIndex: number) {
   const item = documentState[docIdx];
   if (item?.type !== 'paragraph') return;
-  if (charIndex <= 0) return;
+  if (charIndex <= 0) {
+    // 문단 시작점에서 백스페이스: 이전 문단과 병합 (빈 문단 삭제 포함)
+    if (docIdx <= 0) return;
+    const prev = documentState[docIdx - 1];
+    const total = item.children.reduce((acc, r) => acc + (r.text?.length || 0), 0);
+    if (!prev || prev.type !== 'paragraph') {
+      if (total === 0) documentState.splice(docIdx, 1);
+      else return;
+      requestLayout();
+      return;
+    }
+    prev.children.push(...item.children);
+    documentState.splice(docIdx, 1);
+    requestLayout();
+    return;
+  }
   const total = item.children.reduce((acc, r) => acc + (r.text?.length || 0), 0);
   if (charIndex - 1 >= total) return;
   const { runIndex, localIndex } = locateRun(item.children, charIndex - 1);
@@ -135,6 +152,56 @@ function editDelete(docIdx: number, charIndex: number) {
   if (t.length === 0) return;
   const delAt = Math.min(localIndex, t.length - 1);
   run.text = t.slice(0, Math.max(0, delAt)) + t.slice(delAt + 1);
+  requestLayout();
+}
+
+function editDeleteForward(docIdx: number, charIndex: number) {
+  const item = documentState[docIdx];
+  if (item?.type !== 'paragraph') return;
+  const total = item.children.reduce((acc, r) => acc + (r.text?.length || 0), 0);
+  if (charIndex < total) {
+    // 커서 위치의 글자 1개 삭제
+    const { runIndex, localIndex } = locateRun(item.children, Math.max(0, charIndex));
+    let ri = runIndex;
+    let run = item.children[ri];
+    let local = localIndex;
+    while (run && (run.text || '').length === 0 && ri < item.children.length - 1) {
+      ri += 1;
+      run = item.children[ri];
+      local = 0;
+    }
+    if (!run) return;
+    const t = run.text || '';
+    if (local >= t.length) {
+      let ni = ri + 1;
+      while (ni < item.children.length && (item.children[ni].text || '').length === 0) ni += 1;
+      if (ni >= item.children.length) return;
+      const nt = item.children[ni].text || '';
+      item.children[ni].text = nt.slice(1);
+    } else {
+      run.text = t.slice(0, local) + t.slice(local + 1);
+    }
+    requestLayout();
+    return;
+  }
+  // 문단 끝에서 DEL: 다음 문단과 병합 (빈 문단 삭제 포함)
+  const next = documentState[docIdx + 1];
+  if (!next) {
+    if (total === 0 && documentState.length > 1) {
+      documentState.splice(docIdx, 1);
+      requestLayout();
+    }
+    return;
+  }
+  if (next.type !== 'paragraph') {
+    if (total === 0) {
+      documentState.splice(docIdx, 1);
+      requestLayout();
+    }
+    return;
+  }
+  item.children.push(...next.children);
+  documentState.splice(docIdx + 1, 1);
   requestLayout();
 }
 

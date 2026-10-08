@@ -261,11 +261,52 @@ container.addEventListener('beforeinput', async (e: InputEvent) => {
   if (e.inputType === 'deleteContentBackward') {
     e.preventDefault();
     saveCursorPosition();
-    if (cursor.charIndex <= 0) return;
+    if (cursor.charIndex <= 0) {
+      // 문단 시작점에서 백스페이스: 이전 문단과 병합 (빈 문단 삭제 포함)
+      if (cursor.docIdx <= 0 || cursor.isInsideTable) return;
+      const prev = cachedParagraphInfo(cursor.docIdx - 1);
+      const cur = cachedParagraphInfo(cursor.docIdx);
+      if (!prev.isParagraph && cur.length > 0) return;
+      await refreshParaBreaks(worker, cursor.docIdx);
+      markEditPending();
+      worker.postMessage({ type: 'EDIT_DELETE', payload: { paragraphIndex: cursor.docIdx, charIndex: 0 } });
+      cursor.docIdx -= 1;
+      cursor.charIndex = prev.isParagraph ? prev.length : 0;
+      cursor.charOffset = 0;
+      return;
+    }
     await refreshParaBreaks(worker, cursor.docIdx);
     markEditPending();
     worker.postMessage({ type: 'EDIT_DELETE', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
     cursor.charIndex -= 1;
+    return;
+  }
+
+  if (e.inputType === 'deleteContentForward') {
+    e.preventDefault();
+    saveCursorPosition();
+    if (cursor.isInsideTable) return;
+    const cur = cachedParagraphInfo(cursor.docIdx);
+    if (cur.isParagraph && cur.length === 0) {
+      // 빈 문단에서 DEL: 문단 자체가 사라지므로 커서를 이전 문단 끝으로 이동
+      const next = cachedParagraphInfo(cursor.docIdx + 1);
+      const nextIsTable = next.exists && !next.isParagraph;
+      if (nextIsTable || !next.exists) {
+        const prev = cachedParagraphInfo(cursor.docIdx - 1);
+        await refreshParaBreaks(worker, cursor.docIdx);
+        markEditPending();
+        worker.postMessage({ type: 'EDIT_DELETE_FWD', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
+        if (prev.isParagraph) {
+          cursor.docIdx -= 1;
+          cursor.charIndex = prev.length;
+          cursor.charOffset = 0;
+        }
+        return;
+      }
+    }
+    await refreshParaBreaks(worker, cursor.docIdx);
+    markEditPending();
+    worker.postMessage({ type: 'EDIT_DELETE_FWD', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
     return;
   }
 
@@ -279,6 +320,27 @@ container.addEventListener('beforeinput', async (e: InputEvent) => {
   }
 });
 
+}
+
+// 캐시된 조각에서 문단 텍스트 길이·종류·존재 조회 (병합 커서 계산용)
+function cachedParagraphInfo(docIdx: number): { isParagraph: boolean; exists: boolean; length: number } {
+  let length = 0;
+  let isParagraph = false;
+  let exists = false;
+  getCachedPages().forEach((page) => {
+    page.forEach((item: any) => {
+      if (item && item._docIdx === docIdx) {
+        exists = true;
+        if (item.type === 'paragraph') {
+          isParagraph = true;
+          (item.children || []).forEach((run: any) => {
+            length += (run.text || '').length;
+          });
+        }
+      }
+    });
+  });
+  return { isParagraph, exists, length };
 }
 
 export function initFileOpen(worker: Worker, containerEl: HTMLDivElement) {
