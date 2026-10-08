@@ -1,6 +1,6 @@
 import type { CursorState, DocumentModel, FontMetrics } from './types';
 import type { PageModel } from './worker/doc.worker';
-import { defaultFontFamily } from './settings';
+import { defaultFontFamily, defaultUiFontFamily, initSettings } from './settings';
 import { collectProbeItems, computeBreaks } from './probe';
 import { appendStreamPages, findCursorPageIndices, initRenderer, renderVirtualPages, updateVisiblePages } from './render';
 import { initAlignCombo, initColorControls, initColumnCombo, initEditorListeners, initFontCombos, initFileOpen, initSave, initSelectionListener, initViewportScrollListener, initWorkerListener, initZoomControls, isComposingActive, refreshZoomLayout, setAwaitingRender, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos } from './listener';
@@ -206,6 +206,9 @@ function restoreCursorPosition() {
 
 
 async function initWordProcessor() {
+  await initSettings();
+  document.documentElement.style.setProperty('--doc-font', `"${defaultFontFamily()}"`);
+  document.documentElement.style.setProperty('--ui-font', `"${defaultUiFontFamily()}"`);
   const fontMetrics = generateFontMetrics(`16px "${defaultFontFamily()}", Arial`);
   worker.postMessage({ type: 'INIT_METRICS', payload: fontMetrics });
 

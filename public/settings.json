@@ -1,0 +1,6 @@
+{
+  "_comment": "DOC3 사용자 설정 (직접 수정 가능, 저장 후 새로고침). fontFamily: 본문 기본 글꼴, fontSize: 본문 기본 글자 크기(px), uiFontFamily: 시스템(툴바·상태바) 글꼴",
+  "fontFamily": "맑은 고딕",
+  "fontSize": 20,
+  "uiFontFamily": "맑은 고딕"
+}

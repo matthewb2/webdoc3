@@ -37,6 +37,10 @@ self.addEventListener('message', (event: MessageEvent<any>) => {
     editAlign(message.payload.paragraphIndices, message.payload.align);
   } else if (message.type === 'EDIT_COLOR') {
     editColor(message.payload.paragraphIndices, message.payload.color, message.payload.backgroundColor);
+  } else if (message.type === 'EDIT_FONT_RANGE') {
+    editFontRange(message.payload.paragraphIndex, message.payload.fromCharIndex, message.payload.endCharIndex, message.payload.fontFamily, message.payload.fontSize);
+  } else if (message.type === 'EDIT_COLOR_RANGE') {
+    editColorRange(message.payload.paragraphIndex, message.payload.fromCharIndex, message.payload.endCharIndex, message.payload.color, message.payload.backgroundColor);
   }
 });
 
@@ -79,6 +83,61 @@ function editColor(docIndices: number[], color?: string, backgroundColor?: strin
     });
   });
   requestLayout();
+}
+
+function splitRunAt(children: TextRun[], idx: number): number {
+  let acc = 0;
+  for (let i = 0; i < children.length; i++) {
+    const len = children[i].text?.length || 0;
+    if (idx <= acc) return i;
+    if (idx < acc + len) {
+      const run = children[i];
+      const t = run.text || '';
+      const at = idx - acc;
+      children.splice(i, 1, { ...run, text: t.slice(0, at) }, { ...run, text: t.slice(at) });
+      return i + 1;
+    }
+    acc += len;
+  }
+  return children.length;
+}
+
+function applyRunAttrs(
+  item: any,
+  from: number,
+  to: number,
+  attrs: { fontFamily?: string; fontSize?: number; color?: string; backgroundColor?: string },
+): boolean {
+  if (!item || item.type !== 'paragraph') return false;
+  if (item.children.length === 0) item.children.push({ text: '' });
+  const total = item.children.reduce((acc: number, r: any) => acc + (r.text?.length || 0), 0);
+  const f = Math.max(0, Math.min(from, total));
+  const t = Math.max(f, Math.min(to, total));
+  if (t <= f) return false;
+  const endIdx = splitRunAt(item.children, t);
+  const startIdx = splitRunAt(item.children, f);
+  for (let i = startIdx; i < endIdx; i++) {
+    const run = item.children[i];
+    if (attrs.fontFamily !== undefined) run.fontFamily = attrs.fontFamily;
+    if (attrs.fontSize !== undefined) run.fontSize = attrs.fontSize;
+    if (attrs.color !== undefined) {
+      if (attrs.color === '') delete run.color;
+      else run.color = attrs.color;
+    }
+    if (attrs.backgroundColor !== undefined) {
+      if (attrs.backgroundColor === '') delete run.backgroundColor;
+      else run.backgroundColor = attrs.backgroundColor;
+    }
+  }
+  return true;
+}
+
+function editFontRange(docIdx: number, from: number, to: number, fontFamily?: string, fontSize?: number) {
+  if (applyRunAttrs(documentState[docIdx], from, to, { fontFamily, fontSize })) requestLayout();
+}
+
+function editColorRange(docIdx: number, from: number, to: number, color?: string, backgroundColor?: string) {
+  if (applyRunAttrs(documentState[docIdx], from, to, { color, backgroundColor })) requestLayout();
 }
 
 function editFont(docIdx: number, fontFamily?: string, fontSize?: number) {

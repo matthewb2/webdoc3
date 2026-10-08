@@ -75,4 +75,6 @@ export type WorkerMessage =
   | { type: 'EDIT_COLUMNS'; payload: { paragraphIndices: number[]; columns: number } }
   | { type: 'EDIT_DELETE_FWD'; payload: { paragraphIndex: number; charIndex: number } }
   | { type: 'EDIT_ALIGN'; payload: { paragraphIndices: number[]; align: TextAlign } }
-  | { type: 'EDIT_COLOR'; payload: { paragraphIndices: number[]; color?: string; backgroundColor?: string } };
+  | { type: 'EDIT_COLOR'; payload: { paragraphIndices: number[]; color?: string; backgroundColor?: string } }
+  | { type: 'EDIT_FONT_RANGE'; payload: { paragraphIndex: number; fromCharIndex: number; endCharIndex: number; fontFamily?: string; fontSize?: number } }
+  | { type: 'EDIT_COLOR_RANGE'; payload: { paragraphIndex: number; fromCharIndex: number; endCharIndex: number; color?: string; backgroundColor?: string } };

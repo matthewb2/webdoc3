@@ -9,7 +9,7 @@
             background-color: #f0f3f6;
             margin: 0;
             padding: 0;
-            font-family: '맑은 고딕', 'Arial', sans-serif;
+            font-family: var(--doc-font, '맑은 고딕'), 'Arial', sans-serif;
             width: 100vw;
             height: 100vh;
             overflow: hidden; 
@@ -31,6 +31,7 @@
             z-index: 10;
             box-shadow: 0 2px 8px rgba(0,0,0,0.06);
             box-sizing: border-box;
+            font-family: var(--ui-font, '맑은 고딕'), sans-serif;
         }
         .toolbar-btn {
             height: 30px;
@@ -125,6 +126,7 @@
             box-sizing: border-box;
             font-size: 12px;
             color: #555;
+            font-family: var(--ui-font, '맑은 고딕'), sans-serif;
         }
         .statusbar-info {
             white-space: nowrap;
@@ -224,7 +226,7 @@
             color: #888;
         }
         p {
-            font-family: '맑은 고딕', 'Arial', sans-serif;
+            font-family: var(--doc-font, '맑은 고딕'), 'Arial', sans-serif;
             font-size: 16px;
             line-height: 26px;
             margin: 0; 

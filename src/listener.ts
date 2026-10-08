@@ -57,16 +57,99 @@ export function initFontCombos(container: HTMLDivElement, worker: Worker, cursor
   sizeSelect.disabled = false;
   familySelect.addEventListener('change', () => {
     if (fontWorker && fontCursor) {
-      fontWorker.postMessage({ type: 'EDIT_FONT', payload: { paragraphIndex: fontCursor.docIdx, fontFamily: familySelect.value } });
+      postFontStyle(container, fontWorker, fontCursor, { fontFamily: familySelect.value });
     }
   });
   sizeSelect.addEventListener('change', () => {
     const size = parseFloat(sizeSelect.value);
     if (fontWorker && fontCursor && !isNaN(size)) {
-      fontWorker.postMessage({ type: 'EDIT_FONT', payload: { paragraphIndex: fontCursor.docIdx, fontSize: size } });
+      postFontStyle(container, fontWorker, fontCursor, { fontSize: size });
     }
   });
   syncFontCombos();
+}
+
+// 현재 선택 영역을 문단별 모델 오프셋으로 변환 (없으면 null → 문단 전체 적용)
+function selectionRangeInParagraph(
+  container: HTMLDivElement,
+  docIdx: number,
+): { from: number; to: number } | null {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
+  const range = selection.getRangeAt(0);
+  const paras = Array.from(container.querySelectorAll(`p[data-p-idx="${docIdx}"]`));
+  if (paras.length === 0) return null;
+  const modelLen = (t: string): number => {
+    let n = 0;
+    for (const ch of t) if (ch !== '​') n++;
+    return n;
+  };
+  let from = -1;
+  let to = -1;
+  let acc = 0;
+  let found = false;
+  paras.forEach((p) => {
+    const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+    let tn = walker.nextNode();
+    while (tn) {
+      const t = tn.textContent || '';
+      if (range.intersectsNode(tn)) {
+        let startInNode = 0;
+        let endInNode = t.length;
+        if (tn === range.startContainer) startInNode = Math.min(range.startOffset, t.length);
+        if (tn === range.endContainer) endInNode = Math.min(range.endOffset, t.length);
+        if (!found) {
+          from = acc + modelLen(t.slice(0, startInNode));
+          found = true;
+        }
+        to = acc + modelLen(t.slice(0, endInNode));
+      }
+      acc += modelLen(t);
+      tn = walker.nextNode();
+    }
+  });
+  if (!found || to <= from) return null;
+  return { from, to };
+}
+
+// 글꼴 스타일을 선택 영역(범위) 단위로 전송 (범위 없으면 문단 전체)
+function postFontStyle(
+  container: HTMLDivElement,
+  worker: Worker,
+  cursor: CursorState,
+  attrs: { fontFamily?: string; fontSize?: number },
+) {
+  selectedParagraphIndices(container, cursor.docIdx).forEach((docIdx) => {
+    const r = selectionRangeInParagraph(container, docIdx);
+    if (r) {
+      worker.postMessage({
+        type: 'EDIT_FONT_RANGE',
+        payload: { paragraphIndex: docIdx, fromCharIndex: r.from, endCharIndex: r.to, ...attrs },
+      });
+    } else {
+      worker.postMessage({ type: 'EDIT_FONT', payload: { paragraphIndex: docIdx, ...attrs } });
+    }
+  });
+}
+
+// 색상 스타일을 선택 영역(범위) 단위로 전송 (범위 없으면 문단 전체)
+function postColorStyle(
+  container: HTMLDivElement,
+  worker: Worker,
+  cursor: CursorState,
+  attrs: { color?: string; backgroundColor?: string },
+) {
+  selectedParagraphIndices(container, cursor.docIdx).forEach((docIdx) => {
+    const r = selectionRangeInParagraph(container, docIdx);
+    if (r) {
+      worker.postMessage({
+        type: 'EDIT_COLOR_RANGE',
+        payload: { paragraphIndex: docIdx, fromCharIndex: r.from, endCharIndex: r.to, ...attrs },
+      });
+    } else {
+      worker.postMessage({ type: 'EDIT_COLOR', payload: { paragraphIndices: [docIdx], ...attrs } });
+    }
+  });
 }
 
 // 선택 영역(커서) run의 스타일을 콤보박스에 반영
@@ -509,16 +592,16 @@ export function initColorControls(container: HTMLDivElement, worker: Worker, cur
   const bgInput = document.getElementById('bg-color-input') as HTMLInputElement | null;
   if (!textInput || !bgInput) return;
   textInput.addEventListener('input', () => {
-    worker.postMessage({ type: 'EDIT_COLOR', payload: { paragraphIndices: selectedParagraphIndices(container, cursor.docIdx), color: textInput.value } });
+    postColorStyle(container, worker, cursor, { color: textInput.value });
   });
   bgInput.addEventListener('input', () => {
-    worker.postMessage({ type: 'EDIT_COLOR', payload: { paragraphIndices: selectedParagraphIndices(container, cursor.docIdx), backgroundColor: bgInput.value } });
+    postColorStyle(container, worker, cursor, { backgroundColor: bgInput.value });
   });
   textInput.addEventListener('dblclick', () => {
-    worker.postMessage({ type: 'EDIT_COLOR', payload: { paragraphIndices: selectedParagraphIndices(container, cursor.docIdx), color: '' } });
+    postColorStyle(container, worker, cursor, { color: '' });
   });
   bgInput.addEventListener('dblclick', () => {
-    worker.postMessage({ type: 'EDIT_COLOR', payload: { paragraphIndices: selectedParagraphIndices(container, cursor.docIdx), backgroundColor: '' } });
+    postColorStyle(container, worker, cursor, { backgroundColor: '' });
   });
   syncColorControls();
 }
