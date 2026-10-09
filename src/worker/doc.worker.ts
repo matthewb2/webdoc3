@@ -5,6 +5,37 @@ export type { PageModel } from './layout';
 
 let documentState: DocumentModel = [];
 
+// 설정 파일의 기본 글자 모양 (새 run 시딩용, INIT_SETTINGS로 수신)
+let defaultCharShape: { bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean; color?: string } = {};
+
+function seedRun(): TextRun {
+  const run: TextRun = { text: '' };
+  applyDefaultShape(run);
+  return run;
+}
+
+function isBareRun(run: TextRun): boolean {
+  return (
+    !run.bold &&
+    !run.italic &&
+    !run.underline &&
+    !run.strike &&
+    run.fontFamily === undefined &&
+    run.fontSize === undefined &&
+    run.color === undefined &&
+    run.backgroundColor === undefined
+  );
+}
+
+// 속성이 전혀 없는 run에 첫 입력이 들어오면 기본 모양 적용
+function applyDefaultShape(run: TextRun): void {
+  if (defaultCharShape.bold) run.bold = true;
+  if (defaultCharShape.italic) run.italic = true;
+  if (defaultCharShape.underline) run.underline = true;
+  if (defaultCharShape.strike) run.strike = true;
+  if (defaultCharShape.color) run.color = defaultCharShape.color;
+}
+
 
 
 
@@ -25,6 +56,9 @@ self.addEventListener('message', (event: MessageEvent<any>) => {
     editDelete(message.payload.paragraphIndex, message.payload.charIndex);
   } else if (message.type === 'EDIT_DELETE_FWD') {
     editDeleteForward(message.payload.paragraphIndex, message.payload.charIndex);
+  } else if (message.type === 'INIT_SETTINGS') {
+    const cs = message.payload?.charShape;
+    defaultCharShape = cs && typeof cs === 'object' ? { ...cs } : {};
   } else if (message.type === 'EDIT_SPLIT') {
     editSplit(message.payload.paragraphIndex, message.payload.charIndex);
   } else if (message.type === 'GET_DOC') {
@@ -59,9 +93,10 @@ function editInsert(docIdx: number, charIndex: number, text: string) {
   console.log(`[edit] insert p=${docIdx} at=${charIndex} text=${JSON.stringify(text.slice(0, 30))}`);
   const item = documentState[docIdx];
   if (item?.type !== 'paragraph') return;
-  if (item.children.length === 0) item.children.push({ text: '' });
+  if (item.children.length === 0) item.children.push(seedRun());
   const { runIndex, localIndex } = locateRun(item.children, Math.max(0, charIndex));
   const run = item.children[runIndex];
+  if (isBareRun(run)) applyDefaultShape(run);
   const t = run.text || '';
   run.text = t.slice(0, localIndex) + text + t.slice(localIndex);
   requestLayout();
@@ -208,15 +243,12 @@ function editFont(
 }
 
 function editAlign(docIndices: number[], align?: string) {
-  const value = align && align !== 'left' ? align : undefined;
+  const valid = ['left', 'center', 'right', 'justify'];
+  const value = align && valid.includes(align) ? align : 'left';
   (Array.isArray(docIndices) ? docIndices : []).forEach((docIdx) => {
     const item = documentState[docIdx];
     if (item?.type !== 'paragraph') return;
-    if (value === undefined) {
-      delete item.align;
-    } else {
-      item.align = value as any;
-    }
+    item.align = value as any;
   });
   requestLayout();
 }
@@ -336,8 +368,8 @@ function editSplit(docIdx: number, charIndex: number) {
       right.push({ ...run, text: t.slice(localIndex) });
     }
   });
-  documentState[docIdx] = { type: 'paragraph', children: left.length > 0 ? left : [{ text: '' }], align: item.align, columns: item.columns, indent: item.indent };
-  documentState.splice(docIdx + 1, 0, { type: 'paragraph', children: right.length > 0 ? right : [{ text: '' }], align: item.align, columns: item.columns, indent: item.indent });
+  documentState[docIdx] = { type: 'paragraph', children: left.length > 0 ? left : [seedRun()], align: item.align, columns: item.columns, indent: item.indent };
+  documentState.splice(docIdx + 1, 0, { type: 'paragraph', children: right.length > 0 ? right : [seedRun()], align: item.align, columns: item.columns, indent: item.indent });
   requestLayout();
 }
 

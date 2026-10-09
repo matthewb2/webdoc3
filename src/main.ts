@@ -1,9 +1,9 @@
 import type { CursorState, DocumentModel, FontMetrics } from './types';
 import type { PageModel } from './worker/doc.worker';
-import { defaultFontFamily, defaultUiFontFamily, initSettings } from './settings';
+import { defaultFontFamily, defaultUiFontFamily, initSettings, loadSettings } from './settings';
 import { collectProbeItems, computeBreaks } from './probe';
 import { appendStreamPages, findCursorPageIndices, initRenderer, renderVirtualPages, updateVisiblePages } from './render';
-import { initAlignCombo, initColorControls, initColumnCombo, initEditorListeners, initFontCombos, initFileOpen, initSave, initSelectionListener, initStyleButtons, initViewportScrollListener, initWorkerListener, initZoomControls, isComposingActive, refreshZoomLayout, setAwaitingRender, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncStyleButtons } from './listener';
+import { clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initEditorListeners, initFontCombos, initFileOpen, initSave, initSelectionListener, initStyleButtons, initViewportScrollListener, initWorkerListener, initZoomControls, isComposingActive, refreshZoomLayout, setAwaitingRender, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncStyleButtons, takePendingSelection } from './listener';
 
 const worker = new Worker(new URL('./worker/doc.worker.ts', import.meta.url), {
   type: 'module'
@@ -109,9 +109,13 @@ function restoreCursorPosition() {
   const selection = window.getSelection();
   if (!selection) return;
 
+  // 툴바 조작으로 보관된 선택 영역이 있으면 양 끝 페이지를 먼저 마운트
+  const pending = takePendingSelection();
+  const mountPages = pending
+    ? [...findCursorPageIndices(pending.anchor.docIdx), ...findCursorPageIndices(pending.focus.docIdx)]
+    : findCursorPageIndices(savedCursor.docIdx);
   // [가상화] 커서가 있는 페이지를 먼저 마운트 (분할된 단락/표의 모든 조각)
-  const cursorPages = findCursorPageIndices(savedCursor.docIdx);
-  if (cursorPages.length > 0) updateVisiblePages(cursorPages);
+  if (mountPages.length > 0) updateVisiblePages(mountPages);
 
   let targetTextNode: Node | null = null;
   let targetOffset = 0;
@@ -142,6 +146,59 @@ function restoreCursorPosition() {
       targetOffset = lastLen;
     }
   };
+
+  const locateInElement = (root: Element, modelIndex: number): { node: Node; offset: number } | null => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let tn = walker.nextNode();
+    let remaining = Math.max(0, modelIndex);
+    let lastText: Node | null = null;
+    let lastLen = 0;
+    while (tn) {
+      const t = tn.textContent || '';
+      const modelLen = t.length - Array.from(t).filter((ch) => ch.charCodeAt(0) === 0x200b).length;
+      lastText = tn;
+      lastLen = t.length;
+      if (remaining <= modelLen) {
+        return { node: tn, offset: Math.min(remaining, t.length) };
+      }
+      remaining -= modelLen;
+      tn = walker.nextNode();
+    }
+    if (lastText) return { node: lastText, offset: lastLen };
+    return null;
+  };
+
+  const locateModelOffset = (docIdx: number, charIndex: number): { node: Node; offset: number } | null => {
+    const matches = Array.from(containerEl.querySelectorAll(`p[data-p-idx="${docIdx}"]`) as NodeListOf<HTMLParagraphElement>);
+    let targetParagraph: HTMLParagraphElement | null = null;
+    for (const m of matches) {
+      const off = parseInt(m.dataset.pOffset || '0', 10);
+      const len = m.textContent?.length || 0;
+      if (charIndex >= off) targetParagraph = m;
+      if (charIndex <= off + len) break;
+    }
+    targetParagraph = targetParagraph || matches[0] || null;
+    if (!targetParagraph) return null;
+    const fragOffset = parseInt(targetParagraph.dataset.pOffset || '0', 10);
+    return locateInElement(targetParagraph, charIndex - fragOffset);
+  };
+
+  // 툴바 조작 전 선택 영역 복원 (범위 선택 유지)
+  if (
+    pending &&
+    (pending.anchor.docIdx !== pending.focus.docIdx || pending.anchor.charIndex !== pending.focus.charIndex)
+  ) {
+    const a = locateModelOffset(pending.anchor.docIdx, pending.anchor.charIndex);
+    const f = locateModelOffset(pending.focus.docIdx, pending.focus.charIndex);
+    if (a && f) {
+      try {
+        selection.setBaseAndExtent(a.node, a.offset, f.node, f.offset);
+      } catch {
+        /* 복원 실패 시 기존 경로 */
+      }
+      if (selection.rangeCount > 0) return;
+    }
+  }
 
   if (savedCursor.isInsideTable) {
     // 저장된 페이지의 표를 우선 탐색 (분할된 표의 조각 인덱스 일치 보장)
@@ -209,6 +266,7 @@ async function initWordProcessor() {
   await initSettings();
   document.documentElement.style.setProperty('--doc-font', `"${defaultFontFamily()}"`);
   document.documentElement.style.setProperty('--ui-font', `"${defaultUiFontFamily()}"`);
+  worker.postMessage({ type: 'INIT_SETTINGS', payload: { charShape: loadSettings().charShape } });
   const fontMetrics = generateFontMetrics(`16px "${defaultFontFamily()}", Arial`);
   worker.postMessage({ type: 'INIT_METRICS', payload: fontMetrics });
 
@@ -242,8 +300,7 @@ function buildMockDocument(): DocumentModel {
   const mockDocument: DocumentModel = [
     {
       type: 'paragraph',
-      align: 'left',
-      children: [{ text: "hwp파일입니다", bold: false }]
+      children: [{ text: "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since 1966, when designers at Letraset and James Mosley, the librarian at St Bride Printing Library in London, took a 1914 Cicero translation and scrambled it to make dummy text for Letraset's Body Type sheets. It has survived not only many decades, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised thanks to these sheets and more recently with desktop publishing software like Aldus PageMaker and Microsoft Word including versions of Lorem Ipsum.", bold: false }]
     }
   ];
   /*
@@ -327,7 +384,7 @@ initWorkerListener(worker, (pages) => {
   appendStreamPages(pages);
 });
 initViewportScrollListener(() => updateVisiblePages());
-initSelectionListener(() => { saveCursorPosition(); syncFontCombos(); syncColumnCombo(); syncAlignCombo(); syncColorControls(); syncStyleButtons(); });
+initSelectionListener(() => { clearPendingSelection(); saveCursorPosition(); syncFontCombos(); syncColumnCombo(); syncAlignCombo(); syncColorControls(); syncStyleButtons(); });
 initEditorListeners(containerEl, worker, savedCursor, saveCursorPosition, flushPendingRender, () => { pendingPages = null; });
 initFontCombos(containerEl, worker, savedCursor);
 initColumnCombo(containerEl, worker, savedCursor);

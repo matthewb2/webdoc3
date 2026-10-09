@@ -1,7 +1,7 @@
 // src/listener.ts - 이벤트 리스너 (워커 메시지·스크롤·선택·입력·HWP 열기)
 import type { PageModel } from './worker/doc.worker';
 import type { CursorState, TextRun } from './types';
-import { defaultFontFamily, defaultFontSize } from './settings';
+import { defaultAlign, defaultFontFamily, defaultFontSize } from './settings';
 import { parseHwpToDocumentModel } from './hwp/hwpParser';
 import { parseDocxToDocumentModel } from './docx/docxParser';
 import { parseOdtToDocumentModel } from './odt/odtParser';
@@ -21,6 +21,10 @@ let fontWorker: Worker | null = null;
 let fontCursor: CursorState | null = null;
 
 function fillSelect(select: HTMLSelectElement, values: Array<string | number>) {
+  // 정적 마크업에 이미 같은 값이 있으면 다시 채우지 않음 (로드 후 레이아웃 밀림 방지)
+  const existing = Array.from(select.options).map((o) => o.value);
+  const wanted = values.map((v) => String(v));
+  if (existing.length === wanted.length && existing.every((v, i) => v === wanted[i])) return;
   select.innerHTML = '';
   values.forEach((v) => {
     const opt = document.createElement('option');
@@ -55,6 +59,8 @@ export function initFontCombos(container: HTMLDivElement, worker: Worker, cursor
   fillSelect(sizeSelect, FONT_SIZES);
   familySelect.disabled = false;
   sizeSelect.disabled = false;
+  familySelect.addEventListener('pointerdown', () => stashSelection(container));
+  sizeSelect.addEventListener('pointerdown', () => stashSelection(container));
   familySelect.addEventListener('change', () => {
     if (fontWorker && fontCursor) {
       postFontStyle(container, fontWorker, fontCursor, { fontFamily: familySelect.value });
@@ -69,11 +75,101 @@ export function initFontCombos(container: HTMLDivElement, worker: Worker, cursor
   syncFontCombos();
 }
 
+export interface SelEnd {
+  docIdx: number;
+  charIndex: number;
+}
+
+export interface SelSnapshot {
+  anchor: SelEnd;
+  focus: SelEnd;
+}
+
+function modelTextLen(t: string): number {
+  let n = 0;
+  for (const ch of t) if (ch !== '​') n++;
+  return n;
+}
+
+function paraIndexOfNode(container: HTMLDivElement, node: Node): number | null {
+  const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element | null);
+  const p = el?.closest?.('p');
+  if (!p || !container.contains(p)) return null;
+  const idx = parseInt((p as HTMLElement).dataset.pIdx || '', 10);
+  return isNaN(idx) ? null : idx;
+}
+
+function modelOffsetInPara(container: HTMLDivElement, docIdx: number, node: Node, offset: number): number | null {
+  const paras = Array.from(container.querySelectorAll(`p[data-p-idx="${docIdx}"]`));
+  let acc = 0;
+  for (const p of paras) {
+    const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+    let tn = walker.nextNode();
+    while (tn) {
+      const t = tn.textContent || '';
+      if (tn === node) {
+        return acc + modelTextLen(t.slice(0, Math.min(offset, t.length)));
+      }
+      acc += modelTextLen(t);
+      tn = walker.nextNode();
+    }
+  }
+  return null;
+}
+
+// 렌더로 선택이 날아가기 전 선택 영역 양 끝을 모델 좌표로 보관 (표 안이면 null)
+export function snapshotSelection(container: HTMLDivElement): SelSnapshot | null {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
+  const range = selection.getRangeAt(0);
+  const aIdx = paraIndexOfNode(container, range.startContainer);
+  const fIdx = paraIndexOfNode(container, range.endContainer);
+  if (aIdx === null || fIdx === null) return null;
+  const a = modelOffsetInPara(container, aIdx, range.startContainer, range.startOffset);
+  const f = modelOffsetInPara(container, fIdx, range.endContainer, range.endOffset);
+  if (a === null || f === null) return null;
+  return { anchor: { docIdx: aIdx, charIndex: a }, focus: { docIdx: fIdx, charIndex: f } };
+}
+
+let pendingSel: SelSnapshot | null = null;
+
+export function stashSelection(container: HTMLDivElement): void {
+  pendingSel = snapshotSelection(container);
+}
+
+export function peekPendingSelection(): SelSnapshot | null {
+  return pendingSel;
+}
+
+export function takePendingSelection(): SelSnapshot | null {
+  const s = pendingSel;
+  pendingSel = null;
+  return s;
+}
+
+export function clearPendingSelection(): void {
+  pendingSel = null;
+}
+
 // 현재 선택 영역을 문단별 모델 오프셋으로 변환 (없으면 null → 문단 전체 적용)
 function selectionRangeInParagraph(
   container: HTMLDivElement,
   docIdx: number,
+  snapshot: SelSnapshot | null = null,
 ): { from: number; to: number } | null {
+  if (snapshot) {
+    const aFirst =
+      snapshot.anchor.docIdx < snapshot.focus.docIdx ||
+      (snapshot.anchor.docIdx === snapshot.focus.docIdx &&
+        snapshot.anchor.charIndex <= snapshot.focus.charIndex);
+    const start = aFirst ? snapshot.anchor : snapshot.focus;
+    const end = aFirst ? snapshot.focus : snapshot.anchor;
+    if (docIdx < start.docIdx || docIdx > end.docIdx) return null;
+    const len = cachedParagraphInfo(docIdx).length;
+    const from = docIdx === start.docIdx ? start.charIndex : 0;
+    const to = docIdx === end.docIdx ? end.charIndex : len;
+    return to > from ? { from, to } : null;
+  }
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
   const range = selection.getRangeAt(0);
@@ -128,8 +224,9 @@ function postFontStyle(
   cursor: CursorState,
   attrs: FontStyleAttrs,
 ) {
-  selectedParagraphIndices(container, cursor.docIdx).forEach((docIdx) => {
-    const r = selectionRangeInParagraph(container, docIdx);
+  const snap = peekPendingSelection();
+  selectedParagraphIndices(container, cursor.docIdx, snap).forEach((docIdx) => {
+    const r = selectionRangeInParagraph(container, docIdx, snap);
     if (r) {
       worker.postMessage({
         type: 'EDIT_FONT_RANGE',
@@ -148,8 +245,9 @@ function postColorStyle(
   cursor: CursorState,
   attrs: { color?: string; backgroundColor?: string },
 ) {
-  selectedParagraphIndices(container, cursor.docIdx).forEach((docIdx) => {
-    const r = selectionRangeInParagraph(container, docIdx);
+  const snap = peekPendingSelection();
+  selectedParagraphIndices(container, cursor.docIdx, snap).forEach((docIdx) => {
+    const r = selectionRangeInParagraph(container, docIdx, snap);
     if (r) {
       worker.postMessage({
         type: 'EDIT_COLOR_RANGE',
@@ -297,7 +395,8 @@ container.addEventListener('compositionend', async (e: CompositionEvent) => {
   if (e.data) {
     saveCursorPosition();
     await refreshParaBreaks(worker, cursor.docIdx);
-    markEditPending();
+      clearPendingSelection();
+      markEditPending();
     // 조합 중간에 들어간 임시 글자 offset을 고려하여 워커에 삽입 요청
     worker.postMessage({
       type: 'EDIT_INSERT',
@@ -319,6 +418,7 @@ container.addEventListener('compositionend', async (e: CompositionEvent) => {
     }
     if (text.length > 0) {
       await refreshParaBreaks(worker, cursor.docIdx);
+      clearPendingSelection();
       markEditPending();
       worker.postMessage({ type: 'EDIT_INSERT', payload: { paragraphIndex: cursor.docIdx, charIndex: at, text } });
       cursor.charIndex = at + text.length;
@@ -338,7 +438,8 @@ container.addEventListener('keydown', (e: KeyboardEvent) => {
     e.preventDefault();
     saveCursorPosition();
     if (cursor.isInsideTable) return;
-    markEditPending();
+      clearPendingSelection();
+      markEditPending();
     worker.postMessage({ type: 'EDIT_SPLIT', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
     cursor.docIdx += 1;
     cursor.charIndex = 0;
@@ -361,6 +462,7 @@ container.addEventListener('beforeinput', async (e: InputEvent) => {
       const cur = cachedParagraphInfo(cursor.docIdx);
       if (!prev.isParagraph && cur.length > 0) return;
       await refreshParaBreaks(worker, cursor.docIdx);
+      clearPendingSelection();
       markEditPending();
       worker.postMessage({ type: 'EDIT_DELETE', payload: { paragraphIndex: cursor.docIdx, charIndex: 0 } });
       cursor.docIdx -= 1;
@@ -369,7 +471,8 @@ container.addEventListener('beforeinput', async (e: InputEvent) => {
       return;
     }
     await refreshParaBreaks(worker, cursor.docIdx);
-    markEditPending();
+      clearPendingSelection();
+      markEditPending();
     worker.postMessage({ type: 'EDIT_DELETE', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
     cursor.charIndex -= 1;
     return;
@@ -387,7 +490,8 @@ container.addEventListener('beforeinput', async (e: InputEvent) => {
       if (nextIsTable || !next.exists) {
         const prev = cachedParagraphInfo(cursor.docIdx - 1);
         await refreshParaBreaks(worker, cursor.docIdx);
-        markEditPending();
+        clearPendingSelection();
+      markEditPending();
         worker.postMessage({ type: 'EDIT_DELETE_FWD', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
         if (prev.isParagraph) {
           cursor.docIdx -= 1;
@@ -398,7 +502,8 @@ container.addEventListener('beforeinput', async (e: InputEvent) => {
       }
     }
     await refreshParaBreaks(worker, cursor.docIdx);
-    markEditPending();
+      clearPendingSelection();
+      markEditPending();
     worker.postMessage({ type: 'EDIT_DELETE_FWD', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
     return;
   }
@@ -407,7 +512,8 @@ container.addEventListener('beforeinput', async (e: InputEvent) => {
     e.preventDefault();
     saveCursorPosition();
     await refreshParaBreaks(worker, cursor.docIdx);
-    markEditPending();
+      clearPendingSelection();
+      markEditPending();
     worker.postMessage({ type: 'EDIT_INSERT', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex, text: e.data } });
     cursor.charIndex += e.data.length;
   }
@@ -513,7 +619,18 @@ export function columnWidth(columns: number): number {
 }
 
 // 선택 영역에 걸친 단락들의 문서 인덱스 수집 (없으면 커서 단락)
-function selectedParagraphIndices(container: HTMLDivElement, cursorDocIdx: number): number[] {
+function selectedParagraphIndices(
+  container: HTMLDivElement,
+  cursorDocIdx: number,
+  snapshot: SelSnapshot | null = null,
+): number[] {
+  if (snapshot) {
+    const lo = Math.min(snapshot.anchor.docIdx, snapshot.focus.docIdx);
+    const hi = Math.max(snapshot.anchor.docIdx, snapshot.focus.docIdx);
+    const out: number[] = [];
+    for (let i = lo; i <= hi; i++) out.push(i);
+    return out;
+  }
   const selection = window.getSelection();
   if (selection && selection.rangeCount > 0) {
     const range = selection.getRangeAt(0);
@@ -534,9 +651,11 @@ function selectedParagraphIndices(container: HTMLDivElement, cursorDocIdx: numbe
 export function initColumnCombo(container: HTMLDivElement, worker: Worker, cursor: CursorState) {
   const select = document.getElementById('column-count-select') as HTMLSelectElement | null;
   if (!select) return;
+  select.addEventListener('pointerdown', () => stashSelection(container));
   select.addEventListener('change', () => {
     const n = parseInt(select.value, 10) || 1;
-    worker.postMessage({ type: 'EDIT_COLUMNS', payload: { paragraphIndices: selectedParagraphIndices(container, cursor.docIdx), columns: n } });
+    const snap = peekPendingSelection();
+    worker.postMessage({ type: 'EDIT_COLUMNS', payload: { paragraphIndices: selectedParagraphIndices(container, cursor.docIdx, snap), columns: n } });
   });
   syncColumnCombo();
 }
@@ -562,9 +681,11 @@ export function syncColumnCombo() {
 export function initAlignCombo(container: HTMLDivElement, worker: Worker, cursor: CursorState) {
   const select = document.getElementById('align-select') as HTMLSelectElement | null;
   if (!select) return;
+  select.addEventListener('pointerdown', () => stashSelection(container));
   select.addEventListener('change', () => {
     const align = ['left', 'center', 'right', 'justify'].includes(select.value) ? select.value : 'left';
-    worker.postMessage({ type: 'EDIT_ALIGN', payload: { paragraphIndices: selectedParagraphIndices(container, cursor.docIdx), align } });
+    const snap = peekPendingSelection();
+    worker.postMessage({ type: 'EDIT_ALIGN', payload: { paragraphIndices: selectedParagraphIndices(container, cursor.docIdx, snap), align } });
   });
   syncAlignCombo();
 }
@@ -582,8 +703,8 @@ export function syncAlignCombo() {
   const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element | null);
   const p = el?.closest?.('p');
   if (!p || !container.contains(p)) return;
-  select.value = (p as HTMLElement).dataset.align || 'left';
-  if (!['left', 'center', 'right', 'justify'].includes(select.value)) select.value = 'left';
+  select.value = (p as HTMLElement).dataset.align || defaultAlign();
+  if (!['left', 'center', 'right', 'justify'].includes(select.value)) select.value = defaultAlign();
 }
 
 function cssColorToHex(color: string): string | null {
@@ -600,6 +721,8 @@ export function initColorControls(container: HTMLDivElement, worker: Worker, cur
   const textInput = document.getElementById('text-color-input') as HTMLInputElement | null;
   const bgInput = document.getElementById('bg-color-input') as HTMLInputElement | null;
   if (!textInput || !bgInput) return;
+  textInput.addEventListener('pointerdown', () => stashSelection(container));
+  bgInput.addEventListener('pointerdown', () => stashSelection(container));
   textInput.addEventListener('input', () => {
     postColorStyle(container, worker, cursor, { color: textInput.value });
   });
@@ -705,18 +828,26 @@ export function initStyleButtons(container: HTMLDivElement, worker: Worker, curs
   const italicBtn = document.getElementById('btn-style-italic') as HTMLButtonElement | null;
   const underlineBtn = document.getElementById('btn-style-underline') as HTMLButtonElement | null;
   if (!normalBtn || !boldBtn || !italicBtn || !underlineBtn) return;
+  [normalBtn, boldBtn, italicBtn, underlineBtn].forEach((btn) => {
+    // 포커스를 빼앗지 않아 선택 영역을 유지
+    btn.addEventListener('mousedown', (e) => e.preventDefault());
+  });
   normalBtn.addEventListener('click', () => {
+    stashSelection(container);
     postFontStyle(container, worker, cursor, { bold: false, italic: false, underline: false, strike: false });
   });
   boldBtn.addEventListener('click', () => {
+    stashSelection(container);
     const span = anchorSpan();
     postFontStyle(container, worker, cursor, { bold: !(span && spanStyleState(span).bold) });
   });
   italicBtn.addEventListener('click', () => {
+    stashSelection(container);
     const span = anchorSpan();
     postFontStyle(container, worker, cursor, { italic: !(span && spanStyleState(span).italic) });
   });
   underlineBtn.addEventListener('click', () => {
+    stashSelection(container);
     const span = anchorSpan();
     postFontStyle(container, worker, cursor, { underline: !(span && spanStyleState(span).underline) });
   });

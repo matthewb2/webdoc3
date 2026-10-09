@@ -393,9 +393,41 @@ function wrapGlyphs(glyphs: Glyph[], maxWidth: number): Glyph[][] {
     const charWidth = baseWidth * ((glyph.run.fontSize ?? BASE_FONT_PX) / BASE_FONT_PX);
 
     if (currentWidth + charWidth > maxWidth && current.length > 0) {
-      lines.push(current);
-      current = [];
-      currentWidth = 0;
+      // 영문 단어 단위 줄바꿈: 줄 안 마지막 공백/하이픈 뒤에서 나눔 (앞에 실제 글자가 있을 때만)
+      let breakAt = -1;
+      for (let i = current.length - 1; i >= 0; i--) {
+        const ch = current[i].ch;
+        if (ch === ' ' || ch === '-') {
+          let hasContent = false;
+          for (let k = 0; k < i; k++) {
+            if (current[k].ch !== ' ') {
+              hasContent = true;
+              break;
+            }
+          }
+          if (hasContent) {
+            breakAt = i;
+            break;
+          }
+        }
+      }
+      if (breakAt >= 0) {
+        lines.push(current.slice(0, breakAt + 1));
+        current = current.slice(breakAt + 1);
+        currentWidth = 0;
+        current.forEach((g) => {
+          if (g.ch === ' ' && currentWidth === 0) {
+            g.w = 0;
+            return;
+          }
+          const bw = fontMetrics[g.ch] !== undefined ? fontMetrics[g.ch] : fontMetrics['default_ko'];
+          currentWidth += bw * ((g.run.fontSize ?? BASE_FONT_PX) / BASE_FONT_PX);
+        });
+      } else {
+        lines.push(current);
+        current = [];
+        currentWidth = 0;
+      }
     }
     // 브라우저(white-space normal)와 동일하게 줄 맨 앞 공백은 너비 0으로 처리 (텍스트는 보존)
     if (glyph.ch === ' ' && currentWidth === 0) {

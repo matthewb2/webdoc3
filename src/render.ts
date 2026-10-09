@@ -1,5 +1,6 @@
 // src/render.ts - 페이지 DOM 생성 + 가상화 뷰포트
 import type { PageModel } from './worker/doc.worker';
+import { defaultAlign, defaultIndent } from './settings';
 
 let rendererContainer!: HTMLDivElement;
 
@@ -121,21 +122,21 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
       p.dataset.pOffset = (item._charOffset ?? 0).toString();
       if (item.lineHeight) p.style.lineHeight = `${item.lineHeight}px`;
 
-      // [구현] 단락 정렬 반영 (중앙, 우측 등)
-      if (item.align) {
-        p.style.textAlign = item.align;
-        p.dataset.align = item.align;
-      }
+      // [구현] 단락 정렬 반영 (없으면 기본 정렬)
+      const effectiveAlign = item.align ?? defaultAlign();
+      p.style.textAlign = effectiveAlign;
+      p.dataset.align = effectiveAlign;
 
-      // [구현] 왼쪽 들여쓰기 (양수=첫 줄 들여쓰기, 음수=내어쓰기)
-      if (item.indent) {
-        if (item.indent > 0) {
-          p.style.textIndent = `${item.indent}px`;
+      // [구현] 왼쪽 들여쓰기 (없으면 기본값, 양수=첫 줄 들여쓰기, 음수=내어쓰기)
+      const effectiveIndent = item.indent ?? defaultIndent();
+      if (effectiveIndent) {
+        if (effectiveIndent > 0) {
+          p.style.textIndent = `${effectiveIndent}px`;
         } else {
-          p.style.paddingLeft = `${-item.indent}px`;
-          p.style.textIndent = `${item.indent}px`;
+          p.style.paddingLeft = `${-effectiveIndent}px`;
+          p.style.textIndent = `${effectiveIndent}px`;
         }
-        p.dataset.indent = String(item.indent);
+        p.dataset.indent = String(effectiveIndent);
       }
 
       const children: Array<{ text: string; bold?: boolean }> = item.children || [];

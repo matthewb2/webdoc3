@@ -231,9 +231,11 @@
             font-family: var(--doc-font, '맑은 고딕'), 'Arial', sans-serif;
             font-size: 16px;
             line-height: 26px;
-            margin: 0; 
+            margin: 0;
             padding: 0;
-            word-break: break-all;
+            /* 영문은 단어 단위로 줄바꿈 (한글은 글자 단위 유지) */
+            word-break: normal;
+            overflow-wrap: anywhere;
         }
         p::after {
             content: " ↵";
@@ -272,7 +274,8 @@ table td, table th {
     font-size: 16px;
     line-height: 26px; /* 워커의 LINE_HEIGHT */
     color: #333;
-    word-break: break-all;
+    word-break: normal;
+    overflow-wrap: anywhere;
     vertical-align: top;
     text-align: left;
 }
@@ -290,9 +293,41 @@ table tr:nth-child(even) {
         <button id="btn-save" class="toolbar-btn" type="button" title="열린 파일의 확장자로 저장 (기본 HWP)">저장</button>
         <input id="file-input" type="file" accept=".hwp,.docx,.odt" hidden />
         <label class="toolbar-label" for="font-family-select">글꼴</label>
-        <select id="font-family-select" class="toolbar-select" disabled></select>
+        <select id="font-family-select" class="toolbar-select" disabled>
+          <option>Arial</option>
+          <option>Verdana</option>
+          <option>Tahoma</option>
+          <option>Times New Roman</option>
+          <option>Georgia</option>
+          <option>Courier New</option>
+          <option>맑은 고딕</option>
+          <option>굴림</option>
+          <option>돋움</option>
+          <option>바탕</option>
+          <option>궁서</option>
+          <option>나눔고딕</option>
+          <option>Noto Sans KR</option>
+        </select>
         <label class="toolbar-label" for="font-size-select">크기</label>
-        <select id="font-size-select" class="toolbar-select" disabled></select>
+        <select id="font-size-select" class="toolbar-select" disabled>
+          <option>8</option>
+          <option>9</option>
+          <option>10</option>
+          <option>11</option>
+          <option>12</option>
+          <option>14</option>
+          <option>16</option>
+          <option>18</option>
+          <option>20</option>
+          <option>22</option>
+          <option>24</option>
+          <option>26</option>
+          <option>28</option>
+          <option>32</option>
+          <option>36</option>
+          <option>48</option>
+          <option>72</option>
+        </select>
         <button id="btn-style-normal" class="toolbar-btn" type="button" title="보통 (서식 지우기)">보통</button>
         <button id="btn-style-bold" class="toolbar-btn toolbar-btn-style" type="button" title="굵게"><b>B</b></button>
         <button id="btn-style-italic" class="toolbar-btn toolbar-btn-style" type="button" title="기울임"><i>I</i></button>

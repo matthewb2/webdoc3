@@ -2,7 +2,7 @@
 // @hwp.js/parser 가 읽는 레코드 구조의 역순 구현. 버전 5.0.5.0, 압축 저장,
 // CFB 컨테이너는 외부 의존 없이 최소 구현(FAT 전용, 전 스트림 4096B 패딩)으로 내장.
 import { deflateRaw } from 'pako';
-import { defaultFontFamily } from '../settings';
+import { defaultAlign, defaultFontFamily, defaultIndent } from '../settings';
 import {
   BLOB_DEFAULTJSCRIPT,
   BLOB_JSCRIPTVERSION,
@@ -473,8 +473,8 @@ export class HwpWriter {
     };
     const addPara = (para: ParagraphNode) => {
       (para.children || []).forEach(addRun);
-      const hwpAlign = ALIGN_TO_HWP[para.align ?? 'left'];
-      const indentPx = para.indent ?? 0;
+      const hwpAlign = ALIGN_TO_HWP[para.align ?? defaultAlign()];
+      const indentPx = para.indent ?? defaultIndent();
       const key = `${hwpAlign}|${indentPx}`;
       if (!this.paraShapeIndexByAlign.has(key)) {
         this.paraShapeIndexByAlign.set(key, this.paraShapes.length);
@@ -490,11 +490,8 @@ export class HwpWriter {
             (cell.children || []).forEach(addRun);
           });
         });
-        // 셀 문단은 왼쪽 모양 사용 (DocInfo 기록 전 보장)
-        if (!this.paraShapeIndexByAlign.has('1|0')) {
-          this.paraShapeIndexByAlign.set('1|0', this.paraShapes.length);
-          this.paraShapes.push({ align: 1, indentPx: 0 });
-        }
+        // 셀 문단은 기본 모양 사용 (DocInfo 기록 전 보장)
+        this.ensureDefaultShape();
       }
     });
     if (this.koFaces.length === 0) this.koFaces.push(defaultFontFamily());
@@ -782,8 +779,20 @@ export class HwpWriter {
     return out.build();
   }
 
+  private defaultShapeKey(): string {
+    return `${ALIGN_TO_HWP[defaultAlign()]}|${defaultIndent()}`;
+  }
+
+  private ensureDefaultShape(): void {
+    const key = this.defaultShapeKey();
+    if (!this.paraShapeIndexByAlign.has(key)) {
+      this.paraShapeIndexByAlign.set(key, this.paraShapes.length);
+      this.paraShapes.push({ align: ALIGN_TO_HWP[defaultAlign()], indentPx: defaultIndent() });
+    }
+  }
+
   private paraShapeOf(para: ParagraphNode): number {
-    const key = `${ALIGN_TO_HWP[para.align ?? 'left']}|${para.indent ?? 0}`;
+    const key = `${ALIGN_TO_HWP[para.align ?? defaultAlign()]}|${para.indent ?? defaultIndent()}`;
     return this.paraShapeIndexByAlign.get(key) ?? 0;
   }
 
@@ -834,7 +843,7 @@ export class HwpWriter {
     if (isLast) hostChars |= 0x80000000;
     header.u32le(hostChars);
     header.u32le(leading.includes('secd') ? 0x4 : 0); // ctrlMask
-    header.u16le(this.paraShapeIndexByAlign.get('1|0') ?? 0); // 왼쪽 문단 모양
+    header.u16le(this.paraShapeIndexByAlign.get(this.defaultShapeKey()) ?? 0); // 기본 문단 모양
     header.u8(0);
     header.u8(leading.length > 0 ? 3 : 0); // breakOptions
     header.u16le(0); // charShapes (호스트 텍스트 모양 없음)
