@@ -434,12 +434,38 @@ container.addEventListener('keydown', (e: KeyboardEvent) => {
   // 한글 조합 중 엔터를 치는 경우 컴포지션 종료와 충돌하지 않도록 방어
   if (composingActive) return;
 
+  // Ctrl/⌘+A: 가상화로 마운트 해제된 페이지를 포함해 문서 전체 선택
+  if ((e.key === 'a' || e.key === 'A') && (e.ctrlKey || e.metaKey)) {
+    if (!document.activeElement?.closest('#editor-container')) return;
+    if (cursor.isInsideTable) return;
+    e.preventDefault();
+    const total = getCachedPages().length;
+    if (total === 0) return;
+    const all: number[] = [];
+    for (let i = 0; i < total; i++) all.push(i);
+    updateVisiblePages(all);
+    const pages = Array.from(container.querySelectorAll('.page'));
+    if (pages.length === 0) return;
+    const first = pages[0];
+    const last = pages[pages.length - 1];
+    const range = document.createRange();
+    range.setStart(first, 0);
+    range.setEnd(last, last.childNodes.length);
+    const selection = window.getSelection();
+    if (!selection) return;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    saveCursorPosition();
+    return;
+  }
+
   if (e.key === 'Enter') {
     e.preventDefault();
     saveCursorPosition();
     if (cursor.isInsideTable) return;
       clearPendingSelection();
       markEditPending();
+    clearCellSelection(container);
     worker.postMessage({ type: 'EDIT_SPLIT', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
     cursor.docIdx += 1;
     cursor.charIndex = 0;
@@ -464,6 +490,7 @@ container.addEventListener('beforeinput', async (e: InputEvent) => {
       await refreshParaBreaks(worker, cursor.docIdx);
       clearPendingSelection();
       markEditPending();
+      clearCellSelection(container);
       worker.postMessage({ type: 'EDIT_DELETE', payload: { paragraphIndex: cursor.docIdx, charIndex: 0 } });
       cursor.docIdx -= 1;
       cursor.charIndex = prev.isParagraph ? prev.length : 0;
@@ -492,6 +519,7 @@ container.addEventListener('beforeinput', async (e: InputEvent) => {
         await refreshParaBreaks(worker, cursor.docIdx);
         clearPendingSelection();
       markEditPending();
+        clearCellSelection(container);
         worker.postMessage({ type: 'EDIT_DELETE_FWD', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
         if (prev.isParagraph) {
           cursor.docIdx -= 1;
@@ -504,6 +532,10 @@ container.addEventListener('beforeinput', async (e: InputEvent) => {
     await refreshParaBreaks(worker, cursor.docIdx);
       clearPendingSelection();
       markEditPending();
+    // 문단 끝에서 다음 문단을 끌어올리면 인덱스가 밀리므로 선택 해제
+    if (cursor.charIndex >= cur.length && cachedParagraphInfo(cursor.docIdx + 1).isParagraph) {
+      clearCellSelection(container);
+    }
     worker.postMessage({ type: 'EDIT_DELETE_FWD', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
     return;
   }
@@ -570,6 +602,7 @@ export function initFileOpen(worker: Worker, containerEl: HTMLDivElement) {
         worker.postMessage({ type: 'INIT_DOC', payload: model });
         containerEl.style.display = 'inline-flex';
         currentFileName = file.name;
+        clearCellSelection(containerEl);
         hwpStatus.textContent = `파싱 완료: ${file.name} (${model.length}개 항목)`;
       })
       .catch((err: Error) => {
@@ -865,6 +898,125 @@ export function syncStyleButtons() {
   boldBtn.classList.toggle('active', state.bold);
   italicBtn.classList.toggle('active', state.italic);
   underlineBtn.classList.toggle('active', state.underline);
+}
+
+export interface CellSel {
+  tableDocIdx: number;
+  r0: number;
+  r1: number;
+  c0: number;
+  c1: number;
+}
+
+const CELL_SEL_BG = '#e2e2e2';
+
+let cellSel: CellSel | null = null;
+let cellAnchor: { tableDocIdx: number; r: number; c: number } | null = null;
+let cellDragging = false;
+
+function cellPosFromTd(td: HTMLTableCellElement): { tableDocIdx: number; r: number; c: number } | null {
+  const table = td.closest('table');
+  if (!table) return null;
+  const docIdx = parseInt((table as HTMLElement).dataset.pIdx || '', 10);
+  const r = parseInt(td.dataset.r || '', 10);
+  const c = parseInt(td.dataset.c || '', 10);
+  if ([docIdx, r, c].some((v) => isNaN(v))) return null;
+  return { tableDocIdx: docIdx, r, c };
+}
+
+export function paintCellSelection(container?: HTMLDivElement): void {
+  const root =
+    container || (document.getElementById('editor-container') as HTMLDivElement | null);
+  if (!root) return;
+  root.querySelectorAll('td[data-cellsel]').forEach((td) => {
+    (td as HTMLElement).style.backgroundColor = '';
+    delete (td as HTMLElement).dataset.cellsel;
+  });
+  if (!cellSel) return;
+  root.querySelectorAll(`table[data-p-idx="${cellSel.tableDocIdx}"]`).forEach((table) => {
+    table.querySelectorAll('td[data-r]').forEach((td) => {
+      const el = td as HTMLElement;
+      const r = parseInt(el.dataset.r || '', 10);
+      const c = parseInt(el.dataset.c || '', 10);
+      if (!cellSel) return;
+      if (r >= cellSel.r0 && r <= cellSel.r1 && c >= cellSel.c0 && c <= cellSel.c1) {
+        el.style.backgroundColor = CELL_SEL_BG;
+        el.dataset.cellsel = '1';
+      }
+    });
+  });
+}
+
+export function clearCellSelection(container?: HTMLDivElement): void {
+  if (!cellSel && !cellAnchor) return;
+  cellSel = null;
+  cellAnchor = null;
+  cellDragging = false;
+  paintCellSelection(container);
+}
+
+function collapseCaretToCell(container: HTMLDivElement, sel: CellSel): void {
+  const table = container.querySelector(`table[data-p-idx="${sel.tableDocIdx}"]`);
+  const td = table?.querySelector(`td[data-r="${sel.r0}"][data-c="${sel.c0}"]`);
+  const t = td?.querySelector('span')?.firstChild;
+  const selection = window.getSelection();
+  if (!t || !selection) return;
+  const range = document.createRange();
+  range.setStart(t, 0);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+export function initCellSelection(container: HTMLDivElement) {
+  container.addEventListener('mousedown', (e: MouseEvent) => {
+    if (e.button !== 0) return;
+    const td = (e.target as Element)?.closest?.('td');
+    if (!td || !container.contains(td)) {
+      clearCellSelection(container);
+      return;
+    }
+    const pos = cellPosFromTd(td as HTMLTableCellElement);
+    if (!pos) return;
+    cellAnchor = pos;
+    cellDragging = true;
+    cellSel = { tableDocIdx: pos.tableDocIdx, r0: pos.r, r1: pos.r, c0: pos.c, c1: pos.c };
+  });
+  container.addEventListener('mousemove', (e: MouseEvent) => {
+    if (!cellDragging || !cellAnchor || e.buttons !== 1) return;
+    const td = (e.target as Element)?.closest?.('td');
+    if (!td || !container.contains(td)) return;
+    const pos = cellPosFromTd(td as HTMLTableCellElement);
+    if (!pos || pos.tableDocIdx !== cellAnchor.tableDocIdx) return;
+    cellSel = {
+      tableDocIdx: pos.tableDocIdx,
+      r0: Math.min(cellAnchor.r, pos.r),
+      r1: Math.max(cellAnchor.r, pos.r),
+      c0: Math.min(cellAnchor.c, pos.c),
+      c1: Math.max(cellAnchor.c, pos.c),
+    };
+    window.getSelection()?.removeAllRanges();
+    paintCellSelection(container);
+  });
+  document.addEventListener('mouseup', () => {
+    if (!cellDragging) return;
+    cellDragging = false;
+    if (!cellSel) return;
+    if (
+      cellAnchor &&
+      cellSel.r0 === cellSel.r1 &&
+      cellSel.c0 === cellSel.c1 &&
+      cellSel.r0 === cellAnchor.r &&
+      cellSel.c0 === cellAnchor.c
+    ) {
+      // 단일 클릭: 브라우저 기본 캐럿 배치에 맡기고 셀 선택 해제
+      cellSel = null;
+      cellAnchor = null;
+      paintCellSelection(container);
+      return;
+    }
+    collapseCaretToCell(container, cellSel);
+  });
 }
 
 export function initSave(worker: Worker) {

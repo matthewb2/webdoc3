@@ -167,14 +167,17 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
       if (item._continues) table.style.marginBottom = '0';
       const rows: Array<any> = item.rows || [];
 
-      rows.forEach((row: any) => {
+      rows.forEach((row: any, ri: number) => {
         if (!row) return;
         const tr = document.createElement('tr');
         const cells: Array<any> = row.cells || [];
+        const modelRow = row._rowIdx ?? ri;
 
-        cells.forEach((cell: any) => {
+        cells.forEach((cell: any, ci: number) => {
           if (!cell) return;
           const td = document.createElement('td');
+          td.dataset.r = String(modelRow);
+          td.dataset.c = String(ci);
           const cellCount = cells.length || 1;
             td.style.width = `${(600 - 1) / cellCount}px`;
 

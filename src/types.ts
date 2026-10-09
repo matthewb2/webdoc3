@@ -33,6 +33,8 @@ export interface TableCellNode {
 export interface TableRowNode {
   type: 'table-row';
   cells: TableCellNode[];
+  /** 모델 행 인덱스 (분할 조각 추적용) */
+  _rowIdx?: number;
 }
 
 export interface TableNode {

@@ -111,6 +111,54 @@
             cursor: pointer;
         }
 
+        /* 미리보기 모드: 상단 바 + 읽기 전용 뷰포트 */
+        .preview-toolbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 46px;
+            background: #ffffff;
+            border-bottom: 1px solid #d8dde3;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 0 16px;
+            z-index: 10;
+            box-sizing: border-box;
+            font-size: 13px;
+            color: #333;
+            font-family: var(--ui-font, '맑은 고딕'), sans-serif;
+        }
+        .preview-viewport {
+            width: 100%;
+            height: calc(100% - 46px);
+            margin-top: 46px;
+            overflow: auto;
+            padding: 40px 0;
+            box-sizing: border-box;
+            display: block;
+            text-align: center;
+            background: #f0f3f6;
+        }
+        #preview-container {
+            display: inline-flex;
+            flex-direction: column;
+            gap: 30px;
+            width: 800px;
+            min-width: 800px;
+            padding: 0 20px;
+            box-sizing: content-box;
+            text-align: left;
+        }
+        #preview-container > * {
+            flex-shrink: 0;
+        }
+        #preview-container .page {
+            outline: none;
+            cursor: pointer;
+        }
+
         /* [수정] 스크롤바와 패딩을 담당하는 뷰포트 (툴바 높이만큼 상단 여백) */
         .statusbar {
             position: fixed;
@@ -291,6 +339,7 @@ table tr:nth-child(even) {
     <div class="toolbar">
         <button id="btn-open-file" class="toolbar-btn" type="button">파일열기</button>
         <button id="btn-save" class="toolbar-btn" type="button" title="열린 파일의 확장자로 저장 (기본 HWP)">저장</button>
+        <button id="btn-preview" class="toolbar-btn" type="button" title="읽기 전용 미리보기">미리보기</button>
         <input id="file-input" type="file" accept=".hwp,.docx,.odt" hidden />
         <label class="toolbar-label" for="font-family-select">글꼴</label>
         <select id="font-family-select" class="toolbar-select" disabled>
@@ -354,6 +403,16 @@ table tr:nth-child(even) {
 
     <div class="editor-viewport">
         <div id="editor-container"></div>
+    </div>
+
+    <div class="preview-toolbar" style="display:none">
+        <span id="preview-mode-label" class="statusbar-info" title="페이지를 클릭하면 쪽맞춤으로 전환">미리보기 (읽기 전용)</span>
+        <span class="statusbar-spacer"></span>
+        <button id="btn-preview-edit" class="toolbar-btn" type="button">편집</button>
+        <button id="btn-preview-close" class="toolbar-btn" type="button">닫기</button>
+    </div>
+    <div class="preview-viewport" style="display:none">
+        <div id="preview-container"></div>
     </div>
 
     <div class="statusbar">

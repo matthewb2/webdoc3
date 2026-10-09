@@ -131,7 +131,8 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
       pendingCols = null;
       let currentTableInPage: TableNode = { type: 'table', rows: [], _docIdx: idx };
 
-      item.rows.forEach((row) => {
+      item.rows.forEach((row, ri) => {
+        (row as any)._rowIdx = ri;
         const cellWidth = tableCellContentWidth(row.cells.length);
         const cellLineList = row.cells.map((cell) => buildRunLines(cell.children || [], cellWidth));
         let maxRowLines = 1;
