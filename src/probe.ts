@@ -35,7 +35,8 @@ export function collectProbeItems(model: DocumentModel): ProbeItem[] {
       add(item.children || [], width);
     } else {
       item.rows.forEach((row) => {
-        const cw = TABLE_GRID_W / row.cells.length - CELL_PAD - CELL_BD;
+        const n = Math.max(1, row.cells.length);
+        const cw = (TABLE_GRID_W - CELL_PAD * n - (n - 1) * CELL_BD) / n;
         row.cells.forEach((cell) => add(cell.children || [], cw));
       });
     }

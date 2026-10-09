@@ -1,8 +1,8 @@
-import type { CursorState, DocumentModel, FontMetrics } from './types';
+import type { CursorState, DocumentModel, FontMetrics, ParagraphNode, TableNode, TableRowNode } from './types';
 import type { PageModel } from './worker/doc.worker';
 import { defaultFontFamily, defaultUiFontFamily, initSettings, loadSettings } from './settings';
 import { collectProbeItems, computeBreaks } from './probe';
-import { appendStreamPages, findCursorPageIndices, initRenderer, renderVirtualPages, updateVisiblePages } from './render';
+import { appendStreamPages, findCursorPageIndices, getCachedPages, initRenderer, renderVirtualPages, updateVisiblePages } from './render';
 import { clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initEditorListeners, initFontCombos, initFileOpen, initSave, initSelectionListener, initStyleButtons, initViewportScrollListener, initWorkerListener, initZoomControls, isComposingActive, refreshZoomLayout, setAwaitingRender, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncStyleButtons, takePendingSelection } from './listener';
 
 const worker = new Worker(new URL('./worker/doc.worker.ts', import.meta.url), {
@@ -296,8 +296,61 @@ async function initWordProcessor() {
 }
 
 // 🧪 [시나리오] 3페이지 이상의 분량을 유도하는 대형 표 데이터 (기본 문서 로드 실패 시 폴백)
+// 🧪 표 분할 정밀 검증용: 짧은 행 + 장문 행(줄 단위 분할) + 거대 행(여러 페이지) + 짧은 행
+function buildTableTest(): { title: ParagraphNode; table: TableNode; trailing: ParagraphNode } {
+  const sent = (n: number) => `표 분할 검증 문장 ${n}번입니다. 행 높이에 따라 페이지 나눔이 달라집니다.`;
+  const longCell = (count: number) => {
+    const parts: string[] = [];
+    for (let i = 1; i <= count; i++) parts.push(sent(i));
+    return parts.join(' ');
+  };
+  const drow = (a: string, b: string, c: string, bold = false): TableRowNode => ({
+    type: 'table-row',
+    cells: [
+      { type: 'table-cell', children: [{ text: a, bold }] },
+      { type: 'table-cell', children: [{ text: b }] },
+      { type: 'table-cell', children: [{ text: c }] },
+    ],
+  });
+  const rows: TableRowNode[] = [
+    drow('분류', '상세 내용 명세', '비고', true),
+  ];
+  for (let i = 1; i <= 6; i++) rows.push(drow(`항목 ${i}`, `내용 ${i}번 행입니다.`, '일반'));
+  rows.push(drow('항목 7(장문)', longCell(12), '중요'));
+  rows.push(drow('항목 8', '내용 8번 행입니다.', '일반'));
+  rows.push(drow('항목 9', '내용 9번 행입니다.', '일반'));
+  rows.push(drow('항목 10(거대)', longCell(30), '중요'));
+  rows.push(drow('항목 11', '내용 11번 행입니다.', '일반'));
+  rows.push(drow('항목 12', '내용 12번 행입니다.', '일반'));
+  return {
+    title: { type: 'paragraph', align: 'center', children: [{ text: '표 분할 테스트', bold: true }] },
+    table: { type: 'table', rows },
+    trailing: { type: 'paragraph', children: [{ text: '표 이후 문단입니다. 표 분할이 끝나고 남은 공간에 배치됩니다.' }] },
+  };
+}
+
 function buildMockDocument(): DocumentModel {
   const mockDocument: DocumentModel = [
+    {
+      type: 'paragraph',
+      children: [{ text: "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since 1966, when designers at Letraset and James Mosley, the librarian at St Bride Printing Library in London, took a 1914 Cicero translation and scrambled it to make dummy text for Letraset's Body Type sheets. It has survived not only many decades, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised thanks to these sheets and more recently with desktop publishing software like Aldus PageMaker and Microsoft Word including versions of Lorem Ipsum.", bold: false }]
+    }, 
+    {
+      type: 'paragraph',
+      children: [{ text: "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since 1966, when designers at Letraset and James Mosley, the librarian at St Bride Printing Library in London, took a 1914 Cicero translation and scrambled it to make dummy text for Letraset's Body Type sheets. It has survived not only many decades, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised thanks to these sheets and more recently with desktop publishing software like Aldus PageMaker and Microsoft Word including versions of Lorem Ipsum.", bold: false }]
+    }, 
+    {
+      type: 'paragraph',
+      children: [{ text: "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since 1966, when designers at Letraset and James Mosley, the librarian at St Bride Printing Library in London, took a 1914 Cicero translation and scrambled it to make dummy text for Letraset's Body Type sheets. It has survived not only many decades, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised thanks to these sheets and more recently with desktop publishing software like Aldus PageMaker and Microsoft Word including versions of Lorem Ipsum.", bold: false }]
+    }, 
+    {
+      type: 'paragraph',
+      children: [{ text: "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since 1966, when designers at Letraset and James Mosley, the librarian at St Bride Printing Library in London, took a 1914 Cicero translation and scrambled it to make dummy text for Letraset's Body Type sheets. It has survived not only many decades, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised thanks to these sheets and more recently with desktop publishing software like Aldus PageMaker and Microsoft Word including versions of Lorem Ipsum.", bold: false }]
+    }, 
+    {
+      type: 'paragraph',
+      children: [{ text: "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since 1966, when designers at Letraset and James Mosley, the librarian at St Bride Printing Library in London, took a 1914 Cicero translation and scrambled it to make dummy text for Letraset's Body Type sheets. It has survived not only many decades, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised thanks to these sheets and more recently with desktop publishing software like Aldus PageMaker and Microsoft Word including versions of Lorem Ipsum.", bold: false }]
+    }, 
     {
       type: 'paragraph',
       children: [{ text: "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since 1966, when designers at Letraset and James Mosley, the librarian at St Bride Printing Library in London, took a 1914 Cicero translation and scrambled it to make dummy text for Letraset's Body Type sheets. It has survived not only many decades, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised thanks to these sheets and more recently with desktop publishing software like Aldus PageMaker and Microsoft Word including versions of Lorem Ipsum.", bold: false }]
@@ -337,8 +390,9 @@ function buildMockDocument(): DocumentModel {
 
   mockDocument.push(tableNode);
   */
-  
-  return mockDocument;
+
+  const tableTest = buildTableTest();
+  return [tableTest.title, tableTest.table, tableTest.trailing, ...mockDocument];
 }
 
 initRenderer(containerEl);
@@ -359,8 +413,15 @@ function applyReadyPages(pages: PageModel[]) {
   syncAlignCombo();
   syncColorControls();
   syncStyleButtons();
-  const pageCount = document.getElementById('page-count');
-  if (pageCount) pageCount.textContent = `총 ${pages.length}페이지`;
+  updateCursorPage();
+}
+
+// 상태바에 커서 위치 페이지 표시 (현재 / 전체)
+function updateCursorPage() {
+  const el = document.getElementById('cursor-page');
+  if (!el) return;
+  const total = getCachedPages().length;
+  el.textContent = savedCursor.pageNumber > 0 ? `${savedCursor.pageNumber} / ${total}` : `- / ${total}`;
 }
 
 function flushPendingRender() {
@@ -384,7 +445,7 @@ initWorkerListener(worker, (pages) => {
   appendStreamPages(pages);
 });
 initViewportScrollListener(() => updateVisiblePages());
-initSelectionListener(() => { clearPendingSelection(); saveCursorPosition(); syncFontCombos(); syncColumnCombo(); syncAlignCombo(); syncColorControls(); syncStyleButtons(); });
+initSelectionListener(() => { clearPendingSelection(); saveCursorPosition(); syncFontCombos(); syncColumnCombo(); syncAlignCombo(); syncColorControls(); syncStyleButtons(); updateCursorPage(); });
 initEditorListeners(containerEl, worker, savedCursor, saveCursorPosition, flushPendingRender, () => { pendingPages = null; });
 initFontCombos(containerEl, worker, savedCursor);
 initColumnCombo(containerEl, worker, savedCursor);

@@ -1,5 +1,5 @@
 // src/worker/layout.ts - 레이아웃 엔진 (줄 나눔·페이지 분할·청크 스케줄링)
-import type { DocumentModel, DocumentItem, ParagraphNode, TableNode, FontMetrics, TextRun } from '../types';
+import type { DocumentModel, DocumentItem, ParagraphNode, TableNode, TableRowNode, FontMetrics, TextRun } from '../types';
 
 export type PageModel = DocumentItem[];
 
@@ -12,6 +12,13 @@ const EDITOR_MAX_WIDTH = 600;
 const TABLE_CELL_PADDING = 16;
 const TABLE_CELL_BORDER = 1;
 const TABLE_GRID_WIDTH = EDITOR_MAX_WIDTH - 1;
+
+// 셀 내용 너비: collapse 병합 테두리 반영 실측치와 일치
+// (표 599px 중 셀 패딩 16px/셀 + 공유 내부선 1px씩 제외, 외곽선은 표 바깥)
+function tableCellContentWidth(cellCount: number): number {
+  const n = Math.max(1, cellCount);
+  return (TABLE_GRID_WIDTH - TABLE_CELL_PADDING * n - (n - 1) * TABLE_CELL_BORDER) / n;
+}
 const TABLE_CELL_VERTICAL_PADDING = 14;
 const TABLE_MARGIN_EDGE = 15;
 const TABLE_BORDER_HEIGHT = 1;
@@ -125,8 +132,8 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
       let currentTableInPage: TableNode = { type: 'table', rows: [], _docIdx: idx };
 
       item.rows.forEach((row) => {
-        const cellWidth = TABLE_GRID_WIDTH / row.cells.length;
-        const cellLineList = row.cells.map((cell) => buildRunLines(cell.children || [], cellWidth - TABLE_CELL_PADDING - TABLE_CELL_BORDER));
+        const cellWidth = tableCellContentWidth(row.cells.length);
+        const cellLineList = row.cells.map((cell) => buildRunLines(cell.children || [], cellWidth));
         let maxRowLines = 1;
         cellLineList.forEach((cellLines) => {
           if (cellLines.length > maxRowLines) {
@@ -162,7 +169,13 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
             splitLines += 1;
           }
 
-          console.log(`[layout] docIdx=${idx} row=${row.cells[0]?.children[0]?.text} cur=${currentHeight} oh=${overhead} rh=${rowHeight} maxLines=${maxRowLines} K=${splitLines} firstH=${lineHeights[0]}`);
+          const headPx = headAcc;
+          const tailPx = contentHeight - (headAcc - TABLE_CELL_VERTICAL_PADDING - TABLE_BORDER_HEIGHT) + TABLE_CELL_VERTICAL_PADDING + TABLE_BORDER_HEIGHT;
+          console.log(`[layout] docIdx=${idx} row=${row.cells[0]?.children[0]?.text} cur=${currentHeight} oh=${overhead} rh=${rowHeight} maxLines=${maxRowLines} K=${splitLines} firstH=${lineHeights[0]} cellW=${tableCellContentWidth(row.cells.length).toFixed(2)} headPx=${headPx} tailPx=${tailPx} pageAfter=${currentHeight + headPx}`);
+          // 새로 시작된 조각의 단일 행 (페이지 초과 시 추가 분할 대상)
+          let pieceRow: TableRowNode | null = null;
+          let pieceCellLines: Glyph[][][] = [];
+          let pieceLineHeights: number[] = [];
           if (splitLines >= 1) {
             // 앞부분은 현재 페이지에, 나머지는 다음 페이지에 (여백 없이 채움)
             const headCells = row.cells.map((cell, ci) => ({
@@ -182,6 +195,9 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
             currentTableInPage = { type: 'table', rows: [{ ...row, cells: tailCells }], _docIdx: idx, _continued: true };
             const tailContent = contentHeight - (headAcc - TABLE_CELL_VERTICAL_PADDING - TABLE_BORDER_HEIGHT);
             currentHeight += tailContent + TABLE_CELL_VERTICAL_PADDING + TABLE_BORDER_HEIGHT;
+            pieceRow = { ...row, cells: tailCells };
+            pieceCellLines = cellLineList.map((lines) => lines.slice(splitLines));
+            pieceLineHeights = lineHeights.slice(splitLines);
           } else {
             const broke = currentTableInPage.rows.length > 0 || currentPage.length > 0;
             if (currentTableInPage.rows.length > 0) {
@@ -194,11 +210,53 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
               currentHeight = 0;
               currentTableInPage = { type: 'table', rows: [row], _docIdx: idx, _continued: true };
               currentHeight += rowHeight;
+              pieceRow = row;
+              pieceCellLines = cellLineList;
+              pieceLineHeights = lineHeights;
             } else {
               // 빈 페이지에 거대 행 하나: 빈 페이지 푸시 없이 그대로 배치
               currentTableInPage = { type: 'table', rows: [row], _docIdx: idx };
               currentHeight += TABLE_MARGIN_EDGE + rowHeight;
+              pieceRow = row;
+              pieceCellLines = cellLineList;
+              pieceLineHeights = lineHeights;
             }
+          }
+          // 거대 행 꼬리가 한 페이지를 초과하면 줄 단위로 추가 분할
+          while (
+            pieceRow !== null &&
+            currentTableInPage.rows.length === 1 &&
+            currentHeight > PAGE_MAX_HEIGHT
+          ) {
+            const firstOverhead = currentTableInPage._continued ? 0 : TABLE_MARGIN_EDGE;
+            const rem = PAGE_MAX_HEIGHT - firstOverhead;
+            let k = 0;
+            let acc = TABLE_CELL_VERTICAL_PADDING + TABLE_BORDER_HEIGHT;
+            while (k < pieceLineHeights.length - 1 && acc + pieceLineHeights[k] <= rem) {
+              acc += pieceLineHeights[k];
+              k += 1;
+            }
+            if (k < 1) break;
+            const prow: TableRowNode = pieceRow;
+            const head2Cells = prow.cells.map((cell, ci) => ({
+              ...cell,
+              children: runsFromLines(pieceCellLines[ci].slice(0, k)),
+            }));
+            const tail2Cells = prow.cells.map((cell, ci) => ({
+              ...cell,
+              children: runsFromLines(pieceCellLines[ci].slice(k)),
+            }));
+            console.log(`[layout-split] docIdx=${idx} row=${prow.cells[0]?.children[0]?.text} K2=${k} headPx=${acc} tailLeft=${pieceLineHeights.length - k}`);
+            currentTableInPage.rows = [{ ...prow, cells: head2Cells }];
+            currentTableInPage._continues = true;
+            currentPage.push(currentTableInPage);
+            pages.push(currentPage);
+            currentPage = [];
+            pieceRow = { ...prow, cells: tail2Cells };
+            pieceCellLines = pieceCellLines.map((lines) => lines.slice(k));
+            pieceLineHeights = pieceLineHeights.slice(k);
+            currentTableInPage = { type: 'table', rows: [pieceRow], _docIdx: idx, _continued: true };
+            currentHeight = pieceLineHeights.reduce((a, h) => a + h, 0) + TABLE_CELL_VERTICAL_PADDING + TABLE_BORDER_HEIGHT;
           }
         } else {
           if (currentTableInPage.rows.length === 0) currentHeight += currentTableInPage._continued ? 0 : TABLE_MARGIN_EDGE;

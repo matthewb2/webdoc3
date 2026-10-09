@@ -270,7 +270,7 @@ table td, table th {
     /* 기존 옅은 색(#dcdfe6) 대신 살짝 더 선명한 회색(#b0b4b8)으로 변경 */
     border: 1px solid #b0b4b8 !important; 
     padding: 7px 8px; /* 워커의 TABLE_CELL_PADDING 규격과 매칭 */
-    font-family: 'Arial', sans-serif;
+    font-family: var(--doc-font, '맑은 고딕'), 'Arial', sans-serif;
     font-size: 16px;
     line-height: 26px; /* 워커의 LINE_HEIGHT */
     color: #333;
@@ -357,7 +357,7 @@ table tr:nth-child(even) {
     </div>
 
     <div class="statusbar">
-        <span id="page-count" class="statusbar-info">-</span>
+        <span id="cursor-page" class="statusbar-info" title="커서 위치 페이지">- / -</span>
         <span class="statusbar-spacer"></span>
         <button id="btn-zoom-out" class="statusbar-btn" type="button" title="축소">−</button>
         <button id="zoom-label" class="statusbar-zoom" type="button">100%</button>

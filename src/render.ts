@@ -317,7 +317,10 @@ export function updateVisiblePages(forceIdx?: number | number[]) {
       const nextDesc = !next ? 'END' : next.type === 'paragraph'
         ? `p(${(next.children || []).map((r: any) => r.text).join('').length}ch)`
         : `t(rows=${(next.rows || []).length})`;
-      console.log(`[table-bottom] page=${idx + 1} table#${ti} bottom=${Math.round(bottom)} boundary=${Math.round(boundary)} gap=${Math.round(boundary - bottom)} cont=${!!cur?._continues} next=${nextDesc}`);
+      const rowHs = Array.from(table.rows).map((r) => Math.round((r as HTMLElement).offsetHeight));
+      const firstCell = (table.rows[0]?.cells[0] as HTMLElement) || null;
+      const cw = firstCell ? (firstCell.clientWidth - parseFloat(getComputedStyle(firstCell).paddingLeft) - parseFloat(getComputedStyle(firstCell).paddingRight)).toFixed(1) : '?';
+      console.log(`[table-bottom] page=${idx + 1} table#${ti} bottom=${Math.round(bottom)} boundary=${Math.round(boundary)} gap=${Math.round(boundary - bottom)} cont=${!!cur?._continues} next=${nextDesc} pieceH=${table.offsetHeight} rows=${table.rows.length} rowHs=[${rowHs.join(',')}] cellW=${cw}`);
     });
   });
 }
