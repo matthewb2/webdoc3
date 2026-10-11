@@ -3,7 +3,10 @@ import type { PageModel } from './worker/doc.worker';
 import { defaultFontFamily, defaultUiFontFamily, initSettings, loadSettings } from './settings';
 import { collectProbeItems, computeBreaks } from './probe';
 import { appendStreamPages, findCursorPageIndices, getCachedPages, initRenderer, renderVirtualPages, updateVisiblePages } from './render';
-import { clearPendingSelection, getZoomLevel, initAlignCombo, initCellSelection, initColorControls, initColumnCombo, initEditorListeners, initFontCombos, initFileOpen, initSave, initSelectionListener, initStyleButtons, initViewportScrollListener, initWorkerListener, initZoomControls, isComposingActive, paintCellSelection, refreshZoomLayout, setAwaitingRender, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncStyleButtons, takePendingSelection } from './listener';
+import { clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFontCombos, initFileOpen, initSave, initSelectionListener, initStyleButtons, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncStyleButtons, takePendingSelection } from './listener';
+import { initEditorListeners, isComposingActive } from './listener/keyboard';
+import { initCellSelection, paintCellSelection } from './listener/mouse';
+import { initPreviewMode } from './preview';
 import logoUrl from './assets/logo.svg';
 
 // 타이틀바(탭) 로고
@@ -22,10 +25,8 @@ const worker = new Worker(new URL('./worker/doc.worker.ts', import.meta.url), {
   type: 'module'
 });
 
-
 // 최외곽 스크롤 뷰포트 내부에서 에디터 컨테이너 참조하도록 유지
 const containerEl = document.getElementById('editor-container') as HTMLDivElement;
-
 
 // [핵심] 브라우저 환경에서 폰트 너비를 측정하는 함수
 function generateFontMetrics(fontStyle: string): FontMetrics {
@@ -51,7 +52,6 @@ function generateFontMetrics(fontStyle: string): FontMetrics {
 }
 
 // src/main.ts 중반부 메시지 리스너 확인
-
 
 // [수정] 단락과 표 내부 셀을 모두 추적할 수 있도록 확장된 커서 상태 구조
 let savedCursor: CursorState = {
@@ -273,8 +273,6 @@ function restoreCursorPosition() {
   }
 }
 
-
-
 async function initWordProcessor() {
   await initSettings();
   document.documentElement.style.setProperty('--doc-font', `"${defaultFontFamily()}"`);
@@ -320,9 +318,9 @@ function buildTableTest(): { title: ParagraphNode; table: TableNode; trailing: P
   const drow = (a: string, b: string, c: string, bold = false): TableRowNode => ({
     type: 'table-row',
     cells: [
-      { type: 'table-cell', children: [{ text: a, bold }] },
-      { type: 'table-cell', children: [{ text: b }] },
-      { type: 'table-cell', children: [{ text: c }] },
+      { type: 'table-cell', children: [{ text: a, ...(bold ? { bold: true } : {}) }] },
+      { type: 'table-cell', children: [{ text: b, ...(bold ? { bold: true } : {}) }] },
+      { type: 'table-cell', children: [{ text: c, ...(bold ? { bold: true } : {}) }] },
     ],
   });
   const rows: TableRowNode[] = [
@@ -336,7 +334,7 @@ function buildTableTest(): { title: ParagraphNode; table: TableNode; trailing: P
   rows.push(drow('항목 11', '내용 11번 행입니다.', '일반'));
   rows.push(drow('항목 12', '내용 12번 행입니다.', '일반'));
   return {
-    title: { type: 'paragraph', align: 'center', children: [{ text: '표 분할 테스트', bold: true }] },
+    title: { type: 'paragraph', align: 'center', children: [{ text: '표 분할 테스트' }] },
     table: { type: 'table', rows },
     trailing: { type: 'paragraph', children: [{ text: '표 이후 문단입니다. 표 분할이 끝나고 남은 공간에 배치됩니다.' }] },
   };
@@ -428,110 +426,6 @@ function applyReadyPages(pages: PageModel[]) {
   syncStyleButtons();
   updateCursorPage();
   paintCellSelection(containerEl);
-}
-
-let previewMode = false;
-
-function setVisible(selector: string, visible: boolean, display: string): void {
-  const el = document.querySelector(selector) as HTMLElement | null;
-  if (!el) return;
-  el.style.display = visible ? display : 'none';
-}
-
-// 읽기 전용 미리보기: 전체 페이지 마운트 후 복제 렌더 (편집 DOM은 그대로 유지)
-function enterPreview(): void {
-  if (previewMode) return;
-  const total = getCachedPages().length;
-  if (total === 0) return;
-  previewMode = true;
-  const all: number[] = [];
-  for (let i = 0; i < total; i++) all.push(i);
-  updateVisiblePages(all);
-  const pv = document.getElementById('preview-container') as HTMLDivElement | null;
-  if (pv) {
-    pv.innerHTML = '';
-    document.querySelectorAll('#editor-container .page').forEach((pg) => {
-      const clone = pg.cloneNode(true) as HTMLElement;
-      clone.removeAttribute('contenteditable');
-      clone.contentEditable = 'false';
-      pv.appendChild(clone);
-    });
-    previewFit = null;
-    updatePreviewFitLabel();
-    applyPreviewTransform();
-  }
-  setVisible('.toolbar', false, 'flex');
-  setVisible('.editor-viewport', false, 'block');
-  setVisible('.statusbar', false, 'flex');
-  setVisible('.preview-toolbar', true, 'flex');
-  setVisible('.preview-viewport', true, 'block');
-}
-
-let previewFit: number | null = null;
-
-function applyPreviewTransform(): void {
-  const pv = document.getElementById('preview-container') as HTMLDivElement | null;
-  if (!pv) return;
-  const z = previewFit ?? getZoomLevel();
-  pv.style.transform = `scale(${z})`;
-  pv.style.transformOrigin = 'top center';
-  pv.style.height = '';
-  pv.style.height = `${Math.ceil(pv.scrollHeight * z)}px`;
-}
-
-function updatePreviewFitLabel(): void {
-  const el = document.getElementById('preview-mode-label');
-  if (el) el.textContent = previewFit !== null ? '미리보기 (쪽맞춤, 읽기 전용)' : '미리보기 (읽기 전용)';
-}
-
-// 쪽맞춤: 클릭한 페이지 높이를 뷰포트 높이에 맞춤 (토글)
-function togglePreviewFit(pageEl: HTMLElement): void {
-  const viewport = document.querySelector('.preview-viewport') as HTMLDivElement | null;
-  const pv = document.getElementById('preview-container') as HTMLDivElement | null;
-  if (!viewport || !pv) return;
-  if (previewFit !== null) {
-    previewFit = null;
-    updatePreviewFitLabel();
-    applyPreviewTransform();
-    return;
-  }
-  const oldZ = previewFit ?? getZoomLevel();
-  const pvRect = pv.getBoundingClientRect();
-  const pgRect = pageEl.getBoundingClientRect();
-  const layoutOffset = (pgRect.top - pvRect.top) / oldZ;
-  const scale = viewport.clientHeight / 900;
-  previewFit = Math.round(scale * 1000) / 1000;
-  updatePreviewFitLabel();
-  applyPreviewTransform();
-  viewport.scrollTop = 40 + layoutOffset * previewFit;
-}
-
-function exitPreview(): void {
-  if (!previewMode) return;
-  previewMode = false;
-  previewFit = null;
-  const pv = document.getElementById('preview-container') as HTMLDivElement | null;
-  if (pv) {
-    pv.innerHTML = '';
-    pv.style.transform = '';
-    pv.style.height = '';
-  }
-  setVisible('.toolbar', true, 'flex');
-  setVisible('.editor-viewport', true, 'block');
-  setVisible('.statusbar', true, 'flex');
-  setVisible('.preview-toolbar', false, 'flex');
-  setVisible('.preview-viewport', false, 'block');
-}
-
-function initPreviewMode(): void {
-  document.getElementById('btn-preview')?.addEventListener('click', () => enterPreview());
-  document.getElementById('btn-preview-edit')?.addEventListener('click', () => exitPreview());
-  document.getElementById('btn-preview-close')?.addEventListener('click', () => exitPreview());
-  document.getElementById('preview-container')?.addEventListener('click', (e) => {
-    if (!previewMode) return;
-    const pg = (e.target as Element)?.closest?.('.page') as HTMLElement | null;
-    if (pg) togglePreviewFit(pg);
-  });
 }
 
 // 상태바에 커서 위치 페이지 표시 (현재 / 전체)

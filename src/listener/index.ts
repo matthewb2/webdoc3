@@ -1,15 +1,17 @@
 // src/listener.ts - 이벤트 리스너 (워커 메시지·스크롤·선택·입력·HWP 열기)
-import type { PageModel } from './worker/doc.worker';
-import type { CursorState, TextRun } from './types';
-import { defaultAlign, defaultFontFamily, defaultFontSize } from './settings';
-import { parseHwpToDocumentModel } from './hwp/hwpParser';
-import { parseDocxToDocumentModel } from './docx/docxParser';
-import { parseOdtToDocumentModel } from './odt/odtParser';
-import { breakKeyForRuns, collectProbeItems, computeBreaks } from './probe';
-import { getCachedPages, setRenderZoom, updateVisiblePages } from './render';
-import { saveCurrentDocument } from './odt/odtExport';
-import { saveCurrentDocumentDocx } from './docx/docxExport';
-import { saveCurrentDocumentHwp } from './hwp/hwpExport';
+import type { PageModel } from '../worker/doc.worker';
+import type { CursorState } from '../types';
+import { defaultAlign, defaultFontFamily, defaultFontSize } from '../settings';
+import { parseHwpToDocumentModel } from '../hwp/hwpParser';
+import { parseDocxToDocumentModel } from '../docx/docxParser';
+import { parseOdtToDocumentModel } from '../odt/odtParser';
+import { collectProbeItems, computeBreaks } from '../probe';
+import { getCachedPages, setRenderZoom, updateVisiblePages } from '../render';
+import { saveCurrentDocument } from '../odt/odtExport';
+import { saveCurrentDocumentDocx } from '../docx/docxExport';
+import { saveCurrentDocumentHwp } from '../hwp/hwpExport';
+import { cellPosFromTd, clearCellSelection, getCellSelection } from './mouse';
+import type { CellSel } from './mouse';
 
 const FONT_FAMILIES = [
   'Arial', 'Verdana', 'Tahoma', 'Times New Roman', 'Georgia', 'Courier New', '맑은 고딕', '굴림', '돋움', '바탕',  '궁서', '나눔고딕', 'Noto Sans KR'
@@ -277,20 +279,6 @@ export function syncFontCombos() {
   setSelectValue(sizeSelect, isNaN(size) ? String(defaultFontSize()) : String(Math.round(size * 100) / 100));
 }
 
-// 편집된 단락 전체 런을 캐시된 조각에서 복원해 분절점을 다시 재고 워커에 전달
-async function refreshParaBreaks(worker: Worker, docIdx: number) {
-  const frags: Array<any> = [];
-  getCachedPages().forEach((page) => page.forEach((item: any) => {
-    if (item.type === 'paragraph' && item._docIdx === docIdx) frags.push(item);
-  }));
-  if (frags.length === 0) return;
-  frags.sort((a, b) => (a._charOffset ?? 0) - (b._charOffset ?? 0));
-  if (frags.some((f) => f.align)) return;
-  const runs: TextRun[] = frags.flatMap((f) => f.children || []);
-  if (!runs.some((r) => r.text)) return;
-  worker.postMessage({ type: 'BREAKS', payload: await computeBreaks([{ key: breakKeyForRuns(runs, 600), runs, width: 600 }]) });
-}
-
 export function initWorkerListener(
   worker: Worker,
   onReady: (pages: PageModel[]) => void,
@@ -341,17 +329,6 @@ export function setAwaitingRender(v: boolean) {
   awaitingRender = v;
 }
 
-// 한글 조합 중에는 렌더가 조합 노드를 날려 자모가 깨지므로, main에서 렌더를 보류한다
-let composingActive = false;
-
-export function isComposingActive() {
-  return composingActive;
-}
-
-function markEditPending() {
-  setAwaitingRender(true);
-}
-
 export function initSelectionListener(onSelectionChange: () => void) {
   document.addEventListener('selectionchange', () => {
     if (awaitingRender) return;
@@ -362,199 +339,7 @@ export function initSelectionListener(onSelectionChange: () => void) {
   });
 }
 
-let compAnchor: { docIdx: number; charIndex: number } | null = null;
-
-// 같은 단락 p 조각들의 DOM 텍스트를 모델 좌표로 잘라냄 (ZWSP 제외)
-function sliceDomParaText(container: HTMLDivElement, docIdx: number, fromChar: number, toChar: number): string {
-  const full = Array.from(container.querySelectorAll(`p[data-p-idx="${docIdx}"]`))
-    .map((p) => (p.textContent || '').replace(/\u200B/g, ''))
-    .join('');
-  return full.slice(Math.max(0, fromChar), Math.max(0, toChar));
-}
-
-export function initEditorListeners(
-  container: HTMLDivElement,
-  worker: Worker,
-  cursor: CursorState,
-  saveCursorPosition: () => void,
-  onCompositionEnd: () => void,
-  onCompositionEditPosted: () => void,
-) {
-// 1. 한글 글자 조합이 시작됨을 감지 (ex: 'ㄱ'을 누르는 순간)
-container.addEventListener('compositionstart', () => {
-  composingActive = true;
-  saveCursorPosition();
-  compAnchor = { docIdx: cursor.docIdx, charIndex: cursor.charIndex };
-});
-
-// 2. 한글 글자 조합이 완료됨을 감지 (ex: '가'를 쓰고 다음 글자로 넘어가거나 스페이스를 누를 때)
-container.addEventListener('compositionend', async (e: CompositionEvent) => {
-  composingActive = false;
-
-  // 글자가 완성되었으므로, 최종 완성된 글자를 워커로 전송하여 레이아웃을 다시 계산합니다.
-  if (e.data) {
-    saveCursorPosition();
-    await refreshParaBreaks(worker, cursor.docIdx);
-      clearPendingSelection();
-      markEditPending();
-    // 조합 중간에 들어간 임시 글자 offset을 고려하여 워커에 삽입 요청
-    worker.postMessage({
-      type: 'EDIT_INSERT',
-      payload: {
-        paragraphIndex: cursor.docIdx,
-        charIndex: cursor.charIndex - e.data.length,
-        text: e.data
-      }
-    });
-    onCompositionEditPosted();
-  } else {
-    // 빈 종료(암시적 확정): 시작 앵커~현재 캐럿 사이 DOM 텍스트를 확정분으로 전송
-    saveCursorPosition();
-    let text = '';
-    let at = cursor.charIndex;
-    if (compAnchor && compAnchor.docIdx === cursor.docIdx && cursor.charIndex > compAnchor.charIndex) {
-      text = sliceDomParaText(container, cursor.docIdx, compAnchor.charIndex, cursor.charIndex);
-      at = compAnchor.charIndex;
-    }
-    if (text.length > 0) {
-      await refreshParaBreaks(worker, cursor.docIdx);
-      clearPendingSelection();
-      markEditPending();
-      worker.postMessage({ type: 'EDIT_INSERT', payload: { paragraphIndex: cursor.docIdx, charIndex: at, text } });
-      cursor.charIndex = at + text.length;
-      onCompositionEditPosted();
-    } else {
-      onCompositionEnd();
-    }
-  }
-  compAnchor = null;
-});
-
-container.addEventListener('keydown', (e: KeyboardEvent) => {
-  // 한글 조합 중 엔터를 치는 경우 컴포지션 종료와 충돌하지 않도록 방어
-  if (composingActive) return;
-
-  // Ctrl/⌘+A: 가상화로 마운트 해제된 페이지를 포함해 문서 전체 선택
-  if ((e.key === 'a' || e.key === 'A') && (e.ctrlKey || e.metaKey)) {
-    if (!document.activeElement?.closest('#editor-container')) return;
-    if (cursor.isInsideTable) return;
-    e.preventDefault();
-    const total = getCachedPages().length;
-    if (total === 0) return;
-    const all: number[] = [];
-    for (let i = 0; i < total; i++) all.push(i);
-    updateVisiblePages(all);
-    const pages = Array.from(container.querySelectorAll('.page'));
-    if (pages.length === 0) return;
-    const first = pages[0];
-    const last = pages[pages.length - 1];
-    const range = document.createRange();
-    range.setStart(first, 0);
-    range.setEnd(last, last.childNodes.length);
-    const selection = window.getSelection();
-    if (!selection) return;
-    selection.removeAllRanges();
-    selection.addRange(range);
-    saveCursorPosition();
-    return;
-  }
-
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    saveCursorPosition();
-    if (cursor.isInsideTable) return;
-      clearPendingSelection();
-      markEditPending();
-    clearCellSelection(container);
-    worker.postMessage({ type: 'EDIT_SPLIT', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
-    cursor.docIdx += 1;
-    cursor.charIndex = 0;
-    cursor.charOffset = 0;
-  }
-});
-
-container.addEventListener('beforeinput', async (e: InputEvent) => {
-  if (e.inputType === 'insertLineBreak') return e.preventDefault();
-
-  if (composingActive) return;
-
-  if (e.inputType === 'deleteContentBackward') {
-    e.preventDefault();
-    saveCursorPosition();
-    if (cursor.charIndex <= 0) {
-      // 문단 시작점에서 백스페이스: 이전 문단과 병합 (빈 문단 삭제 포함)
-      if (cursor.docIdx <= 0 || cursor.isInsideTable) return;
-      const prev = cachedParagraphInfo(cursor.docIdx - 1);
-      const cur = cachedParagraphInfo(cursor.docIdx);
-      if (!prev.isParagraph && cur.length > 0) return;
-      await refreshParaBreaks(worker, cursor.docIdx);
-      clearPendingSelection();
-      markEditPending();
-      clearCellSelection(container);
-      worker.postMessage({ type: 'EDIT_DELETE', payload: { paragraphIndex: cursor.docIdx, charIndex: 0 } });
-      cursor.docIdx -= 1;
-      cursor.charIndex = prev.isParagraph ? prev.length : 0;
-      cursor.charOffset = 0;
-      return;
-    }
-    await refreshParaBreaks(worker, cursor.docIdx);
-      clearPendingSelection();
-      markEditPending();
-    worker.postMessage({ type: 'EDIT_DELETE', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
-    cursor.charIndex -= 1;
-    return;
-  }
-
-  if (e.inputType === 'deleteContentForward') {
-    e.preventDefault();
-    saveCursorPosition();
-    if (cursor.isInsideTable) return;
-    const cur = cachedParagraphInfo(cursor.docIdx);
-    if (cur.isParagraph && cur.length === 0) {
-      // 빈 문단에서 DEL: 문단 자체가 사라지므로 커서를 이전 문단 끝으로 이동
-      const next = cachedParagraphInfo(cursor.docIdx + 1);
-      const nextIsTable = next.exists && !next.isParagraph;
-      if (nextIsTable || !next.exists) {
-        const prev = cachedParagraphInfo(cursor.docIdx - 1);
-        await refreshParaBreaks(worker, cursor.docIdx);
-        clearPendingSelection();
-      markEditPending();
-        clearCellSelection(container);
-        worker.postMessage({ type: 'EDIT_DELETE_FWD', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
-        if (prev.isParagraph) {
-          cursor.docIdx -= 1;
-          cursor.charIndex = prev.length;
-          cursor.charOffset = 0;
-        }
-        return;
-      }
-    }
-    await refreshParaBreaks(worker, cursor.docIdx);
-      clearPendingSelection();
-      markEditPending();
-    // 문단 끝에서 다음 문단을 끌어올리면 인덱스가 밀리므로 선택 해제
-    if (cursor.charIndex >= cur.length && cachedParagraphInfo(cursor.docIdx + 1).isParagraph) {
-      clearCellSelection(container);
-    }
-    worker.postMessage({ type: 'EDIT_DELETE_FWD', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
-    return;
-  }
-
-  if (e.data) {
-    e.preventDefault();
-    saveCursorPosition();
-    await refreshParaBreaks(worker, cursor.docIdx);
-      clearPendingSelection();
-      markEditPending();
-    worker.postMessage({ type: 'EDIT_INSERT', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex, text: e.data } });
-    cursor.charIndex += e.data.length;
-  }
-});
-
-}
-
-// 캐시된 조각에서 문단 텍스트 길이·종류·존재 조회 (병합 커서 계산용)
-function cachedParagraphInfo(docIdx: number): { isParagraph: boolean; exists: boolean; length: number } {
+export function cachedParagraphInfo(docIdx: number): { isParagraph: boolean; exists: boolean; length: number } {
   let length = 0;
   let isParagraph = false;
   let exists = false;
@@ -716,11 +501,35 @@ export function initAlignCombo(container: HTMLDivElement, worker: Worker, cursor
   if (!select) return;
   select.addEventListener('pointerdown', () => stashSelection(container));
   select.addEventListener('change', () => {
-    const align = ['left', 'center', 'right', 'justify'].includes(select.value) ? select.value : 'left';
+    const raw = select.value;
+    const align = ['left', 'center', 'right', 'justify'].includes(raw) ? raw : 'left';
+    const tableTarget = currentTableTarget(container);
+    if (tableTarget) {
+      const rows: number[] = [];
+      for (let r = tableTarget.r0; r <= tableTarget.r1; r++) rows.push(r);
+      const cols: number[] = [];
+      for (let c = tableTarget.c0; c <= tableTarget.c1; c++) cols.push(c);
+      worker.postMessage({ type: 'EDIT_TABLE_ALIGN', payload: { tableDocIdx: tableTarget.tableDocIdx, rows, cols, align } });
+      return;
+    }
     const snap = peekPendingSelection();
     worker.postMessage({ type: 'EDIT_ALIGN', payload: { paragraphIndices: selectedParagraphIndices(container, cursor.docIdx, snap), align } });
   });
   syncAlignCombo();
+}
+
+// 표 셀 선택 영역 (있으면 정렬 대상), 없으면 커서 위치 단일 셀
+function currentTableTarget(container: HTMLDivElement): CellSel | null {
+  const selection = window.getSelection();
+  const node = selection && selection.rangeCount > 0 ? selection.anchorNode : null;
+  const el = node ? (node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element | null)) : null;
+  const td = el?.closest?.('td') as HTMLTableCellElement | null;
+  if (!td || !container.contains(td)) return null;
+  const sel = getCellSelection();
+  const pos = cellPosFromTd(td);
+  if (!pos) return null;
+  if (sel && sel.tableDocIdx === pos.tableDocIdx) return sel;
+  return { tableDocIdx: pos.tableDocIdx, r0: pos.r, r1: pos.r, c0: pos.c, c1: pos.c };
 }
 
 // 커서 위치 단락의 정렬 설정을 콤보박스에 반영
@@ -735,8 +544,16 @@ export function syncAlignCombo() {
   if (!container || !container.contains(node)) return;
   const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element | null);
   const p = el?.closest?.('p');
-  if (!p || !container.contains(p)) return;
-  select.value = (p as HTMLElement).dataset.align || defaultAlign();
+  if (p && container.contains(p)) {
+    select.value = (p as HTMLElement).dataset.align || defaultAlign();
+  } else {
+    // 표 셀 안: 셀 정렬 반영
+    const td = el?.closest?.('td') as HTMLElement | null;
+    if (!td || !container.contains(td)) return;
+    const align = td.style.textAlign || defaultAlign();
+    select.value = ['left', 'center', 'right', 'justify'].includes(align) ? align : defaultAlign();
+    return;
+  }
   if (!['left', 'center', 'right', 'justify'].includes(select.value)) select.value = defaultAlign();
 }
 
@@ -898,125 +715,6 @@ export function syncStyleButtons() {
   boldBtn.classList.toggle('active', state.bold);
   italicBtn.classList.toggle('active', state.italic);
   underlineBtn.classList.toggle('active', state.underline);
-}
-
-export interface CellSel {
-  tableDocIdx: number;
-  r0: number;
-  r1: number;
-  c0: number;
-  c1: number;
-}
-
-const CELL_SEL_BG = '#e2e2e2';
-
-let cellSel: CellSel | null = null;
-let cellAnchor: { tableDocIdx: number; r: number; c: number } | null = null;
-let cellDragging = false;
-
-function cellPosFromTd(td: HTMLTableCellElement): { tableDocIdx: number; r: number; c: number } | null {
-  const table = td.closest('table');
-  if (!table) return null;
-  const docIdx = parseInt((table as HTMLElement).dataset.pIdx || '', 10);
-  const r = parseInt(td.dataset.r || '', 10);
-  const c = parseInt(td.dataset.c || '', 10);
-  if ([docIdx, r, c].some((v) => isNaN(v))) return null;
-  return { tableDocIdx: docIdx, r, c };
-}
-
-export function paintCellSelection(container?: HTMLDivElement): void {
-  const root =
-    container || (document.getElementById('editor-container') as HTMLDivElement | null);
-  if (!root) return;
-  root.querySelectorAll('td[data-cellsel]').forEach((td) => {
-    (td as HTMLElement).style.backgroundColor = '';
-    delete (td as HTMLElement).dataset.cellsel;
-  });
-  if (!cellSel) return;
-  root.querySelectorAll(`table[data-p-idx="${cellSel.tableDocIdx}"]`).forEach((table) => {
-    table.querySelectorAll('td[data-r]').forEach((td) => {
-      const el = td as HTMLElement;
-      const r = parseInt(el.dataset.r || '', 10);
-      const c = parseInt(el.dataset.c || '', 10);
-      if (!cellSel) return;
-      if (r >= cellSel.r0 && r <= cellSel.r1 && c >= cellSel.c0 && c <= cellSel.c1) {
-        el.style.backgroundColor = CELL_SEL_BG;
-        el.dataset.cellsel = '1';
-      }
-    });
-  });
-}
-
-export function clearCellSelection(container?: HTMLDivElement): void {
-  if (!cellSel && !cellAnchor) return;
-  cellSel = null;
-  cellAnchor = null;
-  cellDragging = false;
-  paintCellSelection(container);
-}
-
-function collapseCaretToCell(container: HTMLDivElement, sel: CellSel): void {
-  const table = container.querySelector(`table[data-p-idx="${sel.tableDocIdx}"]`);
-  const td = table?.querySelector(`td[data-r="${sel.r0}"][data-c="${sel.c0}"]`);
-  const t = td?.querySelector('span')?.firstChild;
-  const selection = window.getSelection();
-  if (!t || !selection) return;
-  const range = document.createRange();
-  range.setStart(t, 0);
-  range.collapse(true);
-  selection.removeAllRanges();
-  selection.addRange(range);
-}
-
-export function initCellSelection(container: HTMLDivElement) {
-  container.addEventListener('mousedown', (e: MouseEvent) => {
-    if (e.button !== 0) return;
-    const td = (e.target as Element)?.closest?.('td');
-    if (!td || !container.contains(td)) {
-      clearCellSelection(container);
-      return;
-    }
-    const pos = cellPosFromTd(td as HTMLTableCellElement);
-    if (!pos) return;
-    cellAnchor = pos;
-    cellDragging = true;
-    cellSel = { tableDocIdx: pos.tableDocIdx, r0: pos.r, r1: pos.r, c0: pos.c, c1: pos.c };
-  });
-  container.addEventListener('mousemove', (e: MouseEvent) => {
-    if (!cellDragging || !cellAnchor || e.buttons !== 1) return;
-    const td = (e.target as Element)?.closest?.('td');
-    if (!td || !container.contains(td)) return;
-    const pos = cellPosFromTd(td as HTMLTableCellElement);
-    if (!pos || pos.tableDocIdx !== cellAnchor.tableDocIdx) return;
-    cellSel = {
-      tableDocIdx: pos.tableDocIdx,
-      r0: Math.min(cellAnchor.r, pos.r),
-      r1: Math.max(cellAnchor.r, pos.r),
-      c0: Math.min(cellAnchor.c, pos.c),
-      c1: Math.max(cellAnchor.c, pos.c),
-    };
-    window.getSelection()?.removeAllRanges();
-    paintCellSelection(container);
-  });
-  document.addEventListener('mouseup', () => {
-    if (!cellDragging) return;
-    cellDragging = false;
-    if (!cellSel) return;
-    if (
-      cellAnchor &&
-      cellSel.r0 === cellSel.r1 &&
-      cellSel.c0 === cellSel.c1 &&
-      cellSel.r0 === cellAnchor.r &&
-      cellSel.c0 === cellAnchor.c
-    ) {
-      // 단일 클릭: 브라우저 기본 캐럿 배치에 맡기고 셀 선택 해제
-      cellSel = null;
-      cellAnchor = null;
-      paintCellSelection(container);
-      return;
-    }
-    collapseCaretToCell(container, cellSel);
-  });
 }
 
 export function initSave(worker: Worker) {

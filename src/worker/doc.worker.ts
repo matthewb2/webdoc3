@@ -69,6 +69,8 @@ self.addEventListener('message', (event: MessageEvent<any>) => {
     editColumns(message.payload.paragraphIndices, message.payload.columns);
   } else if (message.type === 'EDIT_ALIGN') {
     editAlign(message.payload.paragraphIndices, message.payload.align);
+  } else if (message.type === 'EDIT_TABLE_ALIGN') {
+    editTableAlign(message.payload.tableDocIdx, message.payload.rows, message.payload.cols, message.payload.align);
   } else if (message.type === 'EDIT_COLOR') {
     editColor(message.payload.paragraphIndices, message.payload.color, message.payload.backgroundColor);
   } else if (message.type === 'EDIT_FONT_RANGE') {
@@ -238,6 +240,23 @@ function editFont(
       if (attrs.strike) run.strike = true;
       else delete run.strike;
     }
+  });
+  requestLayout();
+}
+
+function editTableAlign(tableDocIdx: number, rows: number[], cols: number[], align?: string) {
+  const valid = ['left', 'center', 'right', 'justify'];
+  const value = align && valid.includes(align) ? align : 'left';
+  const table = documentState[tableDocIdx];
+  if (!table || table.type !== 'table') return;
+  const rowSet = new Set(Array.isArray(rows) ? rows : []);
+  const colSet = new Set(Array.isArray(cols) ? cols : []);
+  table.rows.forEach((row, ri) => {
+    if (!rowSet.has(ri)) return;
+    row.cells.forEach((cell, ci) => {
+      if (!colSet.has(ci)) return;
+      cell.align = value as any;
+    });
   });
   requestLayout();
 }

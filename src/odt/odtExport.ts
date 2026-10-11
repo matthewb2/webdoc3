@@ -116,7 +116,7 @@ export function buildOdtHtml(model: DocumentModel): string {
       const colW = 599 / maxCols;
       const cols = Array.from({ length: maxCols }, () => `<col class="${colStyle(colW)}"></col>`).join('');
       const trs = table.rows.map((row) => {
-        const cells = row.cells.map((cell) => `<td class="${CELL_STYLE}"><p class="${paraStyle(undefined)}">${renderRuns(cell.children || [])}</p></td>`);
+        const cells = row.cells.map((cell) => `<td class="${CELL_STYLE}"><p class="${paraStyle(cell.align)}">${renderRuns(cell.children || [])}</p></td>`);
         for (let i = row.cells.length; i < maxCols; i++) {
           cells.push(`<td class="${CELL_STYLE}"><p class="${paraStyle(undefined)}"></p></td>`);
         }

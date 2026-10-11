@@ -70,7 +70,7 @@ function toTable(table: TableNode): Table | null {
   const colW = toTwip(599 / maxCols);
   const rows = table.rows.map((row) => {
     const cells = row.cells.map((cell) => new TableCell({
-      children: [toParagraph(cell.children || [], undefined)],
+      children: [toParagraph(cell.children || [], cell.align)],
       width: { size: colW, type: WidthType.DXA },
       margins: { ...CELL_MARGINS },
       borders: { top: { ...CELL_BORDER }, left: { ...CELL_BORDER }, bottom: { ...CELL_BORDER }, right: { ...CELL_BORDER } },

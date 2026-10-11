@@ -178,6 +178,7 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
           const td = document.createElement('td');
           td.dataset.r = String(modelRow);
           td.dataset.c = String(ci);
+          if (cell.align) td.style.textAlign = cell.align;
           const cellCount = cells.length || 1;
             td.style.width = `${(600 - 1) / cellCount}px`;
 

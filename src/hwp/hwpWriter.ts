@@ -488,6 +488,15 @@ export class HwpWriter {
         item.rows.forEach((row) => {
           row.cells.forEach((cell) => {
             (cell.children || []).forEach(addRun);
+            // 셀 정렬 모양 등록
+            if (cell.align) {
+              const hwpAlign = ALIGN_TO_HWP[cell.align] ?? ALIGN_TO_HWP[defaultAlign()];
+              const key = `${hwpAlign}|0`;
+              if (!this.paraShapeIndexByAlign.has(key)) {
+                this.paraShapeIndexByAlign.set(key, this.paraShapes.length);
+                this.paraShapes.push({ align: hwpAlign, indentPx: 0 });
+              }
+            }
           });
         });
         // 셀 문단은 기본 모양 사용 (DocInfo 기록 전 보장)
@@ -913,7 +922,7 @@ export class HwpWriter {
   }
 
   private buildCell(
-    cell: { children?: TextRun[] } | undefined,
+    cell: { children?: TextRun[]; align?: TextAlign } | undefined,
     row: number,
     col: number,
   ): Uint8Array[] {
@@ -939,6 +948,7 @@ export class HwpWriter {
     parts.push(packRecord(TAG_LIST_HEADER, 1, list.build()));
     if (hasText) {
       const para: ParagraphNode = { type: 'paragraph', children: children as TextRun[] };
+      if (cell && cell.align) para.align = cell.align as TextAlign;
       parts.push(...this.buildParagraph(para, 2));
     }
     return parts;
