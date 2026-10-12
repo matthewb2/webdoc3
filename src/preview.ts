@@ -1,5 +1,7 @@
 // src/preview.ts - 읽기 전용 미리보기 모드 (쪽맞춤 포함)
 import { getCachedPages, updateVisiblePages } from './render';
+
+
 import { getZoomLevel } from './listener';
 
 let previewMode = false;
@@ -80,6 +82,20 @@ function togglePreviewFit(pageEl: HTMLElement): void {
 
 function exitPreview(): void {
   if (!previewMode) return;
+  // 미리보기에서 보고 있던 페이지를 편집기에서 이어서 표시
+  const previewViewport = document.querySelector('.preview-viewport') as HTMLDivElement | null;
+  let pageNumber: string | null = null;
+  if (previewViewport) {
+    const vpRect = previewViewport.getBoundingClientRect();
+    const pages = previewViewport.querySelectorAll('#preview-container .page');
+    for (let i = 0; i < pages.length; i++) {
+      const r = (pages[i] as HTMLElement).getBoundingClientRect();
+      if (r.bottom > vpRect.top + 1) {
+        pageNumber = (pages[i] as HTMLElement).dataset.pageNumber || null;
+        break;
+      }
+    }
+  }
   previewMode = false;
   previewFit = null;
   const pv = document.getElementById('preview-container') as HTMLDivElement | null;
@@ -93,6 +109,22 @@ function exitPreview(): void {
   setVisible('.statusbar', true, 'flex');
   setVisible('.preview-toolbar', false, 'flex');
   setVisible('.preview-viewport', false, 'block');
+  if (pageNumber) {
+    let target = document.querySelector(
+      `#editor-container .page[data-page-number="${pageNumber}"]`,
+    ) as HTMLElement | null;
+    if (!target) {
+      // 가상화로 마운트 해제된 경우 대상 페이지만 마운트
+      const idx = parseInt(pageNumber, 10) - 1;
+      if (!isNaN(idx) && idx >= 0) {
+        updateVisiblePages([idx]);
+        target = document.querySelector(
+          `#editor-container .page[data-page-number="${pageNumber}"]`,
+        ) as HTMLElement | null;
+      }
+    }
+    if (target) target.scrollIntoView({ block: 'start', inline: 'nearest', behavior: 'auto' });
+  }
 }
 
 export function initPreviewMode(): void {
