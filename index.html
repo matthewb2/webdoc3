@@ -97,6 +97,31 @@
             font-weight: bold;
             pointer-events: none;
         }
+        .context-menu {
+            position: fixed;
+            z-index: 50;
+            min-width: 160px;
+            background: #ffffff;
+            border: 1px solid #ccd3da;
+            border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.14);
+            padding: 4px;
+            box-sizing: border-box;
+        }
+        .context-menu button {
+            display: block;
+            width: 100%;
+            border: none;
+            background: transparent;
+            text-align: left;
+            font-size: 13px;
+            color: #333;
+            padding: 7px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .context-menu button:hover:not(:disabled) { background: #eef2f5; }
+        .context-menu button:disabled { color: #a6aeb5; cursor: default; }
         .hwp-dropzone {
             height: calc(100% - 48px);
             margin: 24px;
@@ -413,6 +438,10 @@ table tr:nth-child(even) {
     </div>
     <div class="preview-viewport" style="display:none">
         <div id="preview-container"></div>
+    </div>
+
+    <div id="cell-menu" class="context-menu" style="display:none">
+        <button id="cell-menu-merge" type="button">셀 합치기 (M)</button>
     </div>
 
     <div class="statusbar">

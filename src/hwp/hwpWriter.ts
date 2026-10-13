@@ -922,7 +922,7 @@ export class HwpWriter {
   }
 
   private buildCell(
-    cell: { children?: TextRun[]; align?: TextAlign } | undefined,
+    cell: { children?: TextRun[]; align?: TextAlign; rowSpan?: number; colSpan?: number } | undefined,
     row: number,
     col: number,
   ): Uint8Array[] {
@@ -936,8 +936,8 @@ export class HwpWriter {
     // 트레일러는 LIST_HEADER 레코드 데이터 내부에 포함
     list.u16le(col);
     list.u16le(row);
-    list.u16le(1); // colSpan
-    list.u16le(1); // rowSpan
+    list.u16le(Math.max(1, cell?.colSpan ?? 1)); // colSpan
+    list.u16le(Math.max(1, cell?.rowSpan ?? 1)); // rowSpan
     list.u32le(0); // width
     list.u32le(0); // height
     list.u16le(0);

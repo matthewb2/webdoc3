@@ -133,10 +133,17 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
 
       item.rows.forEach((row, ri) => {
         (row as any)._rowIdx = ri;
-        const cellWidth = tableCellContentWidth(row.cells.length);
-        const cellLineList = row.cells.map((cell) => buildRunLines(cell.children || [], cellWidth));
-        let maxRowLines = 1;
+        const n = Math.max(1, row.cells.length);
+        const baseCol = TABLE_GRID_WIDTH / n;
+        const cellLineList: Glyph[][][] = row.cells.map((cell) => {
+          if ((cell as any).merged) return [];
+          const span = Math.max(1, (cell as any).colSpan ?? 1);
+          return buildRunLines(cell.children || [], baseCol * span - TABLE_CELL_PADDING - TABLE_CELL_BORDER);
+        });
+        let maxRowLines = 0;
+        let visibleCells = 0;
         cellLineList.forEach((cellLines) => {
+          if (cellLines.length > 0) visibleCells += 1;
           if (cellLines.length > maxRowLines) {
             maxRowLines = cellLines.length;
           }
@@ -156,7 +163,8 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
           lineHeights.push(lineH);
         }
         const contentHeight = lineHeights.reduce((acc, h) => acc + h, 0);
-        const rowHeight = contentHeight + TABLE_CELL_VERTICAL_PADDING + TABLE_BORDER_HEIGHT;
+        // 전부 가려진 행은 높이 0 (빈 tr 렌더와 일치)
+        const rowHeight = visibleCells === 0 ? 0 : contentHeight + TABLE_CELL_VERTICAL_PADDING + TABLE_BORDER_HEIGHT;
 
         // 새 조각의 첫 행이면 상단 마진도 함께 검사 (이어진 조각은 상단 마진 없음)
         const overhead = currentTableInPage.rows.length === 0 ? (currentTableInPage._continued ? 0 : TABLE_MARGIN_EDGE) : 0;

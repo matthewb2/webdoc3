@@ -174,13 +174,16 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
         const modelRow = row._rowIdx ?? ri;
 
         cells.forEach((cell: any, ci: number) => {
-          if (!cell) return;
+          if (!cell || cell.merged) return;
           const td = document.createElement('td');
           td.dataset.r = String(modelRow);
           td.dataset.c = String(ci);
-          if (cell.align) td.style.textAlign = cell.align;
           const cellCount = cells.length || 1;
-            td.style.width = `${(600 - 1) / cellCount}px`;
+          const colSpan = Math.max(1, cell.colSpan ?? 1);
+          const rowSpan = Math.max(1, cell.rowSpan ?? 1);
+          td.style.width = `${((600 - 1) / cellCount) * colSpan}px`;
+          if (colSpan > 1) td.colSpan = colSpan;
+          if (rowSpan > 1) td.rowSpan = rowSpan;
 
           const cellChildren: Array<any> = cell.children || [];
           cellChildren.forEach((run: any) => {

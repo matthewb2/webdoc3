@@ -71,6 +71,8 @@ self.addEventListener('message', (event: MessageEvent<any>) => {
     editAlign(message.payload.paragraphIndices, message.payload.align);
   } else if (message.type === 'EDIT_TABLE_ALIGN') {
     editTableAlign(message.payload.tableDocIdx, message.payload.rows, message.payload.cols, message.payload.align);
+  } else if (message.type === 'EDIT_TABLE_MERGE') {
+    editTableMerge(message.payload.tableDocIdx, message.payload.r0, message.payload.r1, message.payload.c0, message.payload.c1);
   } else if (message.type === 'EDIT_COLOR') {
     editColor(message.payload.paragraphIndices, message.payload.color, message.payload.backgroundColor);
   } else if (message.type === 'EDIT_FONT_RANGE') {
@@ -258,6 +260,41 @@ function editTableAlign(tableDocIdx: number, rows: number[], cols: number[], ali
       cell.align = value as any;
     });
   });
+  requestLayout();
+}
+
+function editTableMerge(tableDocIdx: number, r0: number, r1: number, c0: number, c1: number) {
+  const table = documentState[tableDocIdx];
+  if (!table || table.type !== 'table') return;
+  const top = Math.max(0, Math.min(r0, r1));
+  const bottom = Math.min(table.rows.length - 1, Math.max(r0, r1));
+  if (bottom < top) return;
+  const maxCols = Math.max(0, ...table.rows.map((row) => row.cells.length));
+  const left = Math.max(0, Math.min(c0, c1));
+  const right = Math.min(maxCols - 1, Math.max(c0, c1));
+  if (right < left) return;
+  if (bottom === top && right === left) return;
+  const masterRow = table.rows[top];
+  const master = masterRow && masterRow.cells[left];
+  if (!master || master.merged) return;
+  const merged: TextRun[] = [];
+  for (let r = top; r <= bottom; r++) {
+    const row = table.rows[r];
+    if (!row) continue;
+    for (let c = left; c <= right; c++) {
+      const cell = row.cells[c];
+      if (!cell) continue;
+      if (r === top && c === left) continue;
+      merged.push(...(cell.children || []));
+      cell.children = [];
+      cell.merged = true;
+      delete cell.align;
+    }
+  }
+  master.children.push(...merged);
+  master.rowSpan = bottom - top + 1;
+  master.colSpan = right - left + 1;
+  delete master.merged;
   requestLayout();
 }
 

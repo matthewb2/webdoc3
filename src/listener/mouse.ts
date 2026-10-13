@@ -113,7 +113,22 @@ function sameCell(
   return !!pos && pos.tableDocIdx === a.tableDocIdx && pos.r === a.r && pos.c === a.c;
 }
 
-export function initCellSelection(container: HTMLDivElement) {
+export function hideCellMenu(): void {
+  const menu = document.getElementById('cell-menu') as HTMLDivElement | null;
+  if (menu) menu.style.display = 'none';
+}
+
+// 선택 영역 병합 요청 (2셀 이상일 때만, 마스터 셀에 캐럿)
+export function mergeSelectedCells(container: HTMLDivElement, worker: Worker): boolean {
+  if (!cellSel) return false;
+  const { tableDocIdx, r0, r1, c0, c1 } = cellSel;
+  if (r0 === r1 && c0 === c1) return false;
+  worker.postMessage({ type: 'EDIT_TABLE_MERGE', payload: { tableDocIdx, r0, r1, c0, c1 } });
+  collapseCaretToCell(container, cellSel);
+  return true;
+}
+
+export function initCellSelection(container: HTMLDivElement, worker: Worker) {
   container.addEventListener('mousedown', (e: MouseEvent) => {
     if (e.button !== 0) return;
     const td = (e.target as Element)?.closest?.('td');
@@ -179,5 +194,48 @@ export function initCellSelection(container: HTMLDivElement) {
     }
     collapseCaretToCell(container, cellSel);
   });
+  const menu = document.getElementById('cell-menu') as HTMLDivElement | null;
+  const mergeBtn = document.getElementById('cell-menu-merge') as HTMLButtonElement | null;
+  container.addEventListener('contextmenu', (e: MouseEvent) => {
+    const td = (e.target as Element)?.closest?.('td');
+    if (!td || !container.contains(td)) {
+      hideCellMenu();
+      return;
+    }
+    e.preventDefault();
+    const pos = cellPosFromTd(td as HTMLTableCellElement);
+    if (pos) {
+      const inMulti =
+        cellSel &&
+        cellSel.tableDocIdx === pos.tableDocIdx &&
+        pos.r >= cellSel.r0 &&
+        pos.r <= cellSel.r1 &&
+        pos.c >= cellSel.c0 &&
+        pos.c <= cellSel.c1 &&
+        (cellSel.r0 !== cellSel.r1 || cellSel.c0 !== cellSel.c1);
+      if (!inMulti) {
+        cellAnchor = pos;
+        cellSel = { tableDocIdx: pos.tableDocIdx, r0: pos.r, r1: pos.r, c0: pos.c, c1: pos.c };
+        paintCellSelection(container);
+      }
+    }
+    if (mergeBtn) {
+      const multi = !!cellSel && (cellSel.r0 !== cellSel.r1 || cellSel.c0 !== cellSel.c1);
+      (mergeBtn as HTMLButtonElement).disabled = !multi;
+    }
+    if (menu) {
+      menu.style.display = 'block';
+      menu.style.left = `${Math.min(e.clientX, window.innerWidth - 180)}px`;
+      menu.style.top = `${Math.min(e.clientY, window.innerHeight - 60)}px`;
+    }
+  });
+  mergeBtn?.addEventListener('click', () => {
+    hideCellMenu();
+    mergeSelectedCells(container, worker);
+  });
+  document.addEventListener('click', (e: MouseEvent) => {
+    if (!(e.target as Element)?.closest?.('#cell-menu')) hideCellMenu();
+  });
+  document.addEventListener('scroll', () => hideCellMenu(), true);
 }
 

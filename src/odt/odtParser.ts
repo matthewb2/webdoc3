@@ -273,17 +273,52 @@ function parseCellParas(cell: Element, ctx: Ctx): TextRun[] {
 
 function parseTable(table: Element, ctx: Ctx): TableNode {
   const rows: TableRowNode[] = [];
-  els(table, 'table-row').forEach((tr) => {
+  // 위 행의 rowSpan에 가려진 열 추적
+  const occupied: boolean[][] = [];
+  els(table, 'table-row').forEach((tr, ri) => {
     const cells: TableCellNode[] = [];
-    els(tr, 'table-cell').forEach((tc) => {
-      const repeated = parseInt(attr(tc, 'number-columns-repeated') ?? '1', 10);
+    if (!occupied[ri]) occupied[ri] = [];
+    let col = 0;
+    const cellEls: Element[] = [];
+    for (let i = 0; i < tr.childNodes.length; i++) {
+      const n = tr.childNodes[i];
+      if (n.nodeType !== 1) continue;
+      const local = (n as Element).localName;
+      if (local === 'table-cell' || local === 'covered-table-cell') cellEls.push(n as Element);
+    }
+    cellEls.forEach((el) => {
+      while (occupied[ri][col]) {
+        cells.push({ type: 'table-cell', children: [], merged: true });
+        col += 1;
+      }
+      if (el.localName === 'covered-table-cell') {
+        cells.push({ type: 'table-cell', children: [], merged: true });
+        col += 1;
+        return;
+      }
+      const cs = parseInt(attr(el, 'number-columns-spanned') ?? '1', 10);
+      const rs = parseInt(attr(el, 'number-rows-spanned') ?? '1', 10);
+      const colSpan = isNaN(cs) || cs < 1 ? 1 : cs;
+      const rowSpan = isNaN(rs) || rs < 1 ? 1 : rs;
+      const repeated = parseInt(attr(el, 'number-columns-repeated') ?? '1', 10);
       const count = isNaN(repeated) || repeated < 1 ? 1 : repeated;
-      const children = parseCellParas(tc, ctx);
+      const children = parseCellParas(el, ctx);
       for (let i = 0; i < count; i++) {
-        cells.push({ type: 'table-cell', children: i === 0 ? children : [] });
+        const node: TableCellNode = { type: 'table-cell', children: i === 0 ? children : [] };
+        if (i === 0) {
+          if (colSpan > 1) node.colSpan = colSpan;
+          if (rowSpan > 1) {
+            node.rowSpan = rowSpan;
+            for (let rr = ri + 1; rr < ri + rowSpan; rr++) {
+              if (!occupied[rr]) occupied[rr] = [];
+              for (let cc = col; cc < col + colSpan; cc++) occupied[rr][cc] = true;
+            }
+          }
+        }
+        cells.push(node);
+        col += colSpan;
       }
     });
-    // covered-table-cell은 건너뜀 (병합 셀로 취급)
     rows.push({ type: 'table-row', cells });
   });
   return { type: 'table', rows };

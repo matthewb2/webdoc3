@@ -464,7 +464,7 @@ initColumnCombo(containerEl, worker, savedCursor);
 initAlignCombo(containerEl, worker, savedCursor);
 initColorControls(containerEl, worker, savedCursor);
 initStyleButtons(containerEl, worker, savedCursor);
-initCellSelection(containerEl);
+initCellSelection(containerEl, worker);
 initZoomControls(containerEl);
 initSave(worker);
 initPreviewMode();

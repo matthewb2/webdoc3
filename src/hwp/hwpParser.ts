@@ -204,13 +204,39 @@ function styledRuns(docInfo: DocInfo, text: string, shapeIndex: number): TextRun
 
 function tableToNode(table: TableControl, docInfo: DocInfo): TableNode {
   console.log('[Debug] tableToNode 실행, 행 개수:', table.content?.length);
+  // 병합 가림 셀 판정용 점유 맵
+  const covered = new Set<string>();
+  table.content.forEach((cells) => {
+    cells.forEach((cell: any) => {
+      const attr = cell.attribute;
+      if (!attr) return;
+      const row = attr.row ?? 0;
+      const col = attr.column ?? 0;
+      const rowSpan = Math.max(1, attr.rowSpan ?? 1);
+      const colSpan = Math.max(1, attr.colSpan ?? 1);
+      for (let r = row; r < row + rowSpan; r++) {
+        for (let c = col; c < col + colSpan; c++) {
+          if (r === row && c === col) continue;
+          covered.add(`${r},${c}`);
+        }
+      }
+    });
+  });
   const rows: TableRowNode[] = table.content.map((cells) => {
-    const rowCells: TableCellNode[] = cells.map((cell) => {
+    const rowCells: TableCellNode[] = cells.map((cell: any) => {
       const children: TextRun[] = [];
-      cell.items.forEach((paragraph) => {
+      cell.items.forEach((paragraph: any) => {
         children.push(...paragraphToRuns(paragraph, docInfo));
       });
-      return { type: 'table-cell', children };
+      const node: TableCellNode = { type: 'table-cell', children };
+      const attr = cell.attribute;
+      if (attr && covered.has(`${attr.row ?? 0},${attr.column ?? 0}`)) {
+        node.merged = true;
+      } else if (attr) {
+        if ((attr.colSpan ?? 1) > 1) node.colSpan = attr.colSpan;
+        if ((attr.rowSpan ?? 1) > 1) node.rowSpan = attr.rowSpan;
+      }
+      return node;
     });
     return { type: 'table-row', cells: rowCells };
   });

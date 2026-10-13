@@ -69,13 +69,19 @@ function toTable(table: TableNode): Table | null {
   if (maxCols <= 0) return null;
   const colW = toTwip(599 / maxCols);
   const rows = table.rows.map((row) => {
-    const cells = row.cells.map((cell) => new TableCell({
-      children: [toParagraph(cell.children || [], cell.align)],
-      width: { size: colW, type: WidthType.DXA },
-      margins: { ...CELL_MARGINS },
-      borders: { top: { ...CELL_BORDER }, left: { ...CELL_BORDER }, bottom: { ...CELL_BORDER }, right: { ...CELL_BORDER } },
-    }));
-    for (let i = row.cells.length; i < maxCols; i++) {
+    const cells = row.cells.map((cell) => {
+      if (cell.merged) return null;
+      return new TableCell({
+        children: [toParagraph(cell.children || [], cell.align)],
+        width: { size: colW, type: WidthType.DXA },
+        margins: { ...CELL_MARGINS },
+        borders: { top: { ...CELL_BORDER }, left: { ...CELL_BORDER }, bottom: { ...CELL_BORDER }, right: { ...CELL_BORDER } },
+        ...(cell.colSpan && cell.colSpan > 1 ? { columnSpan: cell.colSpan } : {}),
+        ...(cell.rowSpan && cell.rowSpan > 1 ? { rowSpan: cell.rowSpan } : {}),
+      });
+    }).filter((c): c is TableCell => c !== null);
+    const coveredCount = row.cells.filter((c) => c.merged).length;
+    for (let i = cells.length + coveredCount; i < maxCols; i++) {
       cells.push(new TableCell({
         children: [new Paragraph({ children: [new TextRun('')] })],
         width: { size: colW, type: WidthType.DXA },

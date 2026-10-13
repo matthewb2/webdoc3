@@ -3,7 +3,7 @@ import type { CursorState, TextRun } from '../types';
 import { breakKeyForRuns, computeBreaks } from '../probe';
 import { getCachedPages, updateVisiblePages } from '../render';
 import { cachedParagraphInfo, clearPendingSelection, setAwaitingRender } from './index';
-import { clearCellSelection, exitCellEditMode, isCellEditMode } from './mouse';
+import { clearCellSelection, exitCellEditMode, getCellSelection, hideCellMenu, isCellEditMode, mergeSelectedCells } from './mouse';
 
 // 편집된 단락 전체 런을 캐시된 조각에서 복원해 분절점을 다시 재고 워커에 전달
 async function refreshParaBreaks(worker: Worker, docIdx: number) {
@@ -127,8 +127,25 @@ container.addEventListener('keydown', (e: KeyboardEvent) => {
     return;
   }
 
-  // Esc: 셀 텍스트 편집 모드 종료
+  // M: 다중 셀 선택 병합 (문단 텍스트編集中이면 타이핑 우선)
+  if ((e.key === 'm' || e.key === 'M') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    const sel = getCellSelection();
+    if (sel && (sel.r0 !== sel.r1 || sel.c0 !== sel.c1)) {
+      const selection = window.getSelection();
+      const node = selection && selection.rangeCount > 0 ? selection.anchorNode : null;
+      const el = node ? (node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element | null)) : null;
+      if (!el?.closest?.('p[data-p-idx]')) {
+        e.preventDefault();
+        hideCellMenu();
+        mergeSelectedCells(container, worker);
+        return;
+      }
+    }
+  }
+
+  // Esc: 셀 텍스트 편집 모드 종료 + 컨텍스트 메뉴 닫기
   if (e.key === 'Escape' || e.key === 'Esc') {
+    hideCellMenu();
     if (isCellEditMode()) {
       e.preventDefault();
       exitCellEditMode(container);

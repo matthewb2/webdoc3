@@ -116,9 +116,22 @@ export function buildOdtHtml(model: DocumentModel): string {
       const colW = 599 / maxCols;
       const cols = Array.from({ length: maxCols }, () => `<col class="${colStyle(colW)}"></col>`).join('');
       const trs = table.rows.map((row) => {
-        const cells = row.cells.map((cell) => `<td class="${CELL_STYLE}"><p class="${paraStyle(cell.align)}">${renderRuns(cell.children || [])}</p></td>`);
-        for (let i = row.cells.length; i < maxCols; i++) {
-          cells.push(`<td class="${CELL_STYLE}"><p class="${paraStyle(undefined)}"></p></td>`);
+        const cells: string[] = [];
+        let covered = 0;
+        row.cells.forEach((cell) => {
+          if (cell.merged) {
+            covered += 1;
+            return;
+          }
+          const span =
+            `${cell.colSpan && cell.colSpan > 1 ? ` colspan="${cell.colSpan}"` : ''}` +
+            `${cell.rowSpan && cell.rowSpan > 1 ? ` rowspan="${cell.rowSpan}"` : ''}`;
+          cells.push(`<td class="${CELL_STYLE}"${span}><p class="${paraStyle(cell.align)}">${renderRuns(cell.children || [])}</p></td>`);
+        });
+        if (cells.length > 0) {
+          for (let i = row.cells.length - covered; i < maxCols; i++) {
+            cells.push(`<td class="${CELL_STYLE}"><p class="${paraStyle(undefined)}"></p></td>`);
+          }
         }
         return `<tr>${cells.join('')}</tr>`;
       }).join('');

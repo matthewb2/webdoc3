@@ -306,12 +306,61 @@ function parseTable(tbl: Element, ctx: Ctx): TableNode {
   const rows: TableRowNode[] = [];
   els(tbl, 'tr').forEach((tr) => {
     const cells: TableCellNode[] = [];
+    let col = 0;
     els(tr, 'tc').forEach((tc) => {
+      const tcPr = first(tc, 'tcPr');
+      let colSpan = 1;
+      if (tcPr) {
+        const gridSpan = first(tcPr, 'gridSpan');
+        if (gridSpan) {
+          const v = parseInt(attr(gridSpan, 'val') ?? '1', 10);
+          if (!isNaN(v) && v > 1) colSpan = v;
+        }
+      }
+      const vMergeEl = tcPr ? first(tcPr, 'vMerge') : null;
+      const vMergeVal = vMergeEl ? attr(vMergeEl, 'val') : null;
+      if (vMergeEl && vMergeVal !== null && vMergeVal !== 'restart') {
+        // 세로 병합 이어짐 → 가림 셀
+        cells.push({ type: 'table-cell', children: [], merged: true });
+        col += 1;
+        return;
+      }
+      // restart(값 없음 포함) 또는 일반 셀: 아래쪽 continue 행 수 계산
+      let rowSpan = 1;
+      if (vMergeEl) {
+        let span = 1;
+        let trNext = tr.nextElementSibling as Element | null;
+        while (trNext && trNext.localName === 'tr') {
+          const tcs = els(trNext, 'tc');
+          let c = 0;
+          let found: Element | null = null;
+          for (const cand of tcs) {
+            if (c === col) {
+              found = cand;
+              break;
+            }
+            const cp = first(cand, 'tcPr');
+            const gs = cp ? first(cp, 'gridSpan') : null;
+            c += gs ? Math.max(1, parseInt(attr(gs, 'val') ?? '1', 10) || 1) : 1;
+          }
+          if (!found) break;
+          const fp = first(found, 'tcPr');
+          const fm = fp ? first(fp, 'vMerge') : null;
+          if (!fm || attr(fm, 'val') !== 'continue') break;
+          span += 1;
+          trNext = trNext.nextElementSibling as Element | null;
+        }
+        rowSpan = span;
+      }
       const children: TextRun[] = [];
       els(tc, 'p').forEach((p) => {
         children.push(...parseParagraph(p, ctx).children);
       });
-      cells.push({ type: 'table-cell', children });
+      const node: TableCellNode = { type: 'table-cell', children };
+      if (colSpan > 1) node.colSpan = colSpan;
+      if (rowSpan > 1) node.rowSpan = rowSpan;
+      cells.push(node);
+      col += colSpan;
     });
     rows.push({ type: 'table-row', cells });
   });
