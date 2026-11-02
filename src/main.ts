@@ -7,6 +7,7 @@ import { clearPendingSelection, initAlignCombo, initColorControls, initColumnCom
 import { initEditorListeners, isComposingActive } from './listener/keyboard';
 import { initCellSelection, paintCellSelection } from './listener/mouse';
 import { initPreviewMode } from './preview';
+import { parseHwpToDocumentModel } from './hwp/hwpToModel';
 import logoUrl from './assets/logo.svg';
 
 // 타이틀바(탭) 로고
@@ -282,7 +283,6 @@ async function initWordProcessor() {
   worker.postMessage({ type: 'INIT_METRICS', payload: fontMetrics });
 
   // 기본 문서: dev 실행 시 public의 입법예고 HWP를 바로 로드 (실패 시 더미로 폴백)
-  /*
   const defaultHwpUrl = encodeURI('/입법예고(울산광역시+남구+구세+조례+일부개정조례안).hwp');
   fetch(defaultHwpUrl)
     .then((res) => {
@@ -295,15 +295,12 @@ async function initWordProcessor() {
       worker.postMessage({ type: 'INIT_DOC', payload: model });
       containerEl.style.display = 'inline-flex';
     })
-    .catch((err: Error) => {
-      worker.postMessage({ type: 'INIT_DOC', payload: buildMockDocument() });
-      const hwpStatus = document.getElementById('hwp-status') as HTMLSpanElement | null;
-      if (hwpStatus) hwpStatus.textContent = `기본 문서 로드 실패, 더미 표시: ${err.message}`;
-    });
-    */
+    .catch(async (err: Error) => {
+      console.warn(`기본 문서 로드 실패, 더미 표시: ${err.message}`);
       const mockModel = buildMockDocument();
       worker.postMessage({ type: 'BREAKS', payload: await computeBreaks(collectProbeItems(mockModel)) });
       worker.postMessage({ type: 'INIT_DOC', payload: mockModel });
+    });
 }
 
 // 🧪 [시나리오] 3페이지 이상의 분량을 유도하는 대형 표 데이터 (기본 문서 로드 실패 시 폴백)
@@ -367,40 +364,6 @@ function buildMockDocument(): DocumentModel {
       children: [{ text: "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since 1966, when designers at Letraset and James Mosley, the librarian at St Bride Printing Library in London, took a 1914 Cicero translation and scrambled it to make dummy text for Letraset's Body Type sheets. It has survived not only many decades, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised thanks to these sheets and more recently with desktop publishing software like Aldus PageMaker and Microsoft Word including versions of Lorem Ipsum.", bold: false }]
     }
   ];
-  /*
-  // 1. 대형 사양 명세 표 생성
-  const tableNode: TableNode = { type: 'table', rows: [] };
-
-  // 헤더 행 추가
-  tableNode.rows.push({
-    type: 'table-row',
-    cells: [
-      { type: 'table-cell', children: [{ text: "분류", bold: true }] },
-      { type: 'table-cell', children: [{ text: "상세 내용 명세", bold: true }] },
-      { type: 'table-cell', children: [{ text: "비고", bold: true }] }
-    ]
-  });
-
-  
-  for (let i = 1; i <= 10; i++) {
-    // 5번째 행마다 매우 긴 텍스트를 넣어 높이 변화를 줌
-    const isLongRow = i % 5 === 0;
-    const detailText = isLongRow 
-      ? `[고높이 행 테스트] 이 행은 텍스트가 매우 길게 작성되었습니다. 웹 워커는 이 텍스트가 680px 너비 내에서 몇 줄을 차지하는지 계산하고, 그에 따른 행의 높이가 현재 페이지의 남은 높이(PAGE_MAX_HEIGHT)를 초과하는지 실시간으로 감시합니다.`
-      : `일반적인 데이터를 포함하는 ${i}번째 데이터 행입니다.`;
-
-    tableNode.rows.push({
-      type: 'table-row',
-      cells: [
-        { type: 'table-cell', children: [{ text: `항목 ${i}` }] },
-        { type: 'table-cell', children: [{ text: detailText }] },
-        { type: 'table-cell', children: [{ text: isLongRow ? "중요" : "일반" }] }
-      ]
-    });
-  }
-
-  mockDocument.push(tableNode);
-  */
 
   const tableTest = buildTableTest();
   return [tableTest.title, tableTest.table, tableTest.trailing, ...mockDocument];
