@@ -7,7 +7,7 @@ import { clearPendingSelection, initAlignCombo, initColorControls, initColumnCom
 import { initEditorListeners, isComposingActive } from './listener/keyboard';
 import { initCellSelection, paintCellSelection } from './listener/mouse';
 import { initPreviewMode } from './preview';
-import { parseHwpToDocumentModel } from './hwp/hwpToModel';
+import { parseHwpToDocumentModel } from './hwp/hwpParser';
 import logoUrl from './assets/logo.svg';
 
 // 타이틀바(탭) 로고
