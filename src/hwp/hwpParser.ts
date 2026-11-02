@@ -117,6 +117,10 @@ function paragraphToModelItems(
     if (segment.kind === 'text') {
       const runs = styledRuns(docInfo, segment.text, segment.shapeIndex);
       if (runs.length > 0) {
+        console.log(`[ParagraphStyleInfo] S${sIndex}-P${pIndex}-Seg${segIndex} 텍스트: "${segment.text.slice(0, 30)}..."`, {
+          shapeIndex: segment.shapeIndex,
+          runs
+        });
         const node: ParagraphNode = { type: 'paragraph', children: runs };
         if (paraAlign) node.align = paraAlign;
         model.push(node);
@@ -182,6 +186,8 @@ function styledRuns(docInfo: DocInfo, text: string, shapeIndex: number): TextRun
 
   const fontSizePt = charShape.fontBaseSize * (charShape.fontRatio[0] / 100);
   run.fontSize = fontSizePt * PT_TO_PX;
+
+  console.log(`[CharShapeInfo] shapeIndex: ${shapeIndex}, fontBaseSize: ${charShape.fontBaseSize}, fontRatio: ${charShape.fontRatio[0]}, calculated fontSizePt: ${fontSizePt}, px: ${run.fontSize}`);
 
   const fontFace = docInfo.fontFaces[charShape.fontId[0]];
   if (fontFace && fontFace.name) {
