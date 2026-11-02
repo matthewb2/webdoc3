@@ -113,23 +113,34 @@ function paragraphToModelItems(
   const paraShapeAlign = docInfo.paragraphShapes[paragraph.shapeIndex]?.align;
   const paraAlign = paraShapeAlign !== undefined ? PARAGRAPH_ALIGN_MAP[paraShapeAlign] : undefined;
 
-  segments.forEach((segment, segIndex) => {
-    if (segment.kind === 'text') {
-      const runs = styledRuns(docInfo, segment.text, segment.shapeIndex);
-      if (runs.length > 0) {
+  // 수정: 내용이 없는 빈 문단(segments가 비어있는 경우) 처리
+  if (segments.length === 0) {
+    const node: ParagraphNode = { 
+      type: 'paragraph', 
+      children: [{ text: '' }] // 빈 텍스트 런을 넣어 주어야 레이아웃 엔진이 빈 줄 높이를 계산합니다.
+    };
+    if (paraAlign) node.align = paraAlign;
+    model.push(node);
+  } else {
+    segments.forEach((segment, segIndex) => {
+      if (segment.kind === 'text') {
+        const runs = styledRuns(docInfo, segment.text, segment.shapeIndex);
         console.log(`[ParagraphStyleInfo] S${sIndex}-P${pIndex}-Seg${segIndex} 텍스트: "${segment.text.slice(0, 30)}..."`, {
           shapeIndex: segment.shapeIndex,
           runs
         });
-        const node: ParagraphNode = { type: 'paragraph', children: runs };
+        const node: ParagraphNode = { 
+          type: 'paragraph', 
+          children: runs.length > 0 ? runs : [{ text: '' }] 
+        };
         if (paraAlign) node.align = paraAlign;
         model.push(node);
+      } else {
+        console.log(`[Debug] [S${sIndex}-P${pIndex}] 세그먼트 #${segIndex}: 테이블 노드 변환 시작`);
+        model.push(tableToNode(segment.table, docInfo));
       }
-    } else {
-      console.log(`[Debug] [S${sIndex}-P${pIndex}] 세그먼트 #${segIndex}: 테이블 노드 변환 시작`);
-      model.push(tableToNode(segment.table, docInfo));
-    }
-  });
+    });
+  }
 }
 
 function paragraphToRuns(paragraph: Paragraph, docInfo: DocInfo): TextRun[] {
