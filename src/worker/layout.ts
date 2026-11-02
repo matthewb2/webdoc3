@@ -8,6 +8,12 @@ console.log('[worker] boot, engine bytes:', runLayoutEngineAsync.toString().leng
 
 const PAGE_MAX_HEIGHT = 700;
 const LINE_HEIGHT = 26;
+// 기본 줄간격(%), 설정 파일 값으로 INIT_SETTINGS를 통해 갱신
+let defaultLineSpacing = 160;
+
+export function setDefaultLineSpacing(pct: number): void {
+  if (pct > 0 && isFinite(pct)) defaultLineSpacing = pct;
+}
 const EDITOR_MAX_WIDTH = 600;
 const TABLE_CELL_PADDING = 16;
 const TABLE_CELL_BORDER = 1;
@@ -62,9 +68,10 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
       if (columns > 1) {
         const runs = item.children || [];
         const lines = buildRunLines(runs, columnWidth(columns));
+        const spacing = item.lineSpacing ?? defaultLineSpacing;
         let paraTotal = 0;
         lines.forEach((line) => {
-          paraTotal += lineHeightOfLine(line);
+          paraTotal += lineHeightOfLine(line, spacing);
         });
         let charge: number;
         if (!pendingCols || pendingCols.columns !== columns) {
@@ -84,7 +91,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
           charge = Math.ceil(paraTotal / columns) + LINE_HEIGHT;
           pendingCols = { columns, total: paraTotal };
         }
-        const colFragment = buildParagraphFragment(lines, idx, 0, item.align, columns, item.indent);
+        const colFragment = buildParagraphFragment(lines, idx, 0, item.align, columns, item.indent, item.lineSpacing);
         if (colFragment && colFragment.children.length > 0) {
           currentPage.push(colFragment);
         }
@@ -96,15 +103,16 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
       let currentParagraphLines: Glyph[][] = [];
       let charOffset = 0;
 
+      const spacing = item.lineSpacing ?? defaultLineSpacing;
       lines.forEach((line) => {
-        const lineHeight = lineHeightOfLine(line);
+        const lineHeight = lineHeightOfLine(line, spacing);
 
         if (currentHeight + lineHeight > PAGE_MAX_HEIGHT) {
           if (currentParagraphLines.length === 0 && currentPage.length > 0) {
             console.log(`[para-break] docIdx=${idx} cur=${currentHeight} lh=${lineHeight} text=${JSON.stringify(runs.map((r) => r.text).join('').slice(0, 30))}`);
           }
           if (currentParagraphLines.length > 0) {
-            const fragment = buildParagraphFragment(currentParagraphLines, idx, charOffset, item.align, undefined, item.indent);
+            const fragment = buildParagraphFragment(currentParagraphLines, idx, charOffset, item.align, undefined, item.indent, item.lineSpacing);
             if (fragment && fragment.children.length > 0) {
               currentPage.push(fragment);
               charOffset += fragment.children.reduce((acc, run) => acc + run.text.length, 0);
@@ -121,7 +129,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
       });
 
       if (currentParagraphLines.length > 0) {
-        const fragment = buildParagraphFragment(currentParagraphLines, idx, charOffset, item.align, undefined, item.indent);
+        const fragment = buildParagraphFragment(currentParagraphLines, idx, charOffset, item.align, undefined, item.indent, item.lineSpacing);
         if (fragment && fragment.children.length > 0) {
           currentPage.push(fragment);
         }
@@ -152,11 +160,11 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
         // 실제 렌더 높이와 일치: 줄별 최대 높이 합 + 셀 수직 패딩 + 경계선
         const lineHeights: number[] = [];
         for (let li = 0; li < maxRowLines; li++) {
-          let lineH = LINE_HEIGHT;
+          let lineH = 0;
           cellLineList.forEach((cellLines) => {
             const line = cellLines[li];
             if (line) {
-              const h = lineHeightOfLine(line);
+              const h = lineHeightOfLine(line, defaultLineSpacing);
               if (h > lineH) lineH = h;
             }
           });
@@ -319,6 +327,7 @@ function buildParagraphFragment(
   align?: string,
   columns?: number,
   indent?: number,
+  spacing?: number,
 ): ParagraphNode | null {
   // 정렬은 CSS text-align으로 처리한다. 스페이서 런을 넣으면 fragment 텍스트가
   // 원문과 달라져 커서 오프셋과 편집 인덱스가 어긋나므로 절대 추가하지 않는다.
@@ -342,9 +351,13 @@ function buildParagraphFragment(
     fragment.indent = indent;
   }
 
-  let maxLineHeight = LINE_HEIGHT;
+  const spacingPct = spacing ?? defaultLineSpacing;
+  if (spacing) {
+    fragment.lineSpacing = spacing;
+  }
+  let maxLineHeight = 0;
   lines.forEach((line) => {
-    const h = lineHeightOfLine(line);
+    const h = lineHeightOfLine(line, spacingPct);
     if (h > maxLineHeight) maxLineHeight = h;
   });
   fragment.lineHeight = maxLineHeight;
@@ -396,13 +409,14 @@ function runsFromLines(lines: Glyph[][]): TextRun[] {
   return mergeRuns(lines.flatMap(glyphLineToRuns));
 }
 
-function lineHeightOfLine(line: Glyph[]): number {
+function lineHeightOfLine(line: Glyph[], spacingPct: number): number {
   let maxFont = 0;
   line.forEach((glyph) => {
     const size = glyph.run.fontSize ?? BASE_FONT_PX;
     if (size > maxFont) maxFont = size;
   });
-  return Math.max(LINE_HEIGHT, Math.round(maxFont * 1.4));
+  if (maxFont <= 0) maxFont = BASE_FONT_PX;
+  return Math.max(1, Math.round((maxFont * spacingPct) / 100));
 }
 
 const breakCache = new Map<string, number[]>();

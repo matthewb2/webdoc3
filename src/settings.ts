@@ -12,6 +12,7 @@ export interface CharShapeSetting {
 export interface ParaShapeSetting {
   align: TextAlign;
   indent: number;
+  lineSpacing: number;
 }
 
 export interface UserSettings {
@@ -38,7 +39,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   fontSize: 16,
   uiFontFamily: '맑은 고딕',
   charShape: { bold: false, italic: false, underline: false, strike: false },
-  paraShape: { align: 'justify', indent: 0 },
+  paraShape: { align: 'justify', indent: 0, lineSpacing: 160 },
 };
 
 function validCharShape(v: unknown): CharShapeSetting {
@@ -60,6 +61,9 @@ function validParaShape(v: unknown): ParaShapeSetting {
   const o = v as Record<string, unknown>;
   if (validAlign(o['align'])) base.align = o['align'];
   if (typeof o['indent'] === 'number' && isFinite(o['indent'])) base.indent = o['indent'];
+  if (typeof o['lineSpacing'] === 'number' && isFinite(o['lineSpacing']) && (o['lineSpacing'] as number) > 0) {
+    base.lineSpacing = o['lineSpacing'] as number;
+  }
   return base;
 }
 
@@ -178,4 +182,8 @@ export function defaultCharShape(): CharShapeSetting {
 
 export function defaultIndent(): number {
   return loadSettings().paraShape.indent;
+}
+
+export function defaultLineSpacing(): number {
+  return loadSettings().paraShape.lineSpacing;
 }

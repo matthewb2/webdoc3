@@ -51,12 +51,14 @@ export function buildOdtHtml(model: DocumentModel): string {
   let tSeq = 0;
   let colSeq = 0;
 
-  const paraStyle = (align: string | undefined): string => {
-    const key = align ?? '';
+  const paraStyle = (align: string | undefined, lineSpacing?: number): string => {
+    const key = `${align ?? ''}|${lineSpacing ?? ''}`;
     let name = pStyles.get(key);
     if (!name) {
       name = `P${pSeq++}`;
-      const props = align && align !== 'left' ? `<style:paragraph-properties fo:text-align="${align}"/>` : '';
+      const alignProps = align && align !== 'left' ? ` fo:text-align="${align}"` : '';
+      const spacingProps = lineSpacing && lineSpacing !== 160 ? ` fo:line-height="${lineSpacing}%"` : '';
+      const props = alignProps || spacingProps ? `<style:paragraph-properties${alignProps}${spacingProps}/>` : '';
       pStyles.set(key, name);
       pStyles.set(`__def__${name}`, props);
     }
@@ -96,10 +98,10 @@ export function buildOdtHtml(model: DocumentModel): string {
     }).join('');
   };
 
-  const renderPara = (children: TextRun[], align: string | undefined): string => {
+  const renderPara = (children: TextRun[], align: string | undefined, lineSpacing?: number): string => {
     const body = renderRuns(children);
-    if (!body) return `<p class="${paraStyle(align)}"></p>`;
-    return `<p class="${paraStyle(align)}">${body}</p>`;
+    if (!body) return `<p class="${paraStyle(align, lineSpacing)}"></p>`;
+    return `<p class="${paraStyle(align, lineSpacing)}">${body}</p>`;
   };
 
   const bodyParts: string[] = [];
@@ -107,7 +109,7 @@ export function buildOdtHtml(model: DocumentModel): string {
   model.forEach((item: DocumentItem) => {
     if (item.type === 'paragraph') {
       hasContent = true;
-      bodyParts.push(renderPara(item.children || [], (item as any).align));
+      bodyParts.push(renderPara(item.children || [], (item as any).align, (item as any).lineSpacing));
     } else if (item.type === 'table') {
       const table = item as TableNode;
       if (table.rows.length === 0) return;

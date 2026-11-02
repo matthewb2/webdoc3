@@ -52,12 +52,13 @@ function toTextRun(run: ModelRun): TextRun | null {
   });
 }
 
-function toParagraph(children: ModelRun[], align: string | undefined): Paragraph {
+function toParagraph(children: ModelRun[], align: string | undefined, lineSpacing?: number): Paragraph {
   const runs = (children || [])
     .map(toTextRun)
     .filter((r): r is TextRun => r !== null);
-  if (runs.length === 0) return new Paragraph({ children: [new TextRun('')] });
-  return new Paragraph({ alignment: alignOf(align), children: runs });
+  const spacing = lineSpacing && lineSpacing !== 160 ? { line: Math.round((lineSpacing / 100) * 240) } : undefined;
+  if (runs.length === 0) return new Paragraph({ children: [new TextRun('')], ...(spacing ? { spacing } : {}) });
+  return new Paragraph({ alignment: alignOf(align), children: runs, ...(spacing ? { spacing } : {}) });
 }
 
 const CELL_BORDER = { style: BorderStyle.SINGLE, size: 4, color: 'B0B4B8' };
@@ -120,7 +121,7 @@ export async function saveCurrentDocumentDocx(worker: Worker, filename = 'docume
     const children: Array<Paragraph | Table> = [];
     model.forEach((item) => {
       if (item.type === 'paragraph') {
-        children.push(toParagraph(item.children || [], (item as any).align));
+        children.push(toParagraph(item.children || [], (item as any).align, (item as any).lineSpacing));
       } else if (item.type === 'table') {
         const table = toTable(item as TableNode);
         if (table) children.push(table);

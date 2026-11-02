@@ -121,6 +121,7 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
       p.dataset.pIdx = docIdx.toString();
       p.dataset.pOffset = (item._charOffset ?? 0).toString();
       if (item.lineHeight) p.style.lineHeight = `${item.lineHeight}px`;
+      if (item.lineSpacing) p.dataset.lineSpacing = String(item.lineSpacing);
 
       // [구현] 단락 정렬 반영 (없으면 기본 정렬)
       const effectiveAlign = item.align ?? defaultAlign();

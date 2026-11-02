@@ -2,7 +2,7 @@
 // @hwp.js/parser 가 읽는 레코드 구조의 역순 구현. 버전 5.0.5.0, 압축 저장,
 // CFB 컨테이너는 외부 의존 없이 최소 구현(FAT 전용, 전 스트림 4096B 패딩)으로 내장.
 import { deflateRaw } from 'pako';
-import { defaultAlign, defaultFontFamily, defaultIndent } from '../settings';
+import { defaultAlign, defaultFontFamily, defaultIndent, defaultLineSpacing } from '../settings';
 import {
   BLOB_DEFAULTJSCRIPT,
   BLOB_JSCRIPTVERSION,
@@ -400,7 +400,7 @@ function buildCfbFile(specs: CfbEntrySpec[]): Uint8Array {
 export class HwpWriter {
   private shapes: ShapeDef[] = [];
   private shapeIndexByKey = new Map<string, number>();
-  private paraShapes: Array<{ align: number; indentPx: number }> = []; // 사용 순서대로 문단 모양
+  private paraShapes: Array<{ align: number; indentPx: number; lineSpacing: number }> = []; // 사용 순서대로 문단 모양
   private paraShapeIndexByAlign = new Map<string, number>();
   private koFaces: string[] = [];
 
@@ -473,13 +473,11 @@ export class HwpWriter {
     };
     const addPara = (para: ParagraphNode) => {
       (para.children || []).forEach(addRun);
-      const hwpAlign = ALIGN_TO_HWP[para.align ?? defaultAlign()];
-      const indentPx = para.indent ?? defaultIndent();
-      const key = `${hwpAlign}|${indentPx}`;
-      if (!this.paraShapeIndexByAlign.has(key)) {
-        this.paraShapeIndexByAlign.set(key, this.paraShapes.length);
-        this.paraShapes.push({ align: hwpAlign, indentPx });
-      }
+      this.ensureParaShape(
+        ALIGN_TO_HWP[para.align ?? defaultAlign()],
+        para.indent ?? defaultIndent(),
+        para.lineSpacing ?? defaultLineSpacing(),
+      );
     };
     this.docModel.forEach((item) => {
       if (item.type === 'paragraph') {
@@ -491,11 +489,7 @@ export class HwpWriter {
             // 셀 정렬 모양 등록
             if (cell.align) {
               const hwpAlign = ALIGN_TO_HWP[cell.align] ?? ALIGN_TO_HWP[defaultAlign()];
-              const key = `${hwpAlign}|0`;
-              if (!this.paraShapeIndexByAlign.has(key)) {
-                this.paraShapeIndexByAlign.set(key, this.paraShapes.length);
-                this.paraShapes.push({ align: hwpAlign, indentPx: 0 });
-              }
+              this.ensureParaShape(hwpAlign, 0, defaultLineSpacing());
             }
           });
         });
@@ -632,7 +626,7 @@ export class HwpWriter {
     return out.build();
   }
 
-  private buildParaShape(def: { align: number; indentPx: number }): Uint8Array {
+  private buildParaShape(def: { align: number; indentPx: number; lineSpacing: number }): Uint8Array {
     const out = new ByteBuilder();
     out.u32le(0x180 | ((def.align & 0x7) << 2)); // attribute (실파일 관용값 + 정렬 비트)
     out.i32le(0); // paddingLeft
@@ -650,7 +644,7 @@ export class HwpWriter {
     out.i16le(0);
     out.u32le(0); // attrV2 (5.0.1.7+)
     out.u32le(0); // attrV3 (5.0.2.5+)
-    out.u32le(160); // lineSpacing (5.0.2.5+)
+    out.u32le(Math.round(def.lineSpacing)); // lineSpacing (5.0.2.5+)
     return out.build();
   }
 
@@ -788,20 +782,35 @@ export class HwpWriter {
     return out.build();
   }
 
+  private shapeKey(align: number, indentPx: number, spacing: number): string {
+    return `${align}|${indentPx}|${spacing}`;
+  }
+
+  private ensureParaShape(align: number, indentPx: number, spacing: number): number {
+    const key = this.shapeKey(align, indentPx, spacing);
+    let idx = this.paraShapeIndexByAlign.get(key);
+    if (idx === undefined) {
+      idx = this.paraShapes.length;
+      this.paraShapeIndexByAlign.set(key, idx);
+      this.paraShapes.push({ align, indentPx, lineSpacing: spacing });
+    }
+    return idx;
+  }
+
   private defaultShapeKey(): string {
-    return `${ALIGN_TO_HWP[defaultAlign()]}|${defaultIndent()}`;
+    return this.shapeKey(ALIGN_TO_HWP[defaultAlign()], defaultIndent(), defaultLineSpacing());
   }
 
   private ensureDefaultShape(): void {
-    const key = this.defaultShapeKey();
-    if (!this.paraShapeIndexByAlign.has(key)) {
-      this.paraShapeIndexByAlign.set(key, this.paraShapes.length);
-      this.paraShapes.push({ align: ALIGN_TO_HWP[defaultAlign()], indentPx: defaultIndent() });
-    }
+    this.ensureParaShape(ALIGN_TO_HWP[defaultAlign()], defaultIndent(), defaultLineSpacing());
   }
 
   private paraShapeOf(para: ParagraphNode): number {
-    const key = `${ALIGN_TO_HWP[para.align ?? defaultAlign()]}|${para.indent ?? defaultIndent()}`;
+    const key = this.shapeKey(
+      ALIGN_TO_HWP[para.align ?? defaultAlign()],
+      para.indent ?? defaultIndent(),
+      para.lineSpacing ?? defaultLineSpacing(),
+    );
     return this.paraShapeIndexByAlign.get(key) ?? 0;
   }
 

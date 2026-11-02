@@ -1,5 +1,5 @@
 import type { DocumentModel, TextRun } from '../types';
-import { runLayoutEngineAsync, setBreaks, setFontMetrics } from './layout';
+import { runLayoutEngineAsync, setBreaks, setDefaultLineSpacing, setFontMetrics } from './layout';
 export type { PageModel } from './layout';
 
 
@@ -59,6 +59,11 @@ self.addEventListener('message', (event: MessageEvent<any>) => {
   } else if (message.type === 'INIT_SETTINGS') {
     const cs = message.payload?.charShape;
     defaultCharShape = cs && typeof cs === 'object' ? { ...cs } : {};
+    if (typeof message.payload?.lineSpacing === 'number') {
+      setDefaultLineSpacing(message.payload.lineSpacing);
+    }
+  } else if (message.type === 'EDIT_LINE_SPACING') {
+    editLineSpacing(message.payload.paragraphIndices, message.payload.lineSpacing);
   } else if (message.type === 'EDIT_SPLIT') {
     editSplit(message.payload.paragraphIndex, message.payload.charIndex);
   } else if (message.type === 'GET_DOC') {
@@ -305,6 +310,16 @@ function editAlign(docIndices: number[], align?: string) {
     const item = documentState[docIdx];
     if (item?.type !== 'paragraph') return;
     item.align = value as any;
+  });
+  requestLayout();
+}
+
+function editLineSpacing(docIndices: number[], lineSpacing: number) {
+  const value = typeof lineSpacing === 'number' && isFinite(lineSpacing) ? Math.min(300, Math.max(50, lineSpacing)) : 160;
+  (Array.isArray(docIndices) ? docIndices : []).forEach((docIdx) => {
+    const item = documentState[docIdx];
+    if (item?.type !== 'paragraph') return;
+    item.lineSpacing = value;
   });
   requestLayout();
 }

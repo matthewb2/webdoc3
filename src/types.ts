@@ -19,6 +19,8 @@ export interface ParagraphNode {
   align?: TextAlign;
   /** 왼쪽(첫 줄) 들여쓰기(px). 양수=들여쓰기, 음수=내어쓰기, 기본값 0 */
   indent?: number;
+  /** 줄간격(퍼센트). 기본값 160 */
+  lineSpacing?: number;
   _docIdx?: number;
   _charOffset?: number;
   lineHeight?: number;
@@ -74,7 +76,8 @@ export type WorkerMessage =
   | { type: 'INIT_METRICS'; payload: FontMetrics }
   | { type: 'BREAKS'; payload: BreakMap }
   | { type: 'INIT_DOC'; payload: DocumentModel }
-  | { type: 'INIT_SETTINGS'; payload: { charShape: { bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean; color?: string } } }
+  | { type: 'INIT_SETTINGS'; payload: { charShape: { bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean; color?: string }; lineSpacing?: number } }
+  | { type: 'EDIT_LINE_SPACING'; payload: { paragraphIndices: number[]; lineSpacing: number } }
   | { type: 'EDIT_INSERT'; payload: { paragraphIndex: number; charIndex: number; text: string } }
   | { type: 'EDIT_DELETE'; payload: { paragraphIndex: number; charIndex: number } }
   | { type: 'EDIT_SPLIT'; payload: { paragraphIndex: number; charIndex: number } }

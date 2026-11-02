@@ -1,7 +1,7 @@
 // src/listener.ts - 이벤트 리스너 (워커 메시지·스크롤·선택·입력·HWP 열기)
 import type { PageModel } from '../worker/doc.worker';
 import type { CursorState } from '../types';
-import { defaultAlign, defaultFontFamily, defaultFontSize } from '../settings';
+import { defaultAlign, defaultFontFamily, defaultFontSize, defaultLineSpacing } from '../settings';
 import { parseHwpToDocumentModel } from '../hwp/hwpParser';
 import { parseDocxToDocumentModel } from '../docx/docxParser';
 import { parseOdtToDocumentModel } from '../odt/odtParser';
@@ -715,6 +715,36 @@ export function syncStyleButtons() {
   boldBtn.classList.toggle('active', state.bold);
   italicBtn.classList.toggle('active', state.italic);
   underlineBtn.classList.toggle('active', state.underline);
+}
+
+export function initLineSpacingCombo(container: HTMLDivElement, worker: Worker, cursor: CursorState) {
+  const select = document.getElementById('line-spacing-select') as HTMLSelectElement | null;
+  if (!select) return;
+  select.addEventListener('pointerdown', () => stashSelection(container));
+  select.addEventListener('change', () => {
+    const value = parseFloat(select.value);
+    const spacing = !isNaN(value) ? value : defaultLineSpacing();
+    const snap = peekPendingSelection();
+    worker.postMessage({ type: 'EDIT_LINE_SPACING', payload: { paragraphIndices: selectedParagraphIndices(container, cursor.docIdx, snap), lineSpacing: spacing } });
+  });
+  syncLineSpacingCombo();
+}
+
+// 커서 위치 단락의 줄간격을 콤보박스에 반영
+export function syncLineSpacingCombo() {
+  const select = document.getElementById('line-spacing-select') as HTMLSelectElement | null;
+  if (!select) return;
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return;
+  const node = selection.anchorNode;
+  if (!node) return;
+  const container = document.getElementById('editor-container');
+  if (!container || !container.contains(node)) return;
+  const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element | null);
+  const p = el?.closest?.('p');
+  if (!p || !container.contains(p)) return;
+  const value = (p as HTMLElement).dataset.lineSpacing || String(defaultLineSpacing());
+  setSelectValue(select, value);
 }
 
 export function initSave(worker: Worker) {
