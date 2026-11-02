@@ -3,7 +3,7 @@ import type { PageModel } from './worker/doc.worker';
 import { defaultFontFamily, defaultUiFontFamily, initSettings, loadSettings } from './settings';
 import { collectProbeItems, computeBreaks } from './probe';
 import { appendStreamPages, findCursorPageIndices, getCachedPages, initRenderer, renderVirtualPages, updateVisiblePages } from './render';
-import { clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFontCombos, initFileOpen, initSave, initSelectionListener, initStyleButtons, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncStyleButtons, takePendingSelection } from './listener';
+import { clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFontCombos, initFileOpen, initLineSpacingCombo, initSave, initSelectionListener, initStyleButtons, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncLineSpacingCombo, syncStyleButtons, takePendingSelection } from './listener';
 import { initEditorListeners, isComposingActive } from './listener/keyboard';
 import { initCellSelection, paintCellSelection } from './listener/mouse';
 import { initPreviewMode } from './preview';
@@ -277,7 +277,7 @@ async function initWordProcessor() {
   await initSettings();
   document.documentElement.style.setProperty('--doc-font', `"${defaultFontFamily()}"`);
   document.documentElement.style.setProperty('--ui-font', `"${defaultUiFontFamily()}"`);
-  worker.postMessage({ type: 'INIT_SETTINGS', payload: { charShape: loadSettings().charShape } });
+  worker.postMessage({ type: 'INIT_SETTINGS', payload: { charShape: loadSettings().charShape, lineSpacing: loadSettings().paraShape.lineSpacing } });
   const fontMetrics = generateFontMetrics(`16px "${defaultFontFamily()}", Arial`);
   worker.postMessage({ type: 'INIT_METRICS', payload: fontMetrics });
 
@@ -424,6 +424,7 @@ function applyReadyPages(pages: PageModel[]) {
   syncAlignCombo();
   syncColorControls();
   syncStyleButtons();
+  syncLineSpacingCombo();
   updateCursorPage();
   paintCellSelection(containerEl);
 }
@@ -457,11 +458,12 @@ initWorkerListener(worker, (pages) => {
   appendStreamPages(pages);
 });
 initViewportScrollListener(() => { updateVisiblePages(); paintCellSelection(containerEl); });
-initSelectionListener(() => { clearPendingSelection(); saveCursorPosition(); syncFontCombos(); syncColumnCombo(); syncAlignCombo(); syncColorControls(); syncStyleButtons(); updateCursorPage(); });
+initSelectionListener(() => { clearPendingSelection(); saveCursorPosition(); syncFontCombos(); syncColumnCombo(); syncAlignCombo(); syncColorControls(); syncStyleButtons(); syncLineSpacingCombo(); updateCursorPage(); });
 initEditorListeners(containerEl, worker, savedCursor, saveCursorPosition, flushPendingRender, () => { pendingPages = null; });
 initFontCombos(containerEl, worker, savedCursor);
 initColumnCombo(containerEl, worker, savedCursor);
 initAlignCombo(containerEl, worker, savedCursor);
+initLineSpacingCombo(containerEl, worker, savedCursor);
 initColorControls(containerEl, worker, savedCursor);
 initStyleButtons(containerEl, worker, savedCursor);
 initCellSelection(containerEl, worker);
