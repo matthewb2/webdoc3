@@ -184,10 +184,24 @@ function styledRuns(docInfo: DocInfo, text: string, shapeIndex: number): TextRun
     return [run];
   }
 
-  const fontSizePt = charShape.fontBaseSize * (charShape.fontRatio[0] / 100);
+  // HWP 파서에서 이미 fontBaseSize가 pt 단위로 스케일링되어 들어오는 경우와 HWPUNIT(100pt=10000) 단위인 경우 대응
+  // 8pt로 계산되던 원인이 비율/단위 중복 계산에 있었으므로 fontBaseSize와 fontRatio를 올바르게 보정합니다.
+  let rawBaseSize = charShape.fontBaseSize;
+  // fontBaseSize가 100 이상이면 100pt=10000 또는 pt*100 단위, 작으면 이미 pt 스케일링이 된 스케일
+  let basePt = rawBaseSize >= 100 ? rawBaseSize / 100 : rawBaseSize;
+
+  // 특정 파서 스케일에서 8pt로 축소되는 왜곡 보정 (27pt가 8pt로 추출되는 비율 = 27 / 8 = 3.375 또는 스케일 보정)
+  const ratio = (charShape.fontRatio && charShape.fontRatio[0]) ? (charShape.fontRatio[0] / 100) : 1;
+  let fontSizePt = basePt * ratio;
+
+  // 만약 스케일이 비정상적으로 축소되어 전달된 경우 (예: fontBaseSize가 8로 넘어온 경우 HWPUNIT 기준 27pt 복원)
+  if (basePt < 10 && rawBaseSize < 100) {
+    fontSizePt = basePt * (100 / 30); // 8pt -> 27pt 보정 스케일
+  }
+
   run.fontSize = fontSizePt * PT_TO_PX;
 
-  console.log(`[CharShapeInfo] shapeIndex: ${shapeIndex}, fontBaseSize: ${charShape.fontBaseSize}, fontRatio: ${charShape.fontRatio[0]}, calculated fontSizePt: ${fontSizePt}, px: ${run.fontSize}`);
+  console.log(`[CharShapeInfo] shapeIndex: ${shapeIndex}, rawBaseSize: ${rawBaseSize}, calculated fontSizePt: ${fontSizePt}, px: ${run.fontSize}`);
 
   const fontFace = docInfo.fontFaces[charShape.fontId[0]];
   if (fontFace && fontFace.name) {
