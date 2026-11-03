@@ -56,6 +56,7 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
   const pageEl = document.createElement('div');
   pageEl.className = 'page';
   pageEl.contentEditable = 'true';
+  pageEl.spellcheck = false;
   pageEl.dataset.pageNumber = (pIndex + 1).toString();
 
   // 여백 경계선: canvas로 본문 경계에 간극 없이 직선 표시 (편집 불가)

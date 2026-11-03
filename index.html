@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>정밀 폰트 매트릭스 기반 웹 워커 워드프로세서</title>
     <style>
+        html {
+            height: 100%;
+            overflow: hidden;
+        }
         body {
             background-color: #f0f3f6;
             margin: 0;
@@ -15,45 +19,139 @@
             overflow: hidden; 
         }
 
-        /* 툴바 */
+        /* 리본 툴바 */
+        :root {
+            --ribbon-height: 113px;
+        }
         .toolbar {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
-            height: 46px;
+            height: var(--ribbon-height);
             background: #ffffff;
             border-bottom: 1px solid #d8dde3;
             display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 0 16px;
+            flex-direction: column;
             z-index: 10;
             box-shadow: 0 2px 8px rgba(0,0,0,0.06);
             box-sizing: border-box;
             font-family: var(--ui-font, '맑은 고딕'), sans-serif;
+            overflow: hidden;
+        }
+        /* 리본 탭 줄 */
+        .ribbon-tabs {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            flex: 0 0 28px;
+            height: 28px;
+            padding: 0 10px;
+            background: #f8fafc;
+            border-bottom: 1px solid #e3e8ee;
+            box-sizing: border-box;
+        }
+        .ribbon-tab {
+            position: relative;
+            display: flex;
+            align-items: center;
+            height: 100%;
+            padding: 0 16px;
+            font-size: 12px;
+            color: #5a6672;
+            white-space: nowrap;
+        }
+        .ribbon-tab.active {
+            color: #1b4f9c;
+            font-weight: 600;
+        }
+        .ribbon-tab.active::after {
+            content: '';
+            position: absolute;
+            left: 8px;
+            right: 8px;
+            bottom: 0;
+            height: 2px;
+            background: #4a90d9;
+        }
+        /* 리본 본문: 그룹 가로 배치, 좁은 화면에서는 가로 스크롤 */
+        .ribbon-body {
+            display: flex;
+            align-items: stretch;
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: thin;
+        }
+        .ribbon-group {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            flex: 0 0 auto;
+            padding: 4px 10px 2px;
+        }
+        .ribbon-group + .ribbon-group {
+            border-left: 1px solid #e6ebf0;
+        }
+        .ribbon-group-items {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 4px;
+            flex: 1 1 auto;
+        }
+        .ribbon-group-title {
+            flex: 0 0 auto;
+            padding-top: 2px;
+            font-size: 10px;
+            line-height: 1;
+            color: #98a2ad;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .ribbon-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex: 0 0 auto;
+            white-space: nowrap;
         }
         .toolbar-btn {
-            height: 30px;
-            padding: 0 14px;
+            flex: 0 0 auto;
+            height: 28px;
+            padding: 0 12px;
             border: 1px solid #ccd3da;
-            border-radius: 6px;
+            border-radius: 5px;
             background: #f7f9fa;
             color: #333;
             font-size: 13px;
+            font-family: inherit;
+            line-height: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
             cursor: pointer;
         }
         .toolbar-btn:hover { background: #eef2f5; }
         .toolbar-btn:active { background: #e2e8ee; }
-        .toolbar-btn-style { padding: 0 10px; font-size: 14px; }
+        .toolbar-btn-style { width: 28px; padding: 0; font-size: 14px; }
         .toolbar-btn.active { background: #d7e3f4; border-color: #4a90d9; color: #1b4f9c; }
+        .toolbar-label {
+            flex: 0 0 auto;
+            font-size: 12px;
+            color: #5f6b77;
+            white-space: nowrap;
+        }
         .toolbar-select {
-            height: 30px;
+            flex: 0 0 auto;
+            height: 28px;
             border: 1px solid #ccd3da;
-            border-radius: 6px;
+            border-radius: 5px;
             background: #ffffff;
             color: #333;
             font-size: 13px;
+            font-family: inherit;
             padding: 0 6px;
             box-sizing: border-box;
             max-width: 180px;
@@ -62,20 +160,29 @@
             background: #f0f2f4;
             color: #a6aeb5;
         }
+        #font-family-select { width: 180px; }
+        #font-size-select { width: 72px; }
+        #column-count-select { width: 72px; }
+        #align-select { width: 82px; }
+        #line-spacing-select { width: 84px; }
         .toolbar-color {
-            width: 34px;
-            height: 30px;
+            flex: 0 0 auto;
+            width: 40px;
+            height: 28px;
             border: 1px solid #ccd3da;
-            border-radius: 6px;
+            border-radius: 5px;
             background: #ffffff;
             padding: 2px;
             box-sizing: border-box;
             cursor: pointer;
         }
         .status {
+            flex: 0 1 auto;
+            min-width: 0;
             font-size: 12px;
             color: #888;
             margin-left: auto;
+            padding-left: 12px;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -156,9 +263,14 @@
             font-family: var(--ui-font, '맑은 고딕'), sans-serif;
         }
         .preview-viewport {
-            width: 100%;
-            height: calc(100% - 46px);
-            margin-top: 46px;
+            position: fixed;
+            top: 46px;
+            right: 0;
+            bottom: 0;
+            left: 0;
+            width: auto;
+            height: auto;
+            margin: 0;
             overflow: auto;
             padding: 40px 0;
             box-sizing: border-box;
@@ -234,9 +346,14 @@
         }
         .statusbar-zoom:hover { background: #eef2f5; }
         .editor-viewport {
-            width: 100%;
-            height: calc(100% - 46px - 28px);
-            margin-top: 46px;
+            position: fixed;
+            top: var(--ribbon-height);
+            right: 0;
+            bottom: 28px;
+            left: 0;
+            width: auto;
+            height: auto;
+            margin: 0;
             overflow: auto;
             -webkit-overflow-scrolling: touch;
             padding: 40px 0; /* 상하 여백만 부여 (좌우 여백은 내부에서 통제) */
@@ -362,80 +479,122 @@ table tr:nth-child(even) {
 <body>
 
     <div class="toolbar">
-        <button id="btn-open-file" class="toolbar-btn" type="button">파일열기</button>
-        <button id="btn-save" class="toolbar-btn" type="button" title="열린 파일의 확장자로 저장 (기본 HWP)">저장</button>
-        <button id="btn-preview" class="toolbar-btn" type="button" title="읽기 전용 미리보기">미리보기</button>
+        <div class="ribbon-tabs">
+            <span class="ribbon-tab active">홈</span>
+            <span id="hwp-status" class="status"></span>
+        </div>
+        <div class="ribbon-body">
+            <div class="ribbon-group">
+                <div class="ribbon-group-items">
+                    <div class="ribbon-row">
+                        <button id="btn-open-file" class="toolbar-btn" type="button">파일 열기</button>
+                        <button id="btn-save" class="toolbar-btn" type="button" title="열린 파일의 확장자로 저장 (기본 HWP)">저장</button>
+                        <button id="btn-preview" class="toolbar-btn" type="button" title="읽기 전용 미리보기">미리보기</button>
+                    </div>
+                </div>
+                <div class="ribbon-group-title">파일</div>
+            </div>
+
+            <div class="ribbon-group">
+                <div class="ribbon-group-items">
+                    <div class="ribbon-row">
+                        <label class="toolbar-label" for="font-family-select">글꼴</label>
+                        <select id="font-family-select" class="toolbar-select" disabled>
+                          <option>Arial</option>
+                          <option>Verdana</option>
+                          <option>Tahoma</option>
+                          <option>Times New Roman</option>
+                          <option>Georgia</option>
+                          <option>Courier New</option>
+                          <option>맑은 고딕</option>
+                          <option>굴림</option>
+                          <option>돋움</option>
+                          <option>바탕</option>
+                          <option>궁서</option>
+                          <option>나눔고딕</option>
+                          <option>Noto Sans KR</option>
+                        </select>
+                        <label class="toolbar-label" for="font-size-select">크기</label>
+                        <select id="font-size-select" class="toolbar-select" disabled>
+                          <option>8</option>
+                          <option>9</option>
+                          <option>10</option>
+                          <option>11</option>
+                          <option>12</option>
+                          <option>14</option>
+                          <option>16</option>
+                          <option>18</option>
+                          <option>20</option>
+                          <option>22</option>
+                          <option>24</option>
+                          <option>26</option>
+                          <option>28</option>
+                          <option>32</option>
+                          <option>36</option>
+                          <option>48</option>
+                          <option>72</option>
+                        </select>
+                    </div>
+                    <div class="ribbon-row">
+                        <button id="btn-style-normal" class="toolbar-btn" type="button" title="보통 (서식 지우기)">보통</button>
+                        <button id="btn-style-bold" class="toolbar-btn toolbar-btn-style" type="button" title="굵게"><b>B</b></button>
+                        <button id="btn-style-italic" class="toolbar-btn toolbar-btn-style" type="button" title="기울임"><i>I</i></button>
+                        <button id="btn-style-underline" class="toolbar-btn toolbar-btn-style" type="button" title="밑줄"><u>U</u></button>
+                    </div>
+                </div>
+                <div class="ribbon-group-title">글꼴</div>
+            </div>
+
+            <div class="ribbon-group">
+                <div class="ribbon-group-items">
+                    <div class="ribbon-row">
+                        <label class="toolbar-label" for="column-count-select">다단</label>
+                        <select id="column-count-select" class="toolbar-select">
+                          <option value="1">1단</option>
+                          <option value="2">2단</option>
+                          <option value="3">3단</option>
+                        </select>
+                        <label class="toolbar-label" for="align-select">정렬</label>
+                        <select id="align-select" class="toolbar-select">
+                          <option value="left">왼쪽</option>
+                          <option value="center">가운데</option>
+                          <option value="right">오른쪽</option>
+                          <option value="justify">양쪽</option>
+                        </select>
+                    </div>
+                    <div class="ribbon-row">
+                        <label class="toolbar-label" for="line-spacing-select">줄간격</label>
+                        <select id="line-spacing-select" class="toolbar-select">
+                          <option value="100">100%</option>
+                          <option value="120">120%</option>
+                          <option value="150">150%</option>
+                          <option value="160">160%</option>
+                          <option value="200">200%</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="ribbon-group-title">단락</div>
+            </div>
+
+            <div class="ribbon-group">
+                <div class="ribbon-group-items">
+                    <div class="ribbon-row">
+                        <label class="toolbar-label" for="text-color-input">글자색</label>
+                        <input id="text-color-input" class="toolbar-color" type="color" value="#000000" title="글자색 (두 번 클릭하면 기본값)">
+                    </div>
+                    <div class="ribbon-row">
+                        <label class="toolbar-label" for="bg-color-input">배경색</label>
+                        <input id="bg-color-input" class="toolbar-color" type="color" value="#ffffff" title="배경색 (두 번 클릭하면 없음)">
+                    </div>
+                </div>
+                <div class="ribbon-group-title">색</div>
+            </div>
+        </div>
         <input id="file-input" type="file" accept=".hwp,.docx,.odt" hidden />
-        <label class="toolbar-label" for="font-family-select">글꼴</label>
-        <select id="font-family-select" class="toolbar-select" disabled>
-          <option>Arial</option>
-          <option>Verdana</option>
-          <option>Tahoma</option>
-          <option>Times New Roman</option>
-          <option>Georgia</option>
-          <option>Courier New</option>
-          <option>맑은 고딕</option>
-          <option>굴림</option>
-          <option>돋움</option>
-          <option>바탕</option>
-          <option>궁서</option>
-          <option>나눔고딕</option>
-          <option>Noto Sans KR</option>
-        </select>
-        <label class="toolbar-label" for="font-size-select">크기</label>
-        <select id="font-size-select" class="toolbar-select" disabled>
-          <option>8</option>
-          <option>9</option>
-          <option>10</option>
-          <option>11</option>
-          <option>12</option>
-          <option>14</option>
-          <option>16</option>
-          <option>18</option>
-          <option>20</option>
-          <option>22</option>
-          <option>24</option>
-          <option>26</option>
-          <option>28</option>
-          <option>32</option>
-          <option>36</option>
-          <option>48</option>
-          <option>72</option>
-        </select>
-        <button id="btn-style-normal" class="toolbar-btn" type="button" title="보통 (서식 지우기)">보통</button>
-        <button id="btn-style-bold" class="toolbar-btn toolbar-btn-style" type="button" title="굵게"><b>B</b></button>
-        <button id="btn-style-italic" class="toolbar-btn toolbar-btn-style" type="button" title="기울임"><i>I</i></button>
-        <button id="btn-style-underline" class="toolbar-btn toolbar-btn-style" type="button" title="밑줄"><u>U</u></button>
-        <label class="toolbar-label" for="column-count-select">다단</label>
-        <select id="column-count-select" class="toolbar-select">
-          <option value="1">1단</option>
-          <option value="2">2단</option>
-          <option value="3">3단</option>
-        </select>
-        <label class="toolbar-label" for="align-select">정렬</label>
-        <select id="align-select" class="toolbar-select">
-          <option value="left">왼쪽</option>
-          <option value="center">가운데</option>
-          <option value="right">오른쪽</option>
-          <option value="justify">양쪽</option>
-        </select>
-        <label class="toolbar-label" for="line-spacing-select">줄간격</label>
-        <select id="line-spacing-select" class="toolbar-select">
-          <option value="100">100%</option>
-          <option value="120">120%</option>
-          <option value="150">150%</option>
-          <option value="160">160%</option>
-          <option value="200">200%</option>
-        </select>
-        <label class="toolbar-label" for="text-color-input">글자색</label>
-        <input id="text-color-input" class="toolbar-color" type="color" value="#000000" title="글자색 (두 번 클릭하면 기본값)">
-        <label class="toolbar-label" for="bg-color-input">배경색</label>
-        <input id="bg-color-input" class="toolbar-color" type="color" value="#ffffff" title="배경색 (두 번 클릭하면 없음)">
-        <span id="hwp-status" class="status"></span>
     </div>
 
     <div class="editor-viewport">
-        <div id="editor-container"></div>
+        <div id="editor-container" spellcheck="false"></div>
     </div>
 
     <div class="preview-toolbar" style="display:none">
