@@ -104,6 +104,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
       let charOffset = 0;
 
       const spacing = item.lineSpacing ?? defaultLineSpacing;
+      console.log(`[layout-para] idx=${idx} lines=${lines.length} lens=[${lines.map((l) => l.length).join(',')}] chars=${runs.reduce((a, r) => a + r.text.length, 0)} cur=${currentHeight} probed=${JSON.stringify(breakCache.get(breakKeyForRuns(runs, EDITOR_MAX_WIDTH)))}`);
       lines.forEach((line) => {
         const lineHeight = lineHeightOfLine(line, spacing);
 

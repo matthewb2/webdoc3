@@ -76,16 +76,19 @@ export async function computeBreaks(items: ProbeItem[], onProgress?: (done: numb
       slice.forEach((it, bi) => {
         const kids = Array.from(blocks[bi].children) as HTMLSpanElement[];
         const counts: number[] = [];
-        let lastTop = -1;
+        // 줄 구분은 offsetTop이 아니라 offsetLeft의 리셋으로 판정한다.
+        // (offsetTop은 폰트 크기에 따라 음수가 될 수 있고, 큰 글꼴과 작은 글꼴이
+        //  한 줄에 섞이면 값 차이가 커져 같은 줄을 다른 줄로 오인할 수 있음)
+        let prevLeft = -Infinity;
         let n = 0;
         kids.forEach((sp) => {
-          const top = sp.offsetTop;
-          if (lastTop < 0 || Math.abs(top - lastTop) > 2) {
-            if (lastTop >= 0) counts.push(n);
+          const left = sp.offsetLeft;
+          if (n > 0 && left < prevLeft - 0.5) {
+            counts.push(n);
             n = 0;
-            lastTop = top;
           }
           n++;
+          prevLeft = left;
         });
         counts.push(n);
         out[it.key] = counts;
