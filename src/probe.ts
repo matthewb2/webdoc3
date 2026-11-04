@@ -58,7 +58,7 @@ export async function computeBreaks(items: ProbeItem[], onProgress?: (done: numb
       const blocks: HTMLDivElement[] = [];
       slice.forEach((it) => {
         const div = document.createElement('div');
-        div.style.cssText = `position:relative;width:${it.width}px;font:16px var(--doc-font, "맑은 고딕"), Arial, sans-serif;word-break:normal;overflow-wrap:anywhere;line-height:26px;letter-spacing:normal;`;
+        div.style.cssText = `position:relative;width:${it.width}px;font:16px var(--doc-font, "바탕"), Arial, sans-serif;word-break:normal;overflow-wrap:anywhere;line-height:26px;letter-spacing:normal;`;
         it.runs.forEach((run) => {
           const fs = run.fontSize ?? 16;
           for (const ch of run.text) {

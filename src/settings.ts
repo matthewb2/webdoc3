@@ -35,7 +35,7 @@ function validAlign(v: unknown): v is TextAlign {
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
-  fontFamily: '맑은 고딕',
+  fontFamily: '바탕',
   fontSize: 16,
   uiFontFamily: '맑은 고딕',
   charShape: { bold: false, italic: false, underline: false, strike: false },

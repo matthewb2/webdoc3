@@ -182,10 +182,10 @@ function paragraphToRuns(paragraph: Paragraph, docInfo: DocInfo): TextRun[] {
   return runs;
 }
 
+
 function styledRuns(docInfo: DocInfo, text: string, shapeIndex: number): TextRun[] {
   const run: TextRun = { text };
   
-  // [오류 수정 및 방어 코드] getCharShape / getCharShpe 오타 대응
   const charShape: CharShape | undefined = 
     (typeof (docInfo as any).getCharShape === 'function' ? (docInfo as any).getCharShape(shapeIndex) : undefined) ??
     (typeof (docInfo as any).getCharShpe === 'function' ? (docInfo as any).getCharShpe(shapeIndex) : undefined);
@@ -195,24 +195,19 @@ function styledRuns(docInfo: DocInfo, text: string, shapeIndex: number): TextRun
     return [run];
   }
 
-  // HWP 파서에서 이미 fontBaseSize가 pt 단위로 스케일링되어 들어오는 경우와 HWPUNIT(100pt=10000) 단위인 경우 대응
-  // 8pt로 계산되던 원인이 비율/단위 중복 계산에 있었으므로 fontBaseSize와 fontRatio를 올바르게 보정합니다.
-  let rawBaseSize = charShape.fontBaseSize;
-  // fontBaseSize가 100 이상이면 100pt=10000 또는 pt*100 단위, 작으면 이미 pt 스케일링이 된 스케일
+  // 1. HWP 규격에 따른 폰트 기본 크기 추출 (1pt = 100 HWPUNIT)
+  let rawBaseSize = charShape.fontBaseSize ?? 1000;
   let basePt = rawBaseSize >= 100 ? rawBaseSize / 100 : rawBaseSize;
 
-  // 특정 파서 스케일에서 8pt로 축소되는 왜곡 보정 (27pt가 8pt로 추출되는 비율 = 27 / 8 = 3.375 또는 스케일 보정)
-  const ratio = (charShape.fontRatio && charShape.fontRatio[0]) ? (charShape.fontRatio[0] / 100) : 1;
-  let fontSizePt = basePt * ratio;
-
-  // 만약 스케일이 비정상적으로 축소되어 전달된 경우 (예: fontBaseSize가 8로 넘어온 경우 HWPUNIT 기준 27pt 복원)
+  // 2. 예외적인 축소 케이스 방어 보정
   if (basePt < 10 && rawBaseSize < 100) {
-    fontSizePt = basePt * (100 / 30); // 8pt -> 27pt 보정 스케일
+    basePt = basePt * (100 / 30); 
   }
 
-  run.fontSize = fontSizePt * PT_TO_PX;
+  // 3. 폰트 높이(Font Size)는 장평과 무관하게 순수 pt를 px로 변환 (1pt = 4/3px)
+  run.fontSize = basePt * PT_TO_PX;
 
-  console.log(`[CharShapeInfo] shapeIndex: ${shapeIndex}, rawBaseSize: ${rawBaseSize}, calculated fontSizePt: ${fontSizePt}, px: ${run.fontSize}`);
+  console.log(`[CharShapeInfo] shapeIndex: ${shapeIndex}, rawBaseSize: ${rawBaseSize}, fontSizePt: ${basePt}, fontSizePx: ${run.fontSize}`);
 
   const fontFace = docInfo.fontFaces[charShape.fontId[0]];
   if (fontFace && fontFace.name) {

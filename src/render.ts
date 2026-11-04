@@ -24,8 +24,9 @@ function applyRunStyle(span: HTMLSpanElement, run: any) {
   if (run.color) span.style.color = run.color;
   if (run.backgroundColor) span.style.backgroundColor = run.backgroundColor;
 }
-// [가상화] 고정 페이지 규격 기반 렌더링 (CSS .page height 900 + gap 30)
-const PAGE_PITCH = 930;
+
+// [수정] A4 규격(794 x 1123 px @ 96DPI) 기준 페이지 피치 설정 (높이 1123 + 여백/간격 40)
+const PAGE_PITCH = 1163;
 const VIRTUAL_BUFFER = 2;
 
 // 줌 스케일 (transform 기준). 가상화의 시각 px를 레이아웃 px로 환산할 때 사용
@@ -59,32 +60,40 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
   pageEl.spellcheck = false;
   pageEl.dataset.pageNumber = (pIndex + 1).toString();
 
-  // 여백 경계선: canvas로 본문 경계에 간극 없이 직선 표시 (편집 불가)
-  // 분리(detached) 노드에서도 padding은 스타일시트에서 정상 계산되나, 방어적으로 폴백 유지
+  // [수정] A4 기준 스타일 적용 (width: 794px, min-height: 1123px)
+  pageEl.style.width = '794px';
+  pageEl.style.minHeight = '1123px';
+  pageEl.style.padding = '85px'; // <-- 이 부분이 빠져 있어서 문장이 여백을 뚫고 나갔습니다.
+  pageEl.style.boxSizing = 'border-box';
+  pageEl.style.position = 'relative';
+  pageEl.style.background = 'white';
+  pageEl.style.margin = '0 auto';
+  pageEl.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+
   const padRaw = parseFloat(getComputedStyle(pageEl).paddingLeft);
-  const padPx = Number.isFinite(padRaw) && padRaw > 0 ? padRaw : 100;
+  const padPx = Number.isFinite(padRaw) && padRaw > 0 ? padRaw : 85; // A4 기본 여백 가정
   const dpr = window.devicePixelRatio || 1;
   const marginCanvas = document.createElement('canvas');
   marginCanvas.className = 'margin-lines';
-  marginCanvas.width = Math.round(800 * dpr);
-  marginCanvas.height = Math.round(900 * dpr);
-  // 스타일시트 미적용 환경에서도 절대 배치되도록 인라인 지정
+  
+  // [수정] A4 캔버스 크기 (794 x 1123)
+  marginCanvas.width = Math.round(794 * dpr);
+  marginCanvas.height = Math.round(1123 * dpr);
   marginCanvas.style.position = 'absolute';
   marginCanvas.style.top = '0';
   marginCanvas.style.left = '0';
-  marginCanvas.style.width = '800px';
-  marginCanvas.style.height = '900px';
+  marginCanvas.style.width = '794px';
+  marginCanvas.style.height = '1123px';
   marginCanvas.style.pointerEvents = 'none';
   marginCanvas.contentEditable = 'false';
+  
   const mctx = marginCanvas.getContext('2d');
   if (mctx) {
-	  console.log("mctx called");
-    // 디바이스 픽셀 스냅 (125%/150% 배율에서도 번짐 없이 표시)
     const D = (v: number) => Math.round(v * dpr);
     mctx.fillStyle = '#8a94a0';
     const tick = Math.round(18 * dpr);
     const lw = Math.max(1, Math.round(dpr));
-    const x0 = D(padPx), x1 = D(800 - padPx), y0 = D(padPx), y1 = D(900 - padPx);
+    const x0 = D(padPx), x1 = D(794 - padPx), y0 = D(padPx), y1 = D(1123 - padPx);
     mctx.fillRect(x0 - tick, y0 - lw, tick, lw);
     mctx.fillRect(x0 - lw, y0 - tick, lw, tick);
     mctx.fillRect(x1, y0 - lw, tick, lw);
@@ -96,10 +105,8 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
   }
   pageEl.appendChild(marginCanvas);
 
-  // 안전장치: pageData가 배열이 아니면 빈 페이지만 반환
   if (!Array.isArray(pageData)) return pageEl;
 
-  // 다단 그룹: 연속된 동일 단수 단락을 하나의 컬럼 박스로 묶음
   let colDiv: HTMLDivElement | null = null;
   let colDivN = 0;
   const flushColDiv = () => {
@@ -124,12 +131,10 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
       if (item.lineHeight) p.style.lineHeight = `${item.lineHeight}px`;
       if (item.lineSpacing) p.dataset.lineSpacing = String(item.lineSpacing);
 
-      // [구현] 단락 정렬 반영 (없으면 기본 정렬)
       const effectiveAlign = item.align ?? defaultAlign();
       p.style.textAlign = effectiveAlign;
       p.dataset.align = effectiveAlign;
 
-      // [구현] 왼쪽 들여쓰기 (없으면 기본값, 양수=첫 줄 들여쓰기, 음수=내어쓰기)
       const effectiveIndent = item.indent ?? defaultIndent();
       if (effectiveIndent) {
         if (effectiveIndent > 0) {
@@ -164,7 +169,6 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
     else if (item.type === 'table') {
       const table = document.createElement('table');
       table.dataset.pIdx = docIdx.toString();
-      // 이어진 조각은 맞닿은 쪽 마진 제거 (경계선에 딱 붙음)
       if (item._continued) table.style.marginTop = '0';
       if (item._continues) table.style.marginBottom = '0';
       const rows: Array<any> = item.rows || [];
@@ -183,7 +187,11 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
           const cellCount = cells.length || 1;
           const colSpan = Math.max(1, cell.colSpan ?? 1);
           const rowSpan = Math.max(1, cell.rowSpan ?? 1);
-          td.style.width = `${((600 - 1) / cellCount) * colSpan}px`;
+          
+          // [수정] 표 셀 가로 폭 기준을 A4 본문 유효 폭(예: 624px = 794 - 좌우여백 85*2)에 맞춤
+          const contentWidth = 794 - (padPx * 2);
+          td.style.width = `${(contentWidth / cellCount) * colSpan}px`;
+          
           if (colSpan > 1) td.colSpan = colSpan;
           if (rowSpan > 1) td.rowSpan = rowSpan;
 

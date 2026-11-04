@@ -6,7 +6,8 @@ export type PageModel = DocumentItem[];
 // 워커는 HMR 대상이 아니라 전체 새로고침해야 교체됨 — 실행 중인 엔진 식별용
 console.log('[worker] boot, engine bytes:', runLayoutEngineAsync.toString().length);
 
-const PAGE_MAX_HEIGHT = 700;
+// [수정] A4 규격(794 x 1123 px) 및 상하 여백(85px * 2 = 170px) 반영
+const PAGE_MAX_HEIGHT = 948; // 1123 - (170 + 안전마진 5)
 const LINE_HEIGHT = 26;
 // 기본 줄간격(%), 설정 파일 값으로 INIT_SETTINGS를 통해 갱신
 let defaultLineSpacing = 160;
@@ -14,7 +15,9 @@ let defaultLineSpacing = 160;
 export function setDefaultLineSpacing(pct: number): void {
   if (pct > 0 && isFinite(pct)) defaultLineSpacing = pct;
 }
-const EDITOR_MAX_WIDTH = 600;
+
+// [수정] A4 가로 폭(794px) 및 좌우 여백(85px * 2 = 170px) 반영
+const EDITOR_MAX_WIDTH = 624; // 794 - 170
 const TABLE_CELL_PADDING = 16;
 const TABLE_CELL_BORDER = 1;
 const TABLE_GRID_WIDTH = EDITOR_MAX_WIDTH - 1;
@@ -104,7 +107,6 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
       let charOffset = 0;
 
       const spacing = item.lineSpacing ?? defaultLineSpacing;
-      console.log(`[layout-para] idx=${idx} lines=${lines.length} lens=[${lines.map((l) => l.length).join(',')}] chars=${runs.reduce((a, r) => a + r.text.length, 0)} cur=${currentHeight} probed=${JSON.stringify(breakCache.get(breakKeyForRuns(runs, EDITOR_MAX_WIDTH)))}`);
       lines.forEach((line) => {
         const lineHeight = lineHeightOfLine(line, spacing);
 
