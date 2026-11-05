@@ -58,26 +58,52 @@ function updatePreviewFitLabel(): void {
   if (el) el.textContent = previewFit !== null ? '미리보기 (쪽맞춤, 읽기 전용)' : '미리보기 (읽기 전용)';
 }
 
-// 쪽맞춤: 클릭한 페이지 높이를 뷰포트 높이에 맞춤 (토글)
-function togglePreviewFit(pageEl: HTMLElement): void {
+// 쪽맞춤: 지정한 페이지 높이를 뷰포트 높이에 맞춤 (토글)
+function togglePreviewFit(pageEl?: HTMLElement): void {
   const viewport = document.querySelector('.preview-viewport') as HTMLDivElement | null;
   const pv = document.getElementById('preview-container') as HTMLDivElement | null;
   if (!viewport || !pv) return;
+
   if (previewFit !== null) {
     previewFit = null;
     updatePreviewFitLabel();
     applyPreviewTransform();
     return;
   }
+
+  // 지정된 페이지가 없으면 현재 뷰포트에 보이는 첫 번째 페이지 선택
+  let targetPage = pageEl;
+  if (!targetPage) {
+    const vpRect = viewport.getBoundingClientRect();
+    const pages = pv.querySelectorAll('.page');
+    for (let i = 0; i < pages.length; i++) {
+      const r = (pages[i] as HTMLElement).getBoundingClientRect();
+      if (r.bottom > vpRect.top + 1) {
+        targetPage = pages[i] as HTMLElement;
+        break;
+      }
+    }
+    if (!targetPage && pages.length > 0) {
+      targetPage = pages[0] as HTMLElement;
+    }
+  }
+
+  if (!targetPage) return;
+
   const oldZ = previewFit ?? getZoomLevel();
   const pvRect = pv.getBoundingClientRect();
-  const pgRect = pageEl.getBoundingClientRect();
+  const pgRect = targetPage.getBoundingClientRect();
   const layoutOffset = (pgRect.top - pvRect.top) / oldZ;
-  const scale = viewport.clientHeight / 900;
+
+  // 뷰포트 여백(위아래 패딩 약 40px) 고려한 실제 페이지 높이 기반 비율 계산
+  const pageHeight = targetPage.offsetHeight || 900;
+  const availableHeight = viewport.clientHeight - 40;
+  const scale = availableHeight > 0 ? availableHeight / pageHeight : 1;
+
   previewFit = Math.round(scale * 1000) / 1000;
   updatePreviewFitLabel();
   applyPreviewTransform();
-  viewport.scrollTop = 40 + layoutOffset * previewFit;
+  viewport.scrollTop = 20 + layoutOffset * previewFit;
 }
 
 function exitPreview(): void {
@@ -131,6 +157,9 @@ export function initPreviewMode(): void {
   document.getElementById('btn-preview')?.addEventListener('click', () => enterPreview());
   document.getElementById('btn-preview-edit')?.addEventListener('click', () => exitPreview());
   document.getElementById('btn-preview-close')?.addEventListener('click', () => exitPreview());
+  document.getElementById('btn-preview-fit')?.addEventListener('click', () => {
+    if (previewMode) togglePreviewFit();
+  });
   document.getElementById('preview-container')?.addEventListener('click', (e) => {
     if (!previewMode) return;
     const pg = (e.target as Element)?.closest?.('.page') as HTMLElement | null;
