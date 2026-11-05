@@ -57,7 +57,7 @@ function updatePreviewFitLabel(): void {
   const el = document.getElementById('preview-mode-label');
   if (!el) return;
   if (twoPagesMode) {
-    el.textContent = previewFit !== null ? '미리보기 (맞쪽보기 + 쪽맞춤, 읽기 전용)' : '미리보기 (맞쪽보기, 읽기 전용)';
+    el.textContent = '미리보기 (맞쪽보기, 읽기 전용)';
   } else {
     el.textContent = previewFit !== null ? '미리보기 (쪽맞춤, 읽기 전용)' : '미리보기 (읽기 전용)';
   }
@@ -119,24 +119,28 @@ function togglePreviewFit(pageEl?: HTMLElement): void {
   viewport.scrollTop = 20 + layoutOffset * previewFit;
 }
 
-// 맞쪽보기: 두 페이지씩 나란히 배치 토글
+// 맞쪽보기: 두 페이지씩 나란히 배치 토글 (페이지 세로 크기를 뷰포트 높이에 맞춤)
 function toggleTwoPagesMode(): void {
   const pv = document.getElementById('preview-container') as HTMLDivElement | null;
+  const viewport = document.querySelector('.preview-viewport') as HTMLDivElement | null;
   const btnTwo = document.getElementById('btn-preview-two-pages') || document.getElementById('btn-preview-two');
-  if (!pv) return;
-
-  // 맞쪽보기 전환 시 기존 쪽맞춤 축소 상태 해제
-  if (previewFit !== null) {
-    previewFit = null;
-  }
+  if (!pv || !viewport) return;
 
   twoPagesMode = !twoPagesMode;
   if (twoPagesMode) {
     pv.classList.add('two-pages-mode');
     btnTwo?.classList.add('active');
+
+    // 뷰포트 높이에 맞춰 페이지 세로 비율(scale) 계산
+    const firstPage = pv.querySelector('.page') as HTMLElement | null;
+    const pageHeight = firstPage?.offsetHeight || 900;
+    const availableHeight = viewport.clientHeight - 40;
+    const scale = availableHeight > 0 ? availableHeight / pageHeight : 1;
+    previewFit = Math.round(scale * 1000) / 1000;
   } else {
     pv.classList.remove('two-pages-mode');
     btnTwo?.classList.remove('active');
+    previewFit = null;
   }
 
   updatePreviewFitLabel();
