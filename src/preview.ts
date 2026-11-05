@@ -1,10 +1,10 @@
-// src/preview.ts - 읽기 전용 미리보기 모드 (쪽맞춤 포함)
+// src/preview.ts - 읽기 전용 미리보기 모드 (쪽맞춤/맞쪽보기 포함)
 import { getCachedPages, updateVisiblePages } from './render';
-
-
 import { getZoomLevel } from './listener';
 
 let previewMode = false;
+let twoPagesMode = false;
+let previewFit: number | null = null;
 
 function setVisible(selector: string, visible: boolean, display: string): void {
   const el = document.querySelector(selector) as HTMLElement | null;
@@ -18,12 +18,14 @@ function enterPreview(): void {
   const total = getCachedPages().length;
   if (total === 0) return;
   previewMode = true;
+  twoPagesMode = false;
   const all: number[] = [];
   for (let i = 0; i < total; i++) all.push(i);
   updateVisiblePages(all);
   const pv = document.getElementById('preview-container') as HTMLDivElement | null;
   if (pv) {
     pv.innerHTML = '';
+    pv.classList.remove('two-pages-mode');
     document.querySelectorAll('#editor-container .page').forEach((pg) => {
       const clone = pg.cloneNode(true) as HTMLElement;
       clone.removeAttribute('contenteditable');
@@ -41,8 +43,6 @@ function enterPreview(): void {
   setVisible('.preview-viewport', true, 'block');
 }
 
-let previewFit: number | null = null;
-
 function applyPreviewTransform(): void {
   const pv = document.getElementById('preview-container') as HTMLDivElement | null;
   if (!pv) return;
@@ -55,7 +55,12 @@ function applyPreviewTransform(): void {
 
 function updatePreviewFitLabel(): void {
   const el = document.getElementById('preview-mode-label');
-  if (el) el.textContent = previewFit !== null ? '미리보기 (쪽맞춤, 읽기 전용)' : '미리보기 (읽기 전용)';
+  if (!el) return;
+  if (twoPagesMode) {
+    el.textContent = previewFit !== null ? '미리보기 (맞쪽보기 + 쪽맞춤, 읽기 전용)' : '미리보기 (맞쪽보기, 읽기 전용)';
+  } else {
+    el.textContent = previewFit !== null ? '미리보기 (쪽맞춤, 읽기 전용)' : '미리보기 (읽기 전용)';
+  }
 }
 
 // 쪽맞춤: 지정한 페이지 높이를 뷰포트 높이에 맞춤 (토글)
@@ -106,6 +111,25 @@ function togglePreviewFit(pageEl?: HTMLElement): void {
   viewport.scrollTop = 20 + layoutOffset * previewFit;
 }
 
+// 맞쪽보기: 두 페이지씩 나란히 배치 토글
+function toggleTwoPagesMode(): void {
+  const pv = document.getElementById('preview-container') as HTMLDivElement | null;
+  const btnTwo = document.getElementById('btn-preview-two-pages') || document.getElementById('btn-preview-two');
+  if (!pv) return;
+
+  twoPagesMode = !twoPagesMode;
+  if (twoPagesMode) {
+    pv.classList.add('two-pages-mode');
+    btnTwo?.classList.add('active');
+  } else {
+    pv.classList.remove('two-pages-mode');
+    btnTwo?.classList.remove('active');
+  }
+
+  updatePreviewFitLabel();
+  applyPreviewTransform();
+}
+
 function exitPreview(): void {
   if (!previewMode) return;
   // 미리보기에서 보고 있던 페이지를 편집기에서 이어서 표시
@@ -123,10 +147,16 @@ function exitPreview(): void {
     }
   }
   previewMode = false;
+  twoPagesMode = false;
   previewFit = null;
+  
+  const btnTwo = document.getElementById('btn-preview-two-pages') || document.getElementById('btn-preview-two');
+  btnTwo?.classList.remove('active');
+
   const pv = document.getElementById('preview-container') as HTMLDivElement | null;
   if (pv) {
     pv.innerHTML = '';
+    pv.classList.remove('two-pages-mode');
     pv.style.transform = '';
     pv.style.height = '';
   }
@@ -163,6 +193,12 @@ export function initPreviewMode(): void {
   };
   document.getElementById('btn-preview-fit')?.addEventListener('click', handleFitClick);
   document.getElementById('btn-preview-fit-page')?.addEventListener('click', handleFitClick);
+
+  const handleTwoPagesClick = () => {
+    if (previewMode) toggleTwoPagesMode();
+  };
+  document.getElementById('btn-preview-two-pages')?.addEventListener('click', handleTwoPagesClick);
+  document.getElementById('btn-preview-two')?.addEventListener('click', handleTwoPagesClick);
 
   document.getElementById('preview-container')?.addEventListener('click', (e) => {
     if (!previewMode) return;
