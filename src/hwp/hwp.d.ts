@@ -60,6 +60,12 @@ declare module '@hwp.js/parser' {
 
   export interface ParagraphShape {
     align: number;
+    /** 문단 위 간격(HWPUNIT, 1/7200 inch) */
+    marginTop: number;
+    /** 문단 아래 간격(HWPUNIT, 1/7200 inch) */
+    marginBottom: number;
+    /** 줄 간격(퍼센트 등) */
+    lineSpacing: number;
   }
 
   export interface DocInfo {

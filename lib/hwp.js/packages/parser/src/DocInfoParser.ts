@@ -244,6 +244,26 @@ class DocInfoParser {
 
     const shape = new ParagraphShape()
     shape.align = getBitValue(attribute, 2, 4)
+
+    // paddingLeft, paddingRight, indent 다음에 문단 위/아래 간격이 이어진다.
+    reader.skipByte(4 * 3)
+    shape.marginTop = reader.readInt32()
+    shape.marginBottom = reader.readInt32()
+
+    const lineSpaceOld = reader.readInt32()
+    shape.lineSpacing = lineSpaceOld
+
+    // 탭 정의, 번호, 테두리 등 건너뛰기
+    reader.skipByte(14)
+    if (reader.remainByte() >= 8) {
+      const attributeV2 = reader.readUInt32()
+      const attributeV3 = reader.readUInt32()
+      const lineSpacingNew = reader.readUInt32()
+      if (lineSpacingNew > 0) {
+        shape.lineSpacing = lineSpacingNew
+      }
+    }
+
     this.result.paragraphShapes.push(shape)
   }
 

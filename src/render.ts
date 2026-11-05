@@ -130,6 +130,10 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
       p.dataset.pOffset = (item._charOffset ?? 0).toString();
       if (item.lineHeight) p.style.lineHeight = `${item.lineHeight}px`;
       if (item.lineSpacing) p.dataset.lineSpacing = String(item.lineSpacing);
+      // HWP 문단 간격(위/아래)은 margin 대신 padding으로 적용해
+      // 인접 문단의 margin collapsing으로 레이아웃 계산과 어긋나지 않게 한다.
+      if (item.spaceBefore) p.style.paddingTop = `${item.spaceBefore}px`;
+      if (item.spaceAfter) p.style.paddingBottom = `${item.spaceAfter}px`;
 
       const effectiveAlign = item.align ?? defaultAlign();
       p.style.textAlign = effectiveAlign;

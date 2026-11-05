@@ -68,6 +68,8 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
     if (!item) return;
     if (item.type === 'paragraph') {
       const columns = item.columns && item.columns > 1 ? item.columns : 1;
+      const spaceBefore = Math.max(0, item.spaceBefore ?? 0);
+      const spaceAfter = Math.max(0, item.spaceAfter ?? 0);
       if (columns > 1) {
         const runs = item.children || [];
         const lines = buildRunLines(runs, columnWidth(columns));
@@ -85,7 +87,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
           pendingCols.total += paraTotal;
           charge = Math.ceil(pendingCols.total / columns) - prevBalanced;
         }
-        if (currentHeight + charge > PAGE_MAX_HEIGHT) {
+        if (currentHeight + spaceBefore + charge > PAGE_MAX_HEIGHT) {
           if (currentPage.length > 0) {
             pages.push(currentPage);
             currentPage = [];
@@ -94,49 +96,56 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
           charge = Math.ceil(paraTotal / columns) + LINE_HEIGHT;
           pendingCols = { columns, total: paraTotal };
         }
-        const colFragment = buildParagraphFragment(lines, idx, 0, item.align, columns, item.indent, item.lineSpacing);
+        currentHeight += spaceBefore;
+        const colFragment = buildParagraphFragment(lines, idx, 0, item.align, columns, item.indent, item.lineSpacing, spaceBefore, spaceAfter);
         if (colFragment && colFragment.children.length > 0) {
           currentPage.push(colFragment);
         }
-        currentHeight += charge;
+        currentHeight += charge + spaceAfter;
       } else {
       pendingCols = null;
       const runs = item.children || [];
       const lines = buildRunLines(runs, EDITOR_MAX_WIDTH);
       let currentParagraphLines: Glyph[][] = [];
       let charOffset = 0;
+      let fragmentCount = 0;
 
       const spacing = item.lineSpacing ?? defaultLineSpacing;
-      lines.forEach((line) => {
+      lines.forEach((line, lineIndex) => {
         const lineHeight = lineHeightOfLine(line, spacing);
+        const before = lineIndex === 0 ? spaceBefore : 0;
 
-        if (currentHeight + lineHeight > PAGE_MAX_HEIGHT) {
+        if (currentHeight + before + lineHeight > PAGE_MAX_HEIGHT) {
           if (currentParagraphLines.length === 0 && currentPage.length > 0) {
             console.log(`[para-break] docIdx=${idx} cur=${currentHeight} lh=${lineHeight} text=${JSON.stringify(runs.map((r) => r.text).join('').slice(0, 30))}`);
           }
           if (currentParagraphLines.length > 0) {
-            const fragment = buildParagraphFragment(currentParagraphLines, idx, charOffset, item.align, undefined, item.indent, item.lineSpacing);
+            const fragment = buildParagraphFragment(currentParagraphLines, idx, charOffset, item.align, undefined, item.indent, item.lineSpacing, fragmentCount === 0 ? spaceBefore : undefined, undefined);
             if (fragment && fragment.children.length > 0) {
               currentPage.push(fragment);
               charOffset += fragment.children.reduce((acc, run) => acc + run.text.length, 0);
+              fragmentCount += 1;
             }
           }
           pages.push(currentPage);
           currentPage = [];
           currentHeight = 0;
+          currentHeight += before;
           currentParagraphLines = [line];
         } else {
+          currentHeight += before;
           currentParagraphLines.push(line);
         }
         currentHeight += lineHeight;
       });
 
       if (currentParagraphLines.length > 0) {
-        const fragment = buildParagraphFragment(currentParagraphLines, idx, charOffset, item.align, undefined, item.indent, item.lineSpacing);
+        const fragment = buildParagraphFragment(currentParagraphLines, idx, charOffset, item.align, undefined, item.indent, item.lineSpacing, fragmentCount === 0 ? spaceBefore : undefined, spaceAfter);
         if (fragment && fragment.children.length > 0) {
           currentPage.push(fragment);
         }
       }
+      currentHeight += spaceAfter;
       }
     } else if (item.type === 'table') {
       pendingCols = null;
@@ -331,6 +340,8 @@ function buildParagraphFragment(
   columns?: number,
   indent?: number,
   spacing?: number,
+  spaceBefore?: number,
+  spaceAfter?: number,
 ): ParagraphNode | null {
   // 정렬은 CSS text-align으로 처리한다. 스페이서 런을 넣으면 fragment 텍스트가
   // 원문과 달라져 커서 오프셋과 편집 인덱스가 어긋나므로 절대 추가하지 않는다.
@@ -352,6 +363,12 @@ function buildParagraphFragment(
   }
   if (indent) {
     fragment.indent = indent;
+  }
+  if (spaceBefore && spaceBefore > 0) {
+    fragment.spaceBefore = spaceBefore;
+  }
+  if (spaceAfter && spaceAfter > 0) {
+    fragment.spaceAfter = spaceAfter;
   }
 
   const spacingPct = spacing ?? defaultLineSpacing;

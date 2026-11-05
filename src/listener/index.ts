@@ -1,4 +1,3 @@
-// src/listener.ts - 이벤트 리스너 (워커 메시지·스크롤·선택·입력·HWP 열기)
 import type { PageModel } from '../worker/doc.worker';
 import type { CursorState } from '../types';
 import { defaultAlign, defaultFontFamily, defaultFontSize, defaultLineSpacing } from '../settings';
@@ -154,7 +153,7 @@ export function clearPendingSelection(): void {
 }
 
 // 현재 선택 영역을 문단별 모델 오프셋으로 변환 (없으면 null → 문단 전체 적용)
-function selectionRangeInParagraph(
+export function selectionRangeInParagraph(
   container: HTMLDivElement,
   docIdx: number,
   snapshot: SelSnapshot | null = null,
@@ -437,7 +436,7 @@ export function columnWidth(columns: number): number {
 }
 
 // 선택 영역에 걸친 단락들의 문서 인덱스 수집 (없으면 커서 단락)
-function selectedParagraphIndices(
+export function selectedParagraphIndices(
   container: HTMLDivElement,
   cursorDocIdx: number,
   snapshot: SelSnapshot | null = null,

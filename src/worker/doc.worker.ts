@@ -43,6 +43,38 @@ function applyDefaultShape(run: TextRun): void {
 
 self.addEventListener('message', (event: MessageEvent<any>) => {
   const message = event.data;
+  if (message.type === 'EDIT_DELETE_RANGE') {
+    const { paragraphIndex, fromCharIndex, endCharIndex } = message.payload;
+    
+    // 1. documentModel 대신 documentState를 참조하여 문단(paragraph)을 가져옵니다.
+    const paragraph = documentState[paragraphIndex];
+    if (paragraph && paragraph.type === 'paragraph' && paragraph.children) {
+      // 2. 해당 단락의 런(Run) 구조에서 fromCharIndex ~ endCharIndex 범위의 텍스트를 제거합니다.
+      // (기존에 정의된 applyRunAttrs 또는 런 분할 로직을 활용하거나 범위 슬라이싱 적용)
+      const total = paragraph.children.reduce((acc, r) => acc + (r.text?.length || 0), 0);
+      const f = Math.max(0, Math.min(fromCharIndex, total));
+      const t = Math.max(f, Math.min(endCharIndex, total));
+      
+      if (t > f) {
+        // 낮은 쪽과 높은 쪽을 각각 분할한 뒤 사이의 런 텍스트를 비우거나 제거
+        const startIdx = splitRunAt(paragraph.children, f);
+        const endIdx = splitRunAt(paragraph.children, t);
+        
+        // startIdx부터 endIdx 전까지의 런 텍스트를 빈 문자열로 만들거나 제거
+        for (let i = startIdx; i < endIdx; i++) {
+          paragraph.children[i].text = '';
+        }
+        
+        // 빈 런들 중 텍스트가 없는 것들을 정리하거나 빈 배열 방지
+        if (paragraph.children.length === 0) {
+          paragraph.children.push(seedRun());
+        }
+        
+        // 3. 레이아웃 재계산 및 렌더링 갱신 요청
+        requestLayout();
+      }
+    }
+  }
   if (message.type === 'INIT_METRICS') {
     setFontMetrics(message.payload);
   } else if (message.type === 'BREAKS') {
@@ -439,8 +471,16 @@ function editSplit(docIdx: number, charIndex: number) {
       right.push({ ...run, text: t.slice(localIndex) });
     }
   });
-  documentState[docIdx] = { type: 'paragraph', children: left.length > 0 ? left : [seedRun()], align: item.align, columns: item.columns, indent: item.indent };
-  documentState.splice(docIdx + 1, 0, { type: 'paragraph', children: right.length > 0 ? right : [seedRun()], align: item.align, columns: item.columns, indent: item.indent });
+  const paraProps = {
+    align: item.align,
+    columns: item.columns,
+    indent: item.indent,
+    lineSpacing: item.lineSpacing,
+    spaceBefore: item.spaceBefore,
+    spaceAfter: item.spaceAfter,
+  };
+  documentState[docIdx] = { type: 'paragraph', children: left.length > 0 ? left : [seedRun()], ...paraProps };
+  documentState.splice(docIdx + 1, 0, { type: 'paragraph', children: right.length > 0 ? right : [seedRun()], ...paraProps });
   requestLayout();
 }
 

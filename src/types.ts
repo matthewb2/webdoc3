@@ -21,6 +21,10 @@ export interface ParagraphNode {
   indent?: number;
   /** 줄간격(퍼센트). 기본값 160 */
   lineSpacing?: number;
+  /** 문단 위 간격(px). HWP 문단 모양의 marginTop을 변환한 값 */
+  spaceBefore?: number;
+  /** 문단 아래 간격(px). HWP 문단 모양의 marginBottom을 변환한 값 */
+  spaceAfter?: number;
   _docIdx?: number;
   _charOffset?: number;
   lineHeight?: number;

@@ -16,6 +16,15 @@
 
 class ParagraphShape {
   align: number = 0
+
+  /** 문단 위 간격(HWPUNIT, 1/7200 inch) */
+  marginTop: number = 0
+
+  /** 문단 아래 간격(HWPUNIT, 1/7200 inch) */
+  marginBottom: number = 0
+
+  /** 줄 간격(퍼센트 등) */
+  lineSpacing: number = 0
 }
 
 export default ParagraphShape

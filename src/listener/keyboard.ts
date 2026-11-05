@@ -2,7 +2,7 @@
 import type { CursorState, TextRun } from '../types';
 import { breakKeyForRuns, computeBreaks } from '../probe';
 import { getCachedPages, updateVisiblePages } from '../render';
-import { cachedParagraphInfo, clearPendingSelection, setAwaitingRender } from './index';
+import { cachedParagraphInfo, clearPendingSelection, setAwaitingRender, snapshotSelection, selectedParagraphIndices, selectionRangeInParagraph } from './index';
 import { clearCellSelection, exitCellEditMode, getCellSelection, hideCellMenu, isCellEditMode, mergeSelectedCells } from './mouse';
 
 // 편집된 단락 전체 런을 캐시된 조각에서 복원해 분절점을 다시 재고 워커에 전달
@@ -19,7 +19,6 @@ async function refreshParaBreaks(worker: Worker, docIdx: number) {
   worker.postMessage({ type: 'BREAKS', payload: await computeBreaks([{ key: breakKeyForRuns(runs, 600), runs, width: 600 }]) });
 }
 
-// 한글 조합 중에는 렌더가 조합 노드를 날려 자모가 깨지므로, main에서 렌더를 보류한다
 let composingActive = false;
 
 export function isComposingActive() {
@@ -32,7 +31,6 @@ function markEditPending() {
 
 let compAnchor: { docIdx: number; charIndex: number } | null = null;
 
-// 같은 단락 p 조각들의 DOM 텍스트를 모델 좌표로 잘라냄 (ZWSP 제외)
 function sliceDomParaText(container: HTMLDivElement, docIdx: number, fromChar: number, toChar: number): string {
   const full = Array.from(container.querySelectorAll(`p[data-p-idx="${docIdx}"]`))
     .map((p) => (p.textContent || '').replace(/\u200B/g, ''))
@@ -48,204 +46,186 @@ export function initEditorListeners(
   onCompositionEnd: () => void,
   onCompositionEditPosted: () => void,
 ) {
-// 1. 한글 글자 조합이 시작됨을 감지 (ex: 'ㄱ'을 누르는 순간)
-container.addEventListener('compositionstart', () => {
-  composingActive = true;
-  saveCursorPosition();
-  compAnchor = { docIdx: cursor.docIdx, charIndex: cursor.charIndex };
-});
-
-// 2. 한글 글자 조합이 완료됨을 감지 (ex: '가'를 쓰고 다음 글자로 넘어가거나 스페이스를 누를 때)
-container.addEventListener('compositionend', async (e: CompositionEvent) => {
-  composingActive = false;
-
-  // 글자가 완성되었으므로, 최종 완성된 글자를 워커로 전송하여 레이아웃을 다시 계산합니다.
-  if (e.data) {
+  container.addEventListener('compositionstart', () => {
+    composingActive = true;
     saveCursorPosition();
-    await refreshParaBreaks(worker, cursor.docIdx);
-      clearPendingSelection();
-      markEditPending();
-    // 조합 중간에 들어간 임시 글자 offset을 고려하여 워커에 삽입 요청
-    worker.postMessage({
-      type: 'EDIT_INSERT',
-      payload: {
-        paragraphIndex: cursor.docIdx,
-        charIndex: cursor.charIndex - e.data.length,
-        text: e.data
-      }
-    });
-    onCompositionEditPosted();
-  } else {
-    // 빈 종료(암시적 확정): 시작 앵커~현재 캐럿 사이 DOM 텍스트를 확정분으로 전송
-    saveCursorPosition();
-    let text = '';
-    let at = cursor.charIndex;
-    if (compAnchor && compAnchor.docIdx === cursor.docIdx && cursor.charIndex > compAnchor.charIndex) {
-      text = sliceDomParaText(container, cursor.docIdx, compAnchor.charIndex, cursor.charIndex);
-      at = compAnchor.charIndex;
-    }
-    if (text.length > 0) {
+    compAnchor = { docIdx: cursor.docIdx, charIndex: cursor.charIndex };
+  });
+
+  container.addEventListener('compositionend', async (e: CompositionEvent) => {
+    composingActive = false;
+    if (e.data) {
+      saveCursorPosition();
       await refreshParaBreaks(worker, cursor.docIdx);
       clearPendingSelection();
       markEditPending();
-      worker.postMessage({ type: 'EDIT_INSERT', payload: { paragraphIndex: cursor.docIdx, charIndex: at, text } });
-      cursor.charIndex = at + text.length;
+      worker.postMessage({
+        type: 'EDIT_INSERT',
+        payload: {
+          paragraphIndex: cursor.docIdx,
+          charIndex: cursor.charIndex - e.data.length,
+          text: e.data
+        }
+      });
       onCompositionEditPosted();
     } else {
-      onCompositionEnd();
-    }
-  }
-  compAnchor = null;
-});
-
-container.addEventListener('keydown', (e: KeyboardEvent) => {
-  // 한글 조합 중 엔터를 치는 경우 컴포지션 종료와 충돌하지 않도록 방어
-  if (composingActive) return;
-
-  // Ctrl/⌘+A: 가상화로 마운트 해제된 페이지를 포함해 문서 전체 선택
-  if ((e.key === 'a' || e.key === 'A') && (e.ctrlKey || e.metaKey)) {
-    if (!document.activeElement?.closest('#editor-container')) return;
-    if (cursor.isInsideTable) return;
-    e.preventDefault();
-    const total = getCachedPages().length;
-    if (total === 0) return;
-    const all: number[] = [];
-    for (let i = 0; i < total; i++) all.push(i);
-    updateVisiblePages(all);
-    const pages = Array.from(container.querySelectorAll('.page'));
-    if (pages.length === 0) return;
-    const first = pages[0];
-    const last = pages[pages.length - 1];
-    const range = document.createRange();
-    range.setStart(first, 0);
-    range.setEnd(last, last.childNodes.length);
-    const selection = window.getSelection();
-    if (!selection) return;
-    selection.removeAllRanges();
-    selection.addRange(range);
-    saveCursorPosition();
-    return;
-  }
-
-  // M: 다중 셀 선택 병합 (문단 텍스트編集中이면 타이핑 우선)
-  if ((e.key === 'm' || e.key === 'M') && !e.ctrlKey && !e.metaKey && !e.altKey) {
-    const sel = getCellSelection();
-    if (sel && (sel.r0 !== sel.r1 || sel.c0 !== sel.c1)) {
-      const selection = window.getSelection();
-      const node = selection && selection.rangeCount > 0 ? selection.anchorNode : null;
-      const el = node ? (node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element | null)) : null;
-      if (!el?.closest?.('p[data-p-idx]')) {
-        e.preventDefault();
-        hideCellMenu();
-        mergeSelectedCells(container, worker);
-        return;
+      saveCursorPosition();
+      let text = '';
+      let at = cursor.charIndex;
+      if (compAnchor && compAnchor.docIdx === cursor.docIdx && cursor.charIndex > compAnchor.charIndex) {
+        text = sliceDomParaText(container, cursor.docIdx, compAnchor.charIndex, cursor.charIndex);
+        at = compAnchor.charIndex;
+      }
+      if (text.length > 0) {
+        await refreshParaBreaks(worker, cursor.docIdx);
+        clearPendingSelection();
+        markEditPending();
+        worker.postMessage({ type: 'EDIT_INSERT', payload: { paragraphIndex: cursor.docIdx, charIndex: at, text } });
+        cursor.charIndex = at + text.length;
+        onCompositionEditPosted();
+      } else {
+        onCompositionEnd();
       }
     }
-  }
+    compAnchor = null;
+  });
 
-  // Esc: 셀 텍스트 편집 모드 종료 + 컨텍스트 메뉴 닫기
-  if (e.key === 'Escape' || e.key === 'Esc') {
-    hideCellMenu();
-    if (isCellEditMode()) {
-      e.preventDefault();
-      exitCellEditMode(container);
-      return;
+  container.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (composingActive) return;
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      console.log('[DEBUG KEYDOWN] Key pressed:', e.key, 'Selection collapsed:', window.getSelection()?.isCollapsed);
     }
-  }
+  });
 
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    saveCursorPosition();
-    if (cursor.isInsideTable) return;
-      clearPendingSelection();
-      markEditPending();
-    clearCellSelection(container);
-    worker.postMessage({ type: 'EDIT_SPLIT', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
-    cursor.docIdx += 1;
-    cursor.charIndex = 0;
-    cursor.charOffset = 0;
-  }
-});
+  container.addEventListener('beforeinput', async (e: InputEvent) => {
+    console.log('[DEBUG BEFOREINPUT] inputType:', e.inputType, 'data:', e.data);
 
-container.addEventListener('beforeinput', async (e: InputEvent) => {
-  if (e.inputType === 'insertLineBreak') return e.preventDefault();
+    if (e.inputType === 'insertLineBreak') return e.preventDefault();
+    if (composingActive) return;
 
-  if (composingActive) return;
+    // 디버깅용 Selection 상태 출력
+    const sel = window.getSelection();
+    console.log('[DEBUG SELECTION]', {
+      rangeCount: sel?.rangeCount,
+      isCollapsed: sel?.isCollapsed,
+      anchorNode: sel?.anchorNode,
+      focusNode: sel?.focusNode
+    });
 
-  if (e.inputType === 'deleteContentBackward') {
-    e.preventDefault();
-    saveCursorPosition();
-    if (cursor.charIndex <= 0) {
-      // 문단 시작점에서 백스페이스: 이전 문단과 병합 (빈 문단 삭제 포함)
-      if (cursor.docIdx <= 0 || cursor.isInsideTable) return;
-      const prev = cachedParagraphInfo(cursor.docIdx - 1);
+    const snap = snapshotSelection(container);
+    console.log('[DEBUG SNAPSHOT]', snap);
+
+    const hasRangeSelection = snap !== null && (
+      snap.anchor.docIdx !== snap.focus.docIdx || snap.anchor.charIndex !== snap.focus.charIndex
+    );
+    console.log('[DEBUG hasRangeSelection]', hasRangeSelection);
+
+    const isDeleteAction = [
+      'deleteContentBackward',
+      'deleteContentForward',
+      'deleteContent',
+      'deleteByCut',
+      'deleteByDrag'
+    ].includes(e.inputType);
+
+    if (isDeleteAction) {
+      e.preventDefault();
+      saveCursorPosition();
+
+      // 1. 범위 선택 삭제
+      if (hasRangeSelection && snap) {
+        console.log('[DEBUG ACTION] Executing Range Delete');
+        const paraIndices = selectedParagraphIndices(container, cursor.docIdx, snap);
+        for (const docIdx of paraIndices) {
+          const r = selectionRangeInParagraph(container, docIdx, snap);
+          console.log(`[DEBUG RANGE] Para ${docIdx} range:`, r);
+          if (r) {
+            await refreshParaBreaks(worker, docIdx);
+            worker.postMessage({
+              type: 'EDIT_DELETE_RANGE',
+              payload: { paragraphIndex: docIdx, fromCharIndex: r.from, endCharIndex: r.to }
+            });
+          }
+        }
+        clearPendingSelection();
+        markEditPending();
+        clearCellSelection(container);
+
+        const loStart = snap.anchor.docIdx < snap.focus.docIdx || 
+          (snap.anchor.docIdx === snap.focus.docIdx && snap.anchor.charIndex <= snap.focus.charIndex) 
+          ? snap.anchor : snap.focus;
+        cursor.docIdx = loStart.docIdx;
+        cursor.charIndex = loStart.charIndex;
+        cursor.charOffset = 0;
+        return;
+      }
+
+      console.log('[DEBUG ACTION] Fallback to single character delete (No valid range selection detected)');
+
+      // 2. 단일 백스페이스
+      if (e.inputType === 'deleteContentBackward') {
+        if (cursor.charIndex <= 0) {
+          if (cursor.docIdx <= 0 || cursor.isInsideTable) return;
+          const prev = cachedParagraphInfo(cursor.docIdx - 1);
+          const cur = cachedParagraphInfo(cursor.docIdx);
+          if (!prev.isParagraph && cur.length > 0) return;
+          await refreshParaBreaks(worker, cursor.docIdx);
+          clearPendingSelection();
+          markEditPending();
+          clearCellSelection(container);
+          worker.postMessage({ type: 'EDIT_DELETE', payload: { paragraphIndex: cursor.docIdx, charIndex: 0 } });
+          cursor.docIdx -= 1;
+          cursor.charIndex = prev.isParagraph ? prev.length : 0;
+          cursor.charOffset = 0;
+          return;
+        }
+        await refreshParaBreaks(worker, cursor.docIdx);
+        clearPendingSelection();
+        markEditPending();
+        worker.postMessage({ type: 'EDIT_DELETE', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
+        cursor.charIndex -= 1;
+        return;
+      }
+
+      // 3. 단일 딜리트
+      if (cursor.isInsideTable) return;
       const cur = cachedParagraphInfo(cursor.docIdx);
-      if (!prev.isParagraph && cur.length > 0) return;
+      if (cur.isParagraph && cur.length === 0) {
+        const next = cachedParagraphInfo(cursor.docIdx + 1);
+        const nextIsTable = next.exists && !next.isParagraph;
+        if (nextIsTable || !next.exists) {
+          const prev = cachedParagraphInfo(cursor.docIdx - 1);
+          await refreshParaBreaks(worker, cursor.docIdx);
+          clearPendingSelection();
+          markEditPending();
+          clearCellSelection(container);
+          worker.postMessage({ type: 'EDIT_DELETE_FWD', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
+          if (prev.isParagraph) {
+            cursor.docIdx -= 1;
+            cursor.charIndex = prev.length;
+            cursor.charOffset = 0;
+          }
+          return;
+        }
+      }
       await refreshParaBreaks(worker, cursor.docIdx);
       clearPendingSelection();
       markEditPending();
-      clearCellSelection(container);
-      worker.postMessage({ type: 'EDIT_DELETE', payload: { paragraphIndex: cursor.docIdx, charIndex: 0 } });
-      cursor.docIdx -= 1;
-      cursor.charIndex = prev.isParagraph ? prev.length : 0;
-      cursor.charOffset = 0;
+      if (cursor.charIndex >= cur.length && cachedParagraphInfo(cursor.docIdx + 1).isParagraph) {
+        clearCellSelection(container);
+      }
+      worker.postMessage({ type: 'EDIT_DELETE_FWD', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
       return;
     }
-    await refreshParaBreaks(worker, cursor.docIdx);
+
+    if (e.data) {
+      e.preventDefault();
+      saveCursorPosition();
+      await refreshParaBreaks(worker, cursor.docIdx);
       clearPendingSelection();
       markEditPending();
-    worker.postMessage({ type: 'EDIT_DELETE', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
-    cursor.charIndex -= 1;
-    return;
-  }
-
-  if (e.inputType === 'deleteContentForward') {
-    e.preventDefault();
-    saveCursorPosition();
-    if (cursor.isInsideTable) return;
-    const cur = cachedParagraphInfo(cursor.docIdx);
-    if (cur.isParagraph && cur.length === 0) {
-      // 빈 문단에서 DEL: 문단 자체가 사라지므로 커서를 이전 문단 끝으로 이동
-      const next = cachedParagraphInfo(cursor.docIdx + 1);
-      const nextIsTable = next.exists && !next.isParagraph;
-      if (nextIsTable || !next.exists) {
-        const prev = cachedParagraphInfo(cursor.docIdx - 1);
-        await refreshParaBreaks(worker, cursor.docIdx);
-        clearPendingSelection();
-      markEditPending();
-        clearCellSelection(container);
-        worker.postMessage({ type: 'EDIT_DELETE_FWD', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
-        if (prev.isParagraph) {
-          cursor.docIdx -= 1;
-          cursor.charIndex = prev.length;
-          cursor.charOffset = 0;
-        }
-        return;
-      }
+      worker.postMessage({ type: 'EDIT_INSERT', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex, text: e.data } });
+      cursor.charIndex += e.data.length;
     }
-    await refreshParaBreaks(worker, cursor.docIdx);
-      clearPendingSelection();
-      markEditPending();
-    // 문단 끝에서 다음 문단을 끌어올리면 인덱스가 밀리므로 선택 해제
-    if (cursor.charIndex >= cur.length && cachedParagraphInfo(cursor.docIdx + 1).isParagraph) {
-      clearCellSelection(container);
-    }
-    worker.postMessage({ type: 'EDIT_DELETE_FWD', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
-    return;
-  }
-
-  if (e.data) {
-    e.preventDefault();
-    saveCursorPosition();
-    await refreshParaBreaks(worker, cursor.docIdx);
-      clearPendingSelection();
-      markEditPending();
-    worker.postMessage({ type: 'EDIT_INSERT', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex, text: e.data } });
-    cursor.charIndex += e.data.length;
-  }
-});
-
+  });
 }
-
-// 캐시된 조각에서 문단 텍스트 길이·종류·존재 조회 (병합 커서 계산용)
-

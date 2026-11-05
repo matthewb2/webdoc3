@@ -28,6 +28,9 @@ const FONT_ATTR_STRIKE_MASK = 0b111 << 18;
 // 1pt = 96/72 px = 4/3 px
 const PT_TO_PX = 4 / 3;
 
+// HWPUNIT(1/7200 inch) -> px(96 DPI). 1pt(100 HWPUNIT) = 4/3 px
+const HWPUNIT_TO_PX = 96 / 7200;
+
 // HWP 5.0 문단 모양 정렬값: 0 양쪽정렬, 1 왼쪽, 2 오른쪽, 3 가운데 (4 배분·5 나눔은 양쪽으로 처리)
 const PARAGRAPH_ALIGN_MAP: Record<number, 'left' | 'center' | 'right' | 'justify'> = {
   0: 'justify',
@@ -66,6 +69,7 @@ function paragraphToModelItems(
   sIndex: number, 
   pIndex: number
 ): void {
+  const modelStart = model.length;
   const segments: ParagraphSegment[] = [];
 
   let text = '';
@@ -109,9 +113,12 @@ function paragraphToModelItems(
 
   flushText();
 
-  // 정렬은 문단 헤더의 shapeIndex가 가리키는 문단 모양(paragraphShapes)의 align을 따른다
-  const paraShapeAlign = docInfo.paragraphShapes[paragraph.shapeIndex]?.align;
+  // 정렬/간격은 문단 헤더의 shapeIndex가 가리키는 문단 모양(paragraphShapes)을 따른다
+  const paraShape = docInfo.paragraphShapes[paragraph.shapeIndex];
+  const paraShapeAlign = paraShape?.align;
   const paraAlign = paraShapeAlign !== undefined ? PARAGRAPH_ALIGN_MAP[paraShapeAlign] : undefined;
+  const spaceBefore = hwpUnitToPx(paraShape?.marginTop);
+  const spaceAfter = hwpUnitToPx(paraShape?.marginBottom);
 
   // 수정: 내용이 없는 빈 문단(segments가 비어있는 경우) 처리
   if (segments.length === 0) {
@@ -141,6 +148,43 @@ function paragraphToModelItems(
       }
     });
   }
+
+  applyParagraphSpacing(model, modelStart, spaceBefore, spaceAfter);
+}
+
+/**
+ * 한 HWP 문단이 여러 모델 항목(텍스트/표)으로 나뉠 수 있으므로
+ * 위 간격은 첫 문단에, 아래 간격은 마지막 문단에만 적용한다.
+ */
+function applyParagraphSpacing(
+  model: DocumentModel,
+  startIndex: number,
+  spaceBefore: number,
+  spaceAfter: number,
+): void {
+  if (spaceBefore > 0) {
+    for (let i = startIndex; i < model.length; i++) {
+      const item = model[i];
+      if (item.type === 'paragraph') {
+        item.spaceBefore = spaceBefore;
+        break;
+      }
+    }
+  }
+  if (spaceAfter > 0) {
+    for (let i = model.length - 1; i >= startIndex; i--) {
+      const item = model[i];
+      if (item.type === 'paragraph') {
+        item.spaceAfter = spaceAfter;
+        break;
+      }
+    }
+  }
+}
+
+function hwpUnitToPx(value: number | undefined): number {
+  if (typeof value !== 'number' || !isFinite(value) || value <= 0) return 0;
+  return Math.round(value * HWPUNIT_TO_PX * 100) / 100;
 }
 
 function paragraphToRuns(paragraph: Paragraph, docInfo: DocInfo): TextRun[] {
