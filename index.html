@@ -188,7 +188,7 @@
             text-overflow: ellipsis;
         }
 
-/* 드래그 앤 드롭 오버레이 */
+        /* 드래그 앤 드롭 오버레이 */
         .editor-viewport.is-dragging::before {
             content: '파일을 놓아주세요';
             position: fixed;
@@ -288,6 +288,14 @@
             box-sizing: content-box;
             text-align: left;
         }
+        /* 맞쪽보기 모드 스타일 */
+        #preview-container.two-pages-mode {
+            flex-direction: row;
+            flex-wrap: wrap;
+            justify-content: center;
+            width: 1630px;
+            min-width: 1630px;
+        }
         #preview-container > * {
             flex-shrink: 0;
         }
@@ -296,7 +304,7 @@
             cursor: pointer;
         }
 
-        /* [수정] 스크롤바와 패딩을 담당하는 뷰포트 (툴바 높이만큼 상단 여백) */
+        /* 스크롤바와 패딩을 담당하는 뷰포트 */
         .statusbar {
             position: fixed;
             left: 0;
@@ -356,35 +364,26 @@
             margin: 0;
             overflow: auto;
             -webkit-overflow-scrolling: touch;
-            padding: 40px 0; /* 상하 여백만 부여 (좌우 여백은 내부에서 통제) */
+            padding: 40px 0;
             box-sizing: border-box;
-            /* ⚠️ 브라우저 버그를 유발하는 grid/flex 정렬을 완전히 제거합니다 */
             display: block; 
-            text-align: center; /* 데스크톱 환경에서 자식을 중앙으로 보내기 위한 트리거 */
+            text-align: center;
         }
 
-        /* [수정] 에디터 컨테이너를 감싸는 안전 마진 래퍼 */
         #editor-container {
-            /* ⚠️ 인라인 블록으로 지정하여 text-align: center의 영향을 받게 함 (데스크톱 중앙 정렬) */
             display: inline-flex; 
             flex-direction: column;
             gap: 30px;
             width: 800px;
             min-width: 800px;
-            
-            /* ⚠️ 양옆에 실제 픽셀 여백을 패딩으로 강제 주입하여 모바일 좌우 여백 확보 */
             padding: 0 20px; 
-            box-sizing: content-box; /* 패딩이 800px 바깥으로 더해져 총 840px이 되도록 설정 */
-            
-            /* 텍스트 정렬이 자식에게 상속되는 것을 방지하기 위해 왼쪽 정렬로 리셋 */
+            box-sizing: content-box;
             text-align: left;
         }
-        /* 줌 높이 고정 시 페이지·스페이서가 찌그러지지 않게 수축 금지 */
         #editor-container > * {
             flex-shrink: 0;
         }
 
-        /* .page 및 하위 요소 스타일은 그대로 유지합니다 */
         .page {
             width: 800px;
             height: 900px;
@@ -396,10 +395,10 @@
             outline: none;
             -webkit-text-size-adjust: none;
         }
-        /* 다단 컬럼 (선택 영역 플로우) */
+        /* 다단 컬럼 */
         .doc-cols-2 { column-count: 2; column-gap: 20px; }
         .doc-cols-3 { column-count: 3; column-gap: 20px; }
-        /* 여백 경계선 (canvas 직선, 본문 경계에 간극 없이 표시) */
+        /* 여백 경계선 */
         .page canvas.margin-lines {
             position: absolute;
             top: 0;
@@ -423,7 +422,6 @@
             line-height: 26px;
             margin: 0;
             padding: 0;
-            /* 영문은 단어 단위로 줄바꿈 (한글은 글자 단위 유지) */
             word-break: normal;
             overflow-wrap: anywhere;
         }
@@ -441,39 +439,30 @@
             left: 0;
             top: 0;
         }
-        /* index.html <style> 내부의 표 스타일 부분을 아래 내용으로 덮어씌우세요 */
 
-table {
-    width: 599px; /* 본문 600px - collapse 외곽 절반 테두리 1px */
-    border-collapse: collapse;
-    margin: 15px 0;
-    table-layout: fixed; /* 가로 고정 픽셀 분배 */
-
-    /* 외곽선은 셀 테두리로 형성 (표 자체 테두리는 600px을 초과하므로 제거) */
-    border: none;
-}
-
-/* ⚠️ td와 함께 th(존재할 경우)까지 완벽하게 테두리를 지정합니다 */
-table td, table th {
-    /* 지정 너비에 패딩·테두리 포함 (워커 줄바꿈 폭과 일치) */
-    box-sizing: border-box;
-    /* 기존 옅은 색(#dcdfe6) 대신 살짝 더 선명한 회색(#b0b4b8)으로 변경 */
-    border: 1px solid #b0b4b8 !important; 
-    padding: 7px 8px; /* 워커의 TABLE_CELL_PADDING 규격과 매칭 */
-    font-family: var(--doc-font, '바탕'), 'Arial', sans-serif;
-    font-size: 16px;
-    line-height: 26px; /* 워커의 LINE_HEIGHT */
-    color: #333;
-    word-break: normal;
-    overflow-wrap: anywhere;
-    vertical-align: top;
-    text-align: left;
-}
-
-/* 짝수 행 배경 음영 (가독성 향상) */
-table tr:nth-child(even) {
-    background-color: #f7f9fa;
-}
+        table {
+            width: 599px;
+            border-collapse: collapse;
+            margin: 15px 0;
+            table-layout: fixed;
+            border: none;
+        }
+        table td, table th {
+            box-sizing: border-box;
+            border: 1px solid #b0b4b8 !important; 
+            padding: 7px 8px;
+            font-family: var(--doc-font, '바탕'), 'Arial', sans-serif;
+            font-size: 16px;
+            line-height: 26px;
+            color: #333;
+            word-break: normal;
+            overflow-wrap: anywhere;
+            vertical-align: top;
+            text-align: left;
+        }
+        table tr:nth-child(even) {
+            background-color: #f7f9fa;
+        }
     </style>
 </head>
 <body>
@@ -600,6 +589,8 @@ table tr:nth-child(even) {
     <div class="preview-toolbar" style="display:none">
         <span id="preview-mode-label" class="statusbar-info" title="페이지를 클릭하면 쪽맞춤으로 전환">미리보기 (읽기 전용)</span>
         <span class="statusbar-spacer"></span>
+        <button id="btn-preview-fit-page" class="toolbar-btn" type="button" title="화면에 페이지 폭 맞추기">쪽맞춤</button>
+        <button id="btn-preview-two-pages" class="toolbar-btn" type="button" title="두 페이지씩 나란히 보기">맞쪽보기</button>
         <button id="btn-preview-edit" class="toolbar-btn" type="button">편집</button>
         <button id="btn-preview-close" class="toolbar-btn" type="button">닫기</button>
     </div>
