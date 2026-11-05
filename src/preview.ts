@@ -12,6 +12,17 @@ function setVisible(selector: string, visible: boolean, display: string): void {
   el.style.display = visible ? display : 'none';
 }
 
+function updateFitButtonState(): void {
+  const btnFit = document.getElementById('btn-preview-fit') || document.getElementById('btn-preview-fit-page');
+  if (btnFit) {
+    if (previewFit !== null) {
+      btnFit.classList.add('active');
+    } else {
+      btnFit.classList.remove('active');
+    }
+  }
+}
+
 // 읽기 전용 미리보기: 전체 페이지 마운트 후 복제 렌더 (편집 DOM은 그대로 유지)
 function enterPreview(): void {
   if (previewMode) return;
@@ -55,12 +66,14 @@ function applyPreviewTransform(): void {
 
 function updatePreviewFitLabel(): void {
   const el = document.getElementById('preview-mode-label');
-  if (!el) return;
-  if (twoPagesMode) {
-    el.textContent = '미리보기 (맞쪽보기, 읽기 전용)';
-  } else {
-    el.textContent = previewFit !== null ? '미리보기 (쪽맞춤, 읽기 전용)' : '미리보기 (읽기 전용)';
+  if (el) {
+    if (twoPagesMode) {
+      el.textContent = '미리보기 (맞쪽보기, 읽기 전용)';
+    } else {
+      el.textContent = previewFit !== null ? '미리보기 (쪽맞춤, 읽기 전용)' : '미리보기 (읽기 전용)';
+    }
   }
+  updateFitButtonState();
 }
 
 // 쪽맞춤: 지정한 페이지 높이를 뷰포트 높이에 맞춤 (토글)
@@ -169,6 +182,7 @@ function exitPreview(): void {
   
   const btnTwo = document.getElementById('btn-preview-two-pages') || document.getElementById('btn-preview-two');
   btnTwo?.classList.remove('active');
+  updateFitButtonState();
 
   const pv = document.getElementById('preview-container') as HTMLDivElement | null;
   if (pv) {
