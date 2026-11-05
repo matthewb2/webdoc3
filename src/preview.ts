@@ -157,9 +157,13 @@ export function initPreviewMode(): void {
   document.getElementById('btn-preview')?.addEventListener('click', () => enterPreview());
   document.getElementById('btn-preview-edit')?.addEventListener('click', () => exitPreview());
   document.getElementById('btn-preview-close')?.addEventListener('click', () => exitPreview());
-  document.getElementById('btn-preview-fit')?.addEventListener('click', () => {
+  
+  const handleFitClick = () => {
     if (previewMode) togglePreviewFit();
-  });
+  };
+  document.getElementById('btn-preview-fit')?.addEventListener('click', handleFitClick);
+  document.getElementById('btn-preview-fit-page')?.addEventListener('click', handleFitClick);
+
   document.getElementById('preview-container')?.addEventListener('click', (e) => {
     if (!previewMode) return;
     const pg = (e.target as Element)?.closest?.('.page') as HTMLElement | null;
