@@ -266,7 +266,7 @@
             position: fixed;
             top: 46px;
             right: 0;
-            bottom: 0;
+            bottom: 28px; /* 하단 상태바 공간 확보 */
             left: 0;
             width: auto;
             height: auto;
@@ -307,8 +307,8 @@
             cursor: pointer;
         }
 
-        /* 스크롤바와 패딩을 담당하는 뷰포트 */
-        .statusbar {
+        /* 스크롤바와 패딩을 담당하는 뷰포트 / 상태바 */
+        .statusbar, .preview-statusbar {
             position: fixed;
             left: 0;
             right: 0;
@@ -599,6 +599,14 @@
     </div>
     <div class="preview-viewport" style="display:none">
         <div id="preview-container"></div>
+    </div>
+    <!-- 미리보기 전용 상태바 -->
+    <div class="preview-statusbar" style="display:none">
+        <span id="preview-cursor-page" class="statusbar-info">미리보기 모드</span>
+        <span class="statusbar-spacer"></span>
+        <button id="btn-preview-zoom-out" class="statusbar-btn" type="button" title="축소">−</button>
+        <button id="preview-zoom-label" class="statusbar-zoom" type="button">100%</button>
+        <button id="btn-preview-zoom-in" class="statusbar-btn" type="button" title="확대">＋</button>
     </div>
 
     <div id="cell-menu" class="context-menu" style="display:none">

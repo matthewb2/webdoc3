@@ -115,10 +115,17 @@ function paragraphToModelItems(
 
   // 정렬/간격은 문단 헤더의 shapeIndex가 가리키는 문단 모양(paragraphShapes)을 따른다
   const paraShape = docInfo.paragraphShapes[paragraph.shapeIndex];
+  // [디버깅 추가] paraShape 객체 전체 구조와 속성 확인
+  console.log(`[Debug] [S${sIndex}-P${pIndex}] paraShape 구조:`, paraShape);
   const paraShapeAlign = paraShape?.align;
   const paraAlign = paraShapeAlign !== undefined ? PARAGRAPH_ALIGN_MAP[paraShapeAlign] : undefined;
   const spaceBefore = hwpUnitToPx(paraShape?.marginTop);
   const spaceAfter = hwpUnitToPx(paraShape?.marginBottom);
+  
+  // [수정] HWP 문단 모양에서 줄간격(lineSpacing) 추출 
+  // HWP 파일 포맷에 따라 lineSpacing 값은 백분율(예: 180) 혹은 상대 비율(예: 1.8)로 저장됩니다.
+  // 보통 hwp.js 파서는 백분율 값(또는 퍼센트 단위 정수)을 제공하므로 그대로 가져오거나 조정합니다.
+  const lineSpacing = paraShape?.lineSpacing;
 
   // 수정: 내용이 없는 빈 문단(segments가 비어있는 경우) 처리
   if (segments.length === 0) {
@@ -127,6 +134,7 @@ function paragraphToModelItems(
       children: [{ text: '' }] // 빈 텍스트 런을 넣어 주어야 레이아웃 엔진이 빈 줄 높이를 계산합니다.
     };
     if (paraAlign) node.align = paraAlign;
+    if (lineSpacing) node.lineSpacing = lineSpacing; // 추가
     model.push(node);
   } else {
     segments.forEach((segment, segIndex) => {
@@ -141,6 +149,7 @@ function paragraphToModelItems(
           children: runs.length > 0 ? runs : [{ text: '' }] 
         };
         if (paraAlign) node.align = paraAlign;
+        if (lineSpacing !== undefined) node.lineSpacing = lineSpacing; // [추가]
         model.push(node);
       } else {
         console.log(`[Debug] [S${sIndex}-P${pIndex}] 세그먼트 #${segIndex}: 테이블 노드 변환 시작`);
