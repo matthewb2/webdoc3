@@ -84,6 +84,7 @@ function togglePreviewFit(pageEl?: HTMLElement): void {
 
   // 맞쪽보기 모드가 켜져 있다면 해제하여 한 페이지만 표시
   if (twoPagesMode) {
+    previewFit = null; // 쪽맞춤 해제
     twoPagesMode = false;
     pv.classList.remove('two-pages-mode');
     const btnTwo = document.getElementById('btn-preview-two-pages') || document.getElementById('btn-preview-two');
