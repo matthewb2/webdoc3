@@ -274,8 +274,9 @@
             overflow: auto;
             padding: 40px 0;
             box-sizing: border-box;
-            display: block;
-            text-align: center;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
             background: #f0f3f6;
         }
         #preview-container {
@@ -287,6 +288,7 @@
             padding: 0 20px;
             box-sizing: content-box;
             text-align: left;
+            margin: 0 auto;
         }
         /* 맞쪽보기 모드 스타일 */
         #preview-container.two-pages-mode {
@@ -295,6 +297,7 @@
             justify-content: center;
             width: 1630px;
             min-width: 1630px;
+            margin: 0 auto;
         }
         #preview-container > * {
             flex-shrink: 0;

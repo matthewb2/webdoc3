@@ -40,7 +40,7 @@ function enterPreview(): void {
   setVisible('.editor-viewport', false, 'block');
   setVisible('.statusbar', false, 'flex');
   setVisible('.preview-toolbar', true, 'flex');
-  setVisible('.preview-viewport', true, 'block');
+  setVisible('.preview-viewport', true, 'flex');
 }
 
 function applyPreviewTransform(): void {
@@ -164,7 +164,7 @@ function exitPreview(): void {
   setVisible('.editor-viewport', true, 'block');
   setVisible('.statusbar', true, 'flex');
   setVisible('.preview-toolbar', false, 'flex');
-  setVisible('.preview-viewport', false, 'block');
+  setVisible('.preview-viewport', false, 'none');
   if (pageNumber) {
     let target = document.querySelector(
       `#editor-container .page[data-page-number="${pageNumber}"]`,
