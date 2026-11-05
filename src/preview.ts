@@ -69,6 +69,14 @@ function togglePreviewFit(pageEl?: HTMLElement): void {
   const pv = document.getElementById('preview-container') as HTMLDivElement | null;
   if (!viewport || !pv) return;
 
+  // 맞쪽보기 모드가 켜져 있다면 해제하여 한 페이지만 표시
+  if (twoPagesMode) {
+    twoPagesMode = false;
+    pv.classList.remove('two-pages-mode');
+    const btnTwo = document.getElementById('btn-preview-two-pages') || document.getElementById('btn-preview-two');
+    btnTwo?.classList.remove('active');
+  }
+
   if (previewFit !== null) {
     previewFit = null;
     updatePreviewFitLabel();
@@ -116,6 +124,11 @@ function toggleTwoPagesMode(): void {
   const pv = document.getElementById('preview-container') as HTMLDivElement | null;
   const btnTwo = document.getElementById('btn-preview-two-pages') || document.getElementById('btn-preview-two');
   if (!pv) return;
+
+  // 맞쪽보기 전환 시 기존 쪽맞춤 축소 상태 해제
+  if (previewFit !== null) {
+    previewFit = null;
+  }
 
   twoPagesMode = !twoPagesMode;
   if (twoPagesMode) {
