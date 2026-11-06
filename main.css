@@ -547,6 +547,10 @@ html {
             font-size: 14px;
             user-select: none;
             pointer-events: none;
+            display: inline-block;
+            width: 0;
+            overflow: visible;
+            vertical-align: top;
         }
         /* 큰 글꼴이 섞여도 브라우저가 line-height보다 줄 상자를 키우지 않도록
            모든 인라인 상자를 위쪽 정렬한다. (레이아웃 엔진의 줄 높이 계산과 일치) */

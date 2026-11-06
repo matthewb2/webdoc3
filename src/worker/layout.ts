@@ -115,8 +115,13 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
       lines.forEach((line, lineIndex) => {
         const lineHeight = lineHeightOfLine(line, spacing);
         const before = lineIndex === 0 ? spaceBefore : 0;
+        
+        // 디버깅 정보 출력
+          console.log(`[layout-debug] docIdx=${idx} lineIdx=${lineIndex} currentHeight=${currentHeight} before=${before} lineHeight=${lineHeight} PAGE_MAX_HEIGHT=${PAGE_MAX_HEIGHT} sum=${currentHeight + before + lineHeight}`);
+          
 
         if (currentHeight + before + lineHeight > PAGE_MAX_HEIGHT) {
+          console.log(`[layout-break] 페이지 초과 발생! docIdx=${idx}, lineIdx=${lineIndex}, 누적높이=${currentHeight + before + lineHeight}`);
           if (currentParagraphLines.length === 0 && currentPage.length > 0) {
             console.log(`[para-break] docIdx=${idx} cur=${currentHeight} lh=${lineHeight} text=${JSON.stringify(runs.map((r) => r.text).join('').slice(0, 30))}`);
           }
