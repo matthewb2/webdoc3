@@ -133,12 +133,14 @@
     <!-- 뷰포트 안에 눈금자와 에디터 컨테이너를 함께 배치하여 스크롤바 영역을 완벽히 공유 -->
     <div class="editor-viewport">
         <div class="ruler-container">
-            <div class="ruler-track" id="ruler-track">
-                <div class="ruler-ticks" id="ruler-ticks"></div>
-                <!-- 첫 줄 들여쓰기 마커 (좌우 패딩 오차가 없으므로 기본 100px 내부 여백 기준 + 여백 보정 20px = 120px) -->
-                <div id="marker-first-line" class="ruler-marker ruler-marker-first-line" title="첫 줄 들여쓰기" style="left: 120px;"></div>
-                <!-- 왼쪽 들여쓰기 마커 (120px) -->
-                <div id="marker-left-indent" class="ruler-marker ruler-marker-left-indent" title="왼쪽 들여쓰기" style="left: 120px;"></div>
+            <div class="ruler-center">
+                <div class="ruler-track" id="ruler-track">
+                    <div class="ruler-ticks" id="ruler-ticks"></div>
+                    <!-- 첫 줄 들여쓰기 마커 (좌우 패딩 오차가 없으므로 기본 100px 내부 여백 기준 + 여백 보정 20px = 120px) -->
+                    <div id="marker-first-line" class="ruler-marker ruler-marker-first-line" title="첫 줄 들여쓰기" style="left: 120px;"></div>
+                    <!-- 왼쪽 들여쓰기 마커 (120px) -->
+                    <div id="marker-left-indent" class="ruler-marker ruler-marker-left-indent" title="왼쪽 들여쓰기" style="left: 120px;"></div>
+                </div>
             </div>
         </div>
         <div id="editor-container" spellcheck="false"></div>
@@ -186,21 +188,26 @@
 
         const MARGIN_LEFT_TRACK = 85; // 페이지 내부 패딩
         const CONTENT_WIDTH = 624; // 순수 편집 영역 너비 (794 - 85*2)
+        const TRACK_WIDTH = 794; // A4 페이지 너비
         const SCALE_STEP = 40; 
+
+        let rulerZoom = 1;
 
         function renderRulerTicks() {
             rulerTicksContainer.innerHTML = '';
+            rulerTicksContainer.style.left = `${MARGIN_LEFT_TRACK * rulerZoom}px`;
             for (let px = 0; px <= CONTENT_WIDTH; px += 10) {
+                const left = px * rulerZoom;
                 const tick = document.createElement('div');
                 tick.className = 'ruler-tick';
-                tick.style.left = `${px}px`;
+                tick.style.left = `${left}px`;
 
                 if (px % SCALE_STEP === 0) {
                     tick.classList.add('ruler-tick-major');
                     const value = (px / SCALE_STEP).toFixed(1).replace(/\.0$/, '');
                     const num = document.createElement('span');
                     num.className = 'ruler-number';
-                    num.style.left = `${px}px`;
+                    num.style.left = `${left}px`;
                     num.textContent = value;
                     rulerTicksContainer.appendChild(num);
                 } else {
@@ -209,9 +216,6 @@
                 rulerTicksContainer.appendChild(tick);
             }
         }
-        renderRulerTicks();
-
-        let activeMarker = null;
 
         function getTargetParagraph() {
             const selection = window.getSelection();
@@ -223,6 +227,41 @@
             }
             return node;
         }
+
+        function updateMarkersFromSelection() {
+            const targetP = getTargetParagraph();
+            if (!targetP) return;
+            const paddingLeft = parseFloat(window.getComputedStyle(targetP).paddingLeft) || 0;
+            const textIndent = parseFloat(window.getComputedStyle(targetP).textIndent) || 0;
+
+            leftIndentMarker.style.left = `${(MARGIN_LEFT_TRACK + paddingLeft) * rulerZoom}px`;
+            firstLineMarker.style.left = `${(MARGIN_LEFT_TRACK + textIndent) * rulerZoom}px`;
+        }
+
+        function setRulerZoom(zoom) {
+            const next = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+            const ratio = next / rulerZoom;
+            rulerZoom = next;
+
+            rulerTrack.style.width = `${TRACK_WIDTH * rulerZoom}px`;
+            renderRulerTicks();
+
+            if (getTargetParagraph()) {
+                updateMarkersFromSelection();
+            } else {
+                const leftIndent = (parseFloat(leftIndentMarker.style.left) || 0) * ratio;
+                const firstLine = (parseFloat(firstLineMarker.style.left) || 0) * ratio;
+                leftIndentMarker.style.left = `${leftIndent}px`;
+                firstLineMarker.style.left = `${firstLine}px`;
+            }
+        }
+
+        setRulerZoom(1);
+        window.addEventListener('editor-zoom', (event) => {
+            setRulerZoom(event.detail && event.detail.zoom);
+        });
+
+        let activeMarker = null;
 
         function updateGuideLine(clientX) {
             guideLine.style.left = `${clientX}px`;
@@ -239,16 +278,18 @@
         function onMouseMove(e) {
             if (!activeMarker) return;
             const rect = rulerTrack.getBoundingClientRect();
+            const margin = MARGIN_LEFT_TRACK * rulerZoom;
+            const content = CONTENT_WIDTH * rulerZoom;
             
             let posX = e.clientX - rect.left;
-            posX = Math.max(MARGIN_LEFT_TRACK, Math.min(posX, MARGIN_LEFT_TRACK + CONTENT_WIDTH));
+            posX = Math.max(margin, Math.min(posX, margin + content));
 
             activeMarker.style.left = `${posX}px`;
             
             const markerRect = activeMarker.getBoundingClientRect();
             updateGuideLine(markerRect.left + markerRect.width / 2);
 
-            const indentValue = posX - MARGIN_LEFT_TRACK;
+            const indentValue = (posX - margin) / rulerZoom;
             const targetP = getTargetParagraph();
 
             if (targetP) {
@@ -271,14 +312,7 @@
         firstLineMarker.addEventListener('mousedown', (e) => onMouseDown(e, firstLineMarker));
 
         document.addEventListener('selectionchange', () => {
-            const targetP = getTargetParagraph();
-            if (targetP) {
-                const paddingLeft = parseFloat(window.getComputedStyle(targetP).paddingLeft) || 0;
-                const textIndent = parseFloat(window.getComputedStyle(targetP).textIndent) || 0;
-
-                leftIndentMarker.style.left = `${MARGIN_LEFT_TRACK + paddingLeft}px`;
-                firstLineMarker.style.left = `${MARGIN_LEFT_TRACK + textIndent}px`;
-            }
+            updateMarkersFromSelection();
         });
     });
 </script>

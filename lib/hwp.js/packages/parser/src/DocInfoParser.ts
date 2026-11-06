@@ -255,9 +255,9 @@ class DocInfoParser {
 
     // 탭 정의, 번호, 테두리 등 건너뛰기
     reader.skipByte(14)
-    if (reader.remainByte() >= 8) {
-      const attributeV2 = reader.readUInt32()
-      const attributeV3 = reader.readUInt32()
+    if (reader.remainByte() >= 12) {
+      reader.skipByte(4) // attributeV2 (5.0.1.7+)
+      reader.skipByte(4) // attributeV3 (5.0.2.5+)
       const lineSpacingNew = reader.readUInt32()
       if (lineSpacingNew > 0) {
         shape.lineSpacing = lineSpacingNew

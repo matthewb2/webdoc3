@@ -636,6 +636,7 @@ export function initZoomControls(container: HTMLDivElement) {
     refreshZoomLayout(container);
     setRenderZoom(zoomLevel);
     updateVisiblePages();
+    window.dispatchEvent(new CustomEvent('editor-zoom', { detail: { zoom: zoomLevel } }));
   };
   outBtn.addEventListener('click', () => apply(zoomLevel - ZOOM_STEP));
   inBtn.addEventListener('click', () => apply(zoomLevel + ZOOM_STEP));
