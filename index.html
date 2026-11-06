@@ -223,11 +223,10 @@
         }
         .ruler-track {
             position: relative;
-            width: 840px;
-            min-width: 840px;
+            width: 794px;
+            min-width: 794px;
             height: 100%;
-            padding: 0 20px; /* 좌우 20px 패딩 유지 */
-            background: #ffffff;            
+            background: #f8fafc;
             overflow: visible;
             box-sizing: border-box;
             border: none; /* 기본 테두리는 제거 */
@@ -245,21 +244,20 @@
             pointer-events: none;
         }
 
-        /* 왼쪽 패딩(22px) 안쪽 경계선 */
+        /* 왼쪽 패딩 안쪽 경계선 */
         .ruler-track::before {
-            left: 22px;
+            left: 0px;
         }
 
-        /* 오른쪽 패딩(22px) 안쪽 경계선 */
+        /* 오른쪽 패딩 안쪽 경계선 */
         .ruler-track::after {
-            right: 22px;
+            right: 0px;
         }
         
         .ruler-ticks {
             position: absolute;
             top: 0;
-            left: 100px; /* 페이지 내부 패딩과 일치 */
-            width: 600px;
+            left: 85px; /* 내부 패딩과 일치 */
             height: 100%;
             pointer-events: none;
         }
@@ -480,8 +478,8 @@
             display: inline-flex; 
             flex-direction: column;
             gap: 30px;
-            width: 800px;
-            min-width: 800px;
+            width: 794px; /* A4 용지 사이즈 */
+            min-width: 794px;
             padding: 20px 20px 40px 20px; 
             box-sizing: content-box;
             text-align: left;
@@ -494,13 +492,15 @@
             width: 800px;
             height: 900px;
             background: white;
-            padding: 6.25rem; /* 6.25rem = 100px */
             box-sizing: border-box;
             position: relative;
             border : 1px solid #d8dde3;
 			-webkit-text-size-adjust: none;			
             /* 그림자 속성을 제거하여 눈금자 영역과 외곽선이 정확히 일치하도록 수정 */
             box-shadow: none !important;
+            outline: none;
+            /* 기존 속성들... */
+            margin: 0px 0px 30px !important; /* 원하는 고정 픽셀 마진으로 강제 적용 */
         }
         .doc-cols-2 { column-count: 2; column-gap: 20px; }
         .doc-cols-3 { column-count: 3; column-gap: 20px; }

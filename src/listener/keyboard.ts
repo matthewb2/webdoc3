@@ -1,9 +1,9 @@
 // src/listener/keyboard.ts - 키보드 입력 처리 (조합·Enter·삭제·삽입)
 import type { CursorState, TextRun } from '../types';
 import { breakKeyForRuns, computeBreaks } from '../probe';
-import { getCachedPages, updateVisiblePages } from '../render';
+import { getCachedPages} from '../render';
 import { cachedParagraphInfo, clearPendingSelection, setAwaitingRender, snapshotSelection, selectedParagraphIndices, selectionRangeInParagraph } from './index';
-import { clearCellSelection, exitCellEditMode, getCellSelection, hideCellMenu, isCellEditMode, mergeSelectedCells } from './mouse';
+import { clearCellSelection} from './mouse';
 
 // 편집된 단락 전체 런을 캐시된 조각에서 복원해 분절점을 다시 재고 워커에 전달
 async function refreshParaBreaks(worker: Worker, docIdx: number) {
