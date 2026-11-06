@@ -569,7 +569,7 @@ html {
 		}
 
         table {
-            width: 599px;
+            width: 100%;
             border-collapse: collapse;
             margin: 15px 0;
             table-layout: fixed;
@@ -578,16 +578,12 @@ html {
         table td, table th {
             box-sizing: border-box;
             border: 1px solid #b0b4b8 !important; 
-            padding: 7px 8px;
+            padding: 5px 5px;
             font-family: var(--doc-font, '바탕'), 'Arial', sans-serif;
-            font-size: 16px;
-            line-height: 26px;
+            font-size: 14px;
             color: #333;
             word-break: normal;
             overflow-wrap: anywhere;
             vertical-align: top;
             text-align: left;
-        }
-        table tr:nth-child(even) {
-            background-color: #f7f9fa;
         }

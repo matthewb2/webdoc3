@@ -284,7 +284,7 @@ async function initWordProcessor() {
   worker.postMessage({ type: 'INIT_METRICS', payload: fontMetrics });
 
   // 기본 문서: dev 실행 시 public의 입법예고 HWP를 바로 로드 (실패 시 더미로 폴백)
-  const defaultHwpUrl = encodeURI('/입법예고(울산광역시+남구+구세+조례+일부개정조례안).hwp');
+  const defaultHwpUrl = encodeURI('/table.hwp');
   fetch(defaultHwpUrl)
     .then((res) => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

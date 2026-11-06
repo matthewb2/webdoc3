@@ -111,6 +111,21 @@ export function initEditorListeners(
       anchorNode: sel?.anchorNode,
       focusNode: sel?.focusNode
     });
+    const rawAnchor = sel?.anchorNode ?? null;
+    let anchorElement: HTMLElement | null = null;
+    
+    if (rawAnchor) {
+      anchorElement = rawAnchor.nodeType === Node.TEXT_NODE 
+        ? rawAnchor.parentElement 
+        : (rawAnchor as HTMLElement);
+    }
+    
+    const isInsideTableElement = anchorElement?.closest('td, table') !== null;
+
+    if (cursor.isInsideTable || isInsideTableElement) {
+      console.log('[DEBUG TABLE INPUT] Inside table cell, bypassing custom beforeinput intercept.');
+      return; // 브라우저 기본 텍스트 입력 동작 허용
+    }
 
     const snap = snapshotSelection(container);
     console.log('[DEBUG SNAPSHOT]', snap);

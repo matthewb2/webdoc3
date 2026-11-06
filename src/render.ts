@@ -130,8 +130,6 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
       p.dataset.pOffset = (item._charOffset ?? 0).toString();
       if (item.lineHeight) p.style.lineHeight = `${item.lineHeight}px`;
       if (item.lineSpacing) p.dataset.lineSpacing = String(item.lineSpacing);
-      // HWP 문단 간격(위/아래)은 margin 대신 padding으로 적용해
-      // 인접 문단의 margin collapsing으로 레이아웃 계산과 어긋나지 않게 한다.
       if (item.spaceBefore) p.style.paddingTop = `${item.spaceBefore}px`;
       if (item.spaceAfter) p.style.paddingBottom = `${item.spaceAfter}px`;
 
@@ -175,11 +173,19 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
       table.dataset.pIdx = docIdx.toString();
       if (item._continued) table.style.marginTop = '0';
       if (item._continues) table.style.marginBottom = '0';
+      
+      table.style.borderCollapse = 'collapse';
+      if (item.backgroundColor) table.style.backgroundColor = item.backgroundColor;
+      if (item.background) table.style.backgroundColor = item.background;
+
       const rows: Array<any> = item.rows || [];
 
       rows.forEach((row: any, ri: number) => {
         if (!row) return;
         const tr = document.createElement('tr');
+        if (row.backgroundColor) tr.style.backgroundColor = row.backgroundColor;
+        if (row.background) tr.style.backgroundColor = row.background;
+
         const cells: Array<any> = row.cells || [];
         const modelRow = row._rowIdx ?? ri;
 
@@ -188,24 +194,78 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
           const td = document.createElement('td');
           td.dataset.r = String(modelRow);
           td.dataset.c = String(ci);
+          
+          // 셀 편집 및 이벤트 디버깅 리스너 부착
+          td.contentEditable = 'true';
+          td.style.outline = 'none';
+
+          td.addEventListener('focus', (e) => {
+            console.log(`[cell-input-debug] TD focused at row=${modelRow}, col=${ci}`, e);
+          });
+          td.addEventListener('keydown', (e) => {
+            console.log(`[cell-input-debug] TD keydown key="${e.key}" code="${e.code}" target=`, e.target);
+          });
+          td.addEventListener('input', (e) => {
+            console.log(`[cell-input-debug] TD input fired! value/text=`, td.textContent, e);
+          });
+
           const cellCount = cells.length || 1;
           const colSpan = Math.max(1, cell.colSpan ?? 1);
           const rowSpan = Math.max(1, cell.rowSpan ?? 1);
           
-          // 표 셀 가로 폭을 페이지 본문 유효 폭에 맞춤
           const contentWidth = PAGE_WIDTH - (padPx * 2);
           td.style.width = `${(contentWidth / cellCount) * colSpan}px`;
           
           if (colSpan > 1) td.colSpan = colSpan;
           if (rowSpan > 1) td.rowSpan = rowSpan;
 
+          if (cell.backgroundColor) td.style.backgroundColor = cell.backgroundColor;
+          if (cell.background) td.style.backgroundColor = cell.background;
+
+          // src/render.ts (표 셀 내부 생성 로직 수정 부분)
+
+          // 표 내부 셀 콘텐츠 생성 부문 수정
           const cellChildren: Array<any> = cell.children || [];
-          cellChildren.forEach((run: any) => {
-            const span = document.createElement('span');
-            span.innerText = run.text === '' ? '\u200B' : run.text;
-            applyRunStyle(span, run);
-            td.appendChild(span);
-          });
+          
+          if (cellChildren.length > 0 && cellChildren[0].type === 'paragraph') {
+            cellChildren.forEach((paraItem: any) => {
+              const p = document.createElement('p');
+              p.style.margin = '0';
+              p.contentEditable = 'true';
+              const pChildren: Array<any> = paraItem.children || [];
+              if (pChildren.length === 0) {
+                // 내용이 비어있어도 텍스트 노드(제로 폭 공백)를 반드시 생성하여 커서가 p가 아닌 텍스트 노드에 앵커되도록 함
+                const span = document.createElement('span');
+                span.innerText = '\u200B';
+                p.appendChild(span);
+              } else {
+                pChildren.forEach((run: any) => {
+                  const span = document.createElement('span');
+                  span.innerText = run.text === '' ? '\u200B' : run.text;
+                  applyRunStyle(span, run);
+                  p.appendChild(span);
+                });
+              }
+              td.appendChild(p);
+            });
+          } else {
+            const p = document.createElement('p');
+            p.style.margin = '0';
+            p.contentEditable = 'true';
+            if (cellChildren.length === 0) {
+              const span = document.createElement('span');
+              span.innerText = '\u200B';
+              p.appendChild(span);
+            } else {
+              cellChildren.forEach((run: any) => {
+                const span = document.createElement('span');
+                span.innerText = run.text === '' ? '\u200B' : run.text;
+                applyRunStyle(span, run);
+                p.appendChild(span);
+              });
+            }
+            td.appendChild(p);
+          }
 
           tr.appendChild(td);
         });
@@ -221,11 +281,9 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
 }
 
 export function renderVirtualPages(pages: PageModel[], isFinal: boolean) {
-  // 안전장치: pages가 배열이 아니거나 비어있으면 중단
   if (!Array.isArray(pages)) return;
   if (isFinal) {
     cachedPages = pages;
-    // 최종본은 내용이 바뀌었으므로 기존 마운트 전부 해제
     mountedPages.forEach((el) => el.remove());
     mountedPages.clear();
     loggedTableKeys.clear();
@@ -278,14 +336,12 @@ export function updateVisiblePages(forceIdx?: number | number[]) {
     return;
   }
   const [start, end] = visibleRange(forceIdx);
-  // 범위를 벗어난 페이지 DOM 제거 (메모리 절약)
   mountedPages.forEach((el, idx) => {
     if (idx < start || idx > end) {
       el.remove();
       mountedPages.delete(idx);
     }
   });
-  // DOM 재활용: 역순 insertBefore로 올바른 순서 유지
   let anchor: Node | null = bottomSpacer;
   for (let i = end; i >= start; i--) {
     let el = mountedPages.get(i);
@@ -294,57 +350,13 @@ export function updateVisiblePages(forceIdx?: number | number[]) {
       mountedPages.set(i, el);
     }
     el.style.marginBottom = i === n - 1 ? '0px' : `${PAGE_GAP}px`;
-    // 이미 올바른 위치면 DOM 이동 생략 (선택 영역 보존)
     if (el.parentNode !== rendererContainer || el.nextSibling !== anchor) {
       rendererContainer.insertBefore(el, anchor);
     }
     anchor = el;
   }
   topSpacer.style.height = `${start * PAGE_PITCH}px`;
-  // 아래쪽 미마운트 페이지도 각각 페이지 높이 + margin-bottom을 차지한다.
   bottomSpacer.style.height = end >= n - 1 ? '0px' : `${(n - 1 - end) * PAGE_PITCH}px`;
-
-  // 디버그: 페이지 전체 자식 하단 (표 다음에 단락이 같은 페이지에 있는지 확정)
-  mountedPages.forEach((el, pidx) => {
-    const pkey = `pg${pidx}:${el.children.length}`;
-    if (!loggedTableKeys.has(pkey)) {
-      loggedTableKeys.add(pkey);
-      const pr = el.getBoundingClientRect();
-      const desc = Array.from(el.children)
-        .filter((c) => !(c as HTMLElement).classList.contains('margin-lines') && c.tagName !== 'CANVAS')
-        .map((c) => {
-          const r = (c as HTMLElement).getBoundingClientRect();
-          const e = c as HTMLElement;
-          const txt = c.tagName === 'P' ? JSON.stringify((c.textContent || '').slice(0, 40)) : '';
-          return `${c.tagName}[${(e.dataset as any).pIdx ?? '-'}]:${Math.round(r.bottom - pr.top)}${txt}`;
-        }).join(' ');
-      console.log(`[page-bottom] page=${pidx + 1} kids: ${desc} contentEnd=800`);
-    }
-  });
-  // 디버그: 표 하단 vs 하단 경계선 비교 (새로 마운트된 표만 1회 출력)
-  mountedPages.forEach((el, idx) => {
-    const pageItems = cachedPages[idx] || [];
-    const tableItems = pageItems.filter((it: any) => it.type === 'table');
-    el.querySelectorAll('table').forEach((table, ti) => {
-      const key = `${idx}:${ti}:${table.rows.length}`;
-      if (loggedTableKeys.has(key)) return;
-      loggedTableKeys.add(key);
-      const boundary = el.offsetHeight - parseFloat(getComputedStyle(el).paddingBottom);
-      const bottom = table.offsetTop + table.offsetHeight;
-      const cur = tableItems[ti] as any;
-      const posInPage = pageItems.indexOf(cur);
-      const after = posInPage >= 0 ? pageItems[posInPage + 1] : undefined;
-      const nextPage = cachedPages[idx + 1];
-      const next = (after || (nextPage && nextPage[0]) || null) as any;
-      const nextDesc = !next ? 'END' : next.type === 'paragraph'
-        ? `p(${(next.children || []).map((r: any) => r.text).join('').length}ch)`
-        : `t(rows=${(next.rows || []).length})`;
-      const rowHs = Array.from(table.rows).map((r) => Math.round((r as HTMLElement).offsetHeight));
-      const firstCell = (table.rows[0]?.cells[0] as HTMLElement) || null;
-      const cw = firstCell ? (firstCell.clientWidth - parseFloat(getComputedStyle(firstCell).paddingLeft) - parseFloat(getComputedStyle(firstCell).paddingRight)).toFixed(1) : '?';
-      console.log(`[table-bottom] page=${idx + 1} table#${ti} bottom=${Math.round(bottom)} boundary=${Math.round(boundary)} gap=${Math.round(boundary - bottom)} cont=${!!cur?._continues} next=${nextDesc} pieceH=${table.offsetHeight} rows=${table.rows.length} rowHs=[${rowHs.join(',')}] cellW=${cw}`);
-    });
-  });
 }
 
 export function findCursorPageIndex(docIdx: number): number {
@@ -365,4 +377,3 @@ export function findCursorPageIndices(docIdx: number): number[] {
   }
   return out;
 }
-
