@@ -7,6 +7,7 @@ import { clearPendingSelection, initAlignCombo, initColorControls, initColumnCom
 import { initEditorListeners, isComposingActive } from './listener/keyboard';
 import { initCellSelection, paintCellSelection } from './listener/mouse';
 import { initPreviewMode } from './preview';
+import { ruler } from './ruler';
 import { parseHwpToDocumentModel } from './hwp/hwpParser';
 import logoUrl from './assets/logo.svg';
 
@@ -431,5 +432,6 @@ initColorControls(containerEl, worker, savedCursor);
 initStyleButtons(containerEl, worker, savedCursor);
 initCellSelection(containerEl, worker);
 initZoomControls(containerEl);
+ruler();
 initSave(worker);
 initPreviewMode();

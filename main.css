@@ -78,6 +78,16 @@ html {
             overflow-y: hidden;
             scrollbar-width: thin;
         }
+        /* 모바일 뷰포트에서는 리본 가로 스크롤바를 숨긴다. (스크롤 동작은 유지) */
+        @media (max-width: 768px) {
+            .ribbon-body {
+                scrollbar-width: none;
+                -ms-overflow-style: none;
+            }
+            .ribbon-body::-webkit-scrollbar {
+                display: none;
+            }
+        }
         .ribbon-group {
             display: flex;
             flex-direction: column;
@@ -491,11 +501,14 @@ html {
             background: white;
             box-sizing: border-box;
             position: relative;
-            border : 1px solid #d8dde3;
+            /* 테두리는 레이아웃 폭에 포함되지 않도록 outline으로 그린다.
+               (794px 안에서 좌우 85px 여백을 제외한 624px 본문 폭 유지) */
+            border: none;
+            outline: 1px solid #d8dde3;
+            outline-offset: -1px;
 			-webkit-text-size-adjust: none;			
             /* 그림자 속성을 제거하여 눈금자 영역과 외곽선이 정확히 일치하도록 수정 */
             box-shadow: none !important;
-            outline: none;
             /* 기존 속성들... */
             margin: 0px 0px 30px !important; /* 원하는 고정 픽셀 마진으로 강제 적용 */
         }
@@ -505,8 +518,8 @@ html {
             position: absolute;
             top: 0;
             left: 0;
-            width: 800px;
-            height: 900px;			
+            width: 794px;
+            height: 1123px;			
             pointer-events: none;
         }
         .page::after {
@@ -534,6 +547,15 @@ html {
             font-size: 14px;
             user-select: none;
             pointer-events: none;
+        }
+        /* 큰 글꼴이 섞여도 브라우저가 line-height보다 줄 상자를 키우지 않도록
+           모든 인라인 상자를 위쪽 정렬한다. (레이아웃 엔진의 줄 높이 계산과 일치) */
+        .page p > span,
+        .page td > span {
+            vertical-align: top;
+        }
+        .page p::after {
+            vertical-align: top;
         }
 		/* 단락 내부가 비어 있거나 제로위스 공백만 포함된 경우 처리 */
 		p:has(span:empty)::after {

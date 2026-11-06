@@ -1,6 +1,7 @@
 // src/render.ts - 페이지 DOM 생성 + 가상화 뷰포트
 import type { PageModel } from './worker/doc.worker';
 import { defaultAlign, defaultIndent } from './settings';
+import { PAGE_GAP, PAGE_HEIGHT, PAGE_PADDING, PAGE_PITCH, PAGE_WIDTH } from './layoutConstants';
 
 let rendererContainer!: HTMLDivElement;
 
@@ -25,8 +26,7 @@ function applyRunStyle(span: HTMLSpanElement, run: any) {
   if (run.backgroundColor) span.style.backgroundColor = run.backgroundColor;
 }
 
-// [수정] A4 규격(794 x 1123 px @ 96DPI) 기준 페이지 피치 설정 (높이 1123 + 여백/간격 40)
-const PAGE_PITCH = 1163;
+// 가상화 계산은 실제 페이지 높이 + CSS margin-bottom(PAGE_GAP)과 일치해야 한다.
 const VIRTUAL_BUFFER = 2;
 
 // 줌 스케일 (transform 기준). 가상화의 시각 px를 레이아웃 px로 환산할 때 사용
@@ -60,10 +60,10 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
   pageEl.spellcheck = false;
   pageEl.dataset.pageNumber = (pIndex + 1).toString();
 
-  // [수정] A4 기준 스타일 적용 (width: 794px, min-height: 1123px)
-  pageEl.style.width = '794px';
-  pageEl.style.minHeight = '1123px';
-  pageEl.style.padding = '85px'; // <-- 이 부분이 빠져 있어서 문장이 여백을 뚫고 나갔습니다.
+  // A4 기준 스타일 적용
+  pageEl.style.width = `${PAGE_WIDTH}px`;
+  pageEl.style.minHeight = `${PAGE_HEIGHT}px`;
+  pageEl.style.padding = `${PAGE_PADDING}px`;
   pageEl.style.boxSizing = 'border-box';
   pageEl.style.position = 'relative';
   pageEl.style.background = 'white';
@@ -71,19 +71,19 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
   pageEl.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
 
   const padRaw = parseFloat(getComputedStyle(pageEl).paddingLeft);
-  const padPx = Number.isFinite(padRaw) && padRaw > 0 ? padRaw : 85; // A4 기본 여백 가정
+  const padPx = Number.isFinite(padRaw) && padRaw > 0 ? padRaw : PAGE_PADDING; // A4 기본 여백 가정
   const dpr = window.devicePixelRatio || 1;
   const marginCanvas = document.createElement('canvas');
   marginCanvas.className = 'margin-lines';
   
-  // [수정] A4 캔버스 크기 (794 x 1123)
-  marginCanvas.width = Math.round(794 * dpr);
-  marginCanvas.height = Math.round(1123 * dpr);
+  // A4 캔버스 크기
+  marginCanvas.width = Math.round(PAGE_WIDTH * dpr);
+  marginCanvas.height = Math.round(PAGE_HEIGHT * dpr);
   marginCanvas.style.position = 'absolute';
   marginCanvas.style.top = '0';
   marginCanvas.style.left = '0';
-  marginCanvas.style.width = '794px';
-  marginCanvas.style.height = '1123px';
+  marginCanvas.style.width = `${PAGE_WIDTH}px`;
+  marginCanvas.style.height = `${PAGE_HEIGHT}px`;
   marginCanvas.style.pointerEvents = 'none';
   marginCanvas.contentEditable = 'false';
   
@@ -93,7 +93,7 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
     mctx.fillStyle = '#8a94a0';
     const tick = Math.round(18 * dpr);
     const lw = Math.max(1, Math.round(dpr));
-    const x0 = D(padPx), x1 = D(794 - padPx), y0 = D(padPx), y1 = D(1123 - padPx);
+    const x0 = D(padPx), x1 = D(PAGE_WIDTH - padPx), y0 = D(padPx), y1 = D(PAGE_HEIGHT - padPx);
     mctx.fillRect(x0 - tick, y0 - lw, tick, lw);
     mctx.fillRect(x0 - lw, y0 - tick, lw, tick);
     mctx.fillRect(x1, y0 - lw, tick, lw);
@@ -192,8 +192,8 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
           const colSpan = Math.max(1, cell.colSpan ?? 1);
           const rowSpan = Math.max(1, cell.rowSpan ?? 1);
           
-          // [수정] 표 셀 가로 폭 기준을 A4 본문 유효 폭(예: 624px = 794 - 좌우여백 85*2)에 맞춤
-          const contentWidth = 794 - (padPx * 2);
+          // 표 셀 가로 폭을 페이지 본문 유효 폭에 맞춤
+          const contentWidth = PAGE_WIDTH - (padPx * 2);
           td.style.width = `${(contentWidth / cellCount) * colSpan}px`;
           
           if (colSpan > 1) td.colSpan = colSpan;
@@ -293,7 +293,7 @@ export function updateVisiblePages(forceIdx?: number | number[]) {
       el = createPageElement(cachedPages[i], i);
       mountedPages.set(i, el);
     }
-    el.style.marginBottom = i === n - 1 ? '0px' : '30px';
+    el.style.marginBottom = i === n - 1 ? '0px' : `${PAGE_GAP}px`;
     // 이미 올바른 위치면 DOM 이동 생략 (선택 영역 보존)
     if (el.parentNode !== rendererContainer || el.nextSibling !== anchor) {
       rendererContainer.insertBefore(el, anchor);
@@ -301,7 +301,8 @@ export function updateVisiblePages(forceIdx?: number | number[]) {
     anchor = el;
   }
   topSpacer.style.height = `${start * PAGE_PITCH}px`;
-  bottomSpacer.style.height = end >= n - 1 ? '0px' : `${(n - 1 - end) * PAGE_PITCH - 30}px`;
+  // 아래쪽 미마운트 페이지도 각각 페이지 높이 + margin-bottom을 차지한다.
+  bottomSpacer.style.height = end >= n - 1 ? '0px' : `${(n - 1 - end) * PAGE_PITCH}px`;
 
   // 디버그: 페이지 전체 자식 하단 (표 다음에 단락이 같은 페이지에 있는지 확정)
   mountedPages.forEach((el, pidx) => {

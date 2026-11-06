@@ -1,13 +1,14 @@
 // src/worker/layout.ts - 레이아웃 엔진 (줄 나눔·페이지 분할·청크 스케줄링)
 import type { DocumentModel, DocumentItem, ParagraphNode, TableNode, TableRowNode, FontMetrics, TextRun } from '../types';
+import { CONTENT_HEIGHT, CONTENT_WIDTH, TABLE_GRID_WIDTH } from '../layoutConstants';
 
 export type PageModel = DocumentItem[];
 
 // 워커는 HMR 대상이 아니라 전체 새로고침해야 교체됨 — 실행 중인 엔진 식별용
 console.log('[worker] boot, engine bytes:', runLayoutEngineAsync.toString().length);
 
-// [수정] A4 규격(794 x 1123 px) 및 상하 여백(85px * 2 = 170px) 반영
-const PAGE_MAX_HEIGHT = 948; // 1123 - (170 + 안전마진 5)
+// A4 규격(794 x 1123 px) 및 상하 여백(85px * 2 = 170px) 반영
+const PAGE_MAX_HEIGHT = CONTENT_HEIGHT; // 953
 const LINE_HEIGHT = 26;
 // 기본 줄간격(%), 설정 파일 값으로 INIT_SETTINGS를 통해 갱신
 let defaultLineSpacing = 160;
@@ -16,11 +17,11 @@ export function setDefaultLineSpacing(pct: number): void {
   if (pct > 0 && isFinite(pct)) defaultLineSpacing = pct;
 }
 
-// [수정] A4 가로 폭(794px) 및 좌우 여백(85px * 2 = 170px) 반영
-const EDITOR_MAX_WIDTH = 624; // 794 - 170
+// A4 가로 폭(794px) 및 좌우 여백(85px * 2 = 170px) 반영
+const EDITOR_MAX_WIDTH = CONTENT_WIDTH; // 624
 const TABLE_CELL_PADDING = 16;
 const TABLE_CELL_BORDER = 1;
-const TABLE_GRID_WIDTH = EDITOR_MAX_WIDTH - 1;
+// TABLE_GRID_WIDTH는 layoutConstants에서 가져온다 (probe.ts와 동일 값)
 
 // 셀 내용 너비: collapse 병합 테두리 반영 실측치와 일치
 // (표 599px 중 셀 패딩 16px/셀 + 공유 내부선 1px씩 제외, 외곽선은 표 바깥)

@@ -1,9 +1,10 @@
 // src/probe.ts - 브라우저 실측 줄바꿈 (숨김 probe로 런별 분절점을 재서 워커에 전달)
 import type { BreakMap, DocumentModel, TextRun } from './types';
+import { CONTENT_WIDTH, TABLE_GRID_WIDTH } from './layoutConstants';
 
-// 워커(doc.worker.ts)의 기하 상수와 동일해야 함
-const EDITOR_W = 600;
-const TABLE_GRID_W = 599;
+// 워커(layout.ts)의 기하 상수와 동일해야 함
+const EDITOR_W = CONTENT_WIDTH;
+const TABLE_GRID_W = TABLE_GRID_WIDTH;
 const CELL_PAD = 16;
 const CELL_BD = 1;
 
