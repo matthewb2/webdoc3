@@ -578,6 +578,7 @@ html {
         table td, table th {
             box-sizing: border-box;
             border: 1px solid #b0b4b8 !important; 
+            background-color: white;
             padding: 5px 5px;
             font-family: var(--doc-font, '바탕'), 'Arial', sans-serif;
             font-size: 14px;
