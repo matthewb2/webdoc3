@@ -747,6 +747,22 @@ export function syncLineSpacingCombo() {
   setSelectValue(select, value);
 }
 
+export function initTableInsert(_container: HTMLDivElement, worker: Worker, cursor: CursorState) {
+  const btn = document.getElementById('btn-insert-table') as HTMLButtonElement | null;
+  const rowsInput = document.getElementById('table-rows-input') as HTMLSelectElement | null;
+  const colsInput = document.getElementById('table-cols-input') as HTMLSelectElement | null;
+  if (!btn || !rowsInput || !colsInput) return;
+  btn.addEventListener('mousedown', (e) => e.preventDefault());
+  btn.addEventListener('click', () => {
+    const rows = parseInt(rowsInput.value, 10) || 2;
+    const cols = parseInt(colsInput.value, 10) || 3;
+    worker.postMessage({
+      type: 'EDIT_INSERT_TABLE',
+      payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex, rows, cols },
+    });
+  });
+}
+
 export function initSave(worker: Worker) {
   document.getElementById('btn-save')?.addEventListener('click', () => {
     const filename = getCurrentFileName();

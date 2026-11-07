@@ -1,4 +1,4 @@
-import type { DocumentModel, TextRun } from '../types';
+import type { DocumentModel, TableCellNode, TableNode, TableRowNode, TextRun } from '../types';
 import { runLayoutEngineAsync, setBreaks, setDefaultLineSpacing, setFontMetrics } from './layout';
 export type { PageModel } from './layout';
 
@@ -114,6 +114,8 @@ self.addEventListener('message', (event: MessageEvent<any>) => {
     editTableRowHeight(message.payload.tableDocIdx, message.payload.rowIndex, message.payload.height);
   } else if (message.type === 'EDIT_TABLE_COL_WIDTH') {
     editTableColWidth(message.payload.tableDocIdx, message.payload.colIndex, message.payload.width);
+  } else if (message.type === 'EDIT_INSERT_TABLE') {
+    editInsertTable(message.payload.paragraphIndex, message.payload.charIndex, message.payload.rows, message.payload.cols);
   } else if (message.type === 'EDIT_COLOR') {
     editColor(message.payload.paragraphIndices, message.payload.color, message.payload.backgroundColor);
   } else if (message.type === 'EDIT_FONT_RANGE') {
@@ -507,6 +509,52 @@ function editSplit(docIdx: number, charIndex: number) {
   };
   documentState[docIdx] = { type: 'paragraph', children: left.length > 0 ? left : [seedRun()], ...paraProps };
   documentState.splice(docIdx + 1, 0, { type: 'paragraph', children: right.length > 0 ? right : [seedRun()], ...paraProps });
+  requestLayout();
+}
+
+function editInsertTable(docIdx: number, charIndex: number, rows: number, cols: number) {
+  const rCount = Math.max(1, Math.min(50, Math.floor(rows) || 2));
+  const cCount = Math.max(1, Math.min(50, Math.floor(cols) || 2));
+  const tableRows: TableRowNode[] = [];
+  for (let r = 0; r < rCount; r++) {
+    const cells: TableCellNode[] = [];
+    for (let c = 0; c < cCount; c++) {
+      cells.push({ type: 'table-cell', children: [{ text: '' }] });
+    }
+    tableRows.push({ type: 'table-row', cells });
+  }
+  const table: TableNode = { type: 'table', rows: tableRows };
+
+  const item = documentState[docIdx];
+  if (item?.type === 'paragraph') {
+    const { runIndex, localIndex } = locateRun(item.children, Math.max(0, charIndex));
+    const left: TextRun[] = [];
+    const right: TextRun[] = [];
+    item.children.forEach((run, i) => {
+      const t = run.text || '';
+      if (i < runIndex) left.push(run);
+      else if (i > runIndex) right.push(run);
+      else {
+        left.push({ ...run, text: t.slice(0, localIndex) });
+        right.push({ ...run, text: t.slice(localIndex) });
+      }
+    });
+    const paraProps = {
+      align: item.align,
+      columns: item.columns,
+      indent: item.indent,
+      lineSpacing: item.lineSpacing,
+      spaceBefore: item.spaceBefore,
+      spaceAfter: item.spaceAfter,
+    };
+    const leftPara = { type: 'paragraph' as const, children: left.length > 0 ? left : [seedRun()], ...paraProps };
+    const rightPara = { type: 'paragraph' as const, children: right.length > 0 ? right : [seedRun()], ...paraProps };
+    documentState.splice(docIdx, 1, leftPara, table, rightPara);
+  } else {
+    const insertAt = Math.min(Math.max(0, docIdx + 1), documentState.length);
+    const emptyPara = { type: 'paragraph' as const, children: [seedRun()] };
+    documentState.splice(insertAt, 0, table, emptyPara);
+  }
   requestLayout();
 }
 
