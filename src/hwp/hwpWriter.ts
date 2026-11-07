@@ -691,13 +691,13 @@ export class HwpWriter {
     return concat(parts);
   }
 
-  // 선행 컨트롤 확장 문자 (코드 2 + 12B 버퍼 + 에코)
+  // 확장 컨트롤 문자 (code + 12B 버퍼 + echo)
   // 버퍼는 원본과 동일 바이트 (0 채움 시 한컴이 공백으로 렌더링할 수 있음)
-  private controlChar(out: ByteBuilder, bufHex: string | null = null): void {
-    out.u16le(2);
+  private controlChar(out: ByteBuilder, bufHex: string | null = null, code = 2): void {
+    out.u16le(code);
     if (bufHex) out.raw(hexBytes(bufHex));
     else for (let i = 0; i < 12; i++) out.u8(0);
-    out.u16le(2);
+    out.u16le(code);
   }
 
   private leadingBuf(name: string): string | null {
@@ -872,12 +872,12 @@ export class HwpWriter {
     parts.push(packRecord(TAG_PARA_HEADER, 0, header.build()));
     const text = new ByteBuilder();
     leading.forEach((name) => this.controlChar(text, this.leadingBuf(name)));
-    this.controlChar(text); // 표 컨트롤
+    this.controlChar(text, null, 11); // 표 컨트롤 (GSO/TABLE, char 11)
     text.u16le(13); // 단락 끝 문자
     parts.push(packRecord(TAG_PARA_TEXT, 1, text.build()));
     if (leading.length > 0) parts.push(...this.buildSectionCtrls(0));
     parts.push(packRecord(TAG_CTRL_HEADER, 1, this.buildCtrlHeader()));
-    parts.push(packRecord(TAG_TABLE, 1, this.buildTableRecord(table)));
+    parts.push(packRecord(TAG_TABLE, 2, this.buildTableRecord(table)));
     const cols = this.tableCols(table);
     table.rows.forEach((row, r) => {
       for (let c = 0; c < cols; c++) {
@@ -954,11 +954,11 @@ export class HwpWriter {
     list.u16le(0);
     list.u16le(0); // padding ×4
     list.u16le(1); // borderFillId (저장값 +1)
-    parts.push(packRecord(TAG_LIST_HEADER, 1, list.build()));
+    parts.push(packRecord(TAG_LIST_HEADER, 3, list.build()));
     if (hasText) {
       const para: ParagraphNode = { type: 'paragraph', children: children as TextRun[] };
       if (cell && cell.align) para.align = cell.align as TextAlign;
-      parts.push(...this.buildParagraph(para, 2));
+      parts.push(...this.buildParagraph(para, 4));
     }
     return parts;
   }
