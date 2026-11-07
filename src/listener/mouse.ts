@@ -77,8 +77,6 @@ export function paintCellSelection(container?: HTMLDivElement): void {
       `td[data-r="${cellEdit.r}"][data-c="${cellEdit.c}"]`,
     ) as HTMLElement | null;
     if (td) {
-      td.style.outline = '2px solid #4a90d9';
-      td.style.outlineOffset = '-2px';
       td.style.backgroundColor = '#ffffff';
       td.dataset.celledit = '1';
     }
