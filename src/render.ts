@@ -247,6 +247,10 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
       if (item._continues) table.style.marginBottom = '0';
       
       table.style.borderCollapse = 'collapse';
+      if (item.colWidths && item.colWidths.length > 0) {
+        const totalW = item.colWidths.reduce((a: number, b: number) => a + (b || 0), 0);
+        if (totalW > 0) table.style.width = `${totalW}px`;
+      }
       if (item.backgroundColor) table.style.backgroundColor = item.backgroundColor;
       if (item.background) table.style.backgroundColor = item.background;
 
