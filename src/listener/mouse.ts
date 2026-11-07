@@ -162,8 +162,13 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
     if (e.button !== 0) return;
     const td = (e.target as Element)?.closest?.('td');
     if (cellEdit) {
-      // 편집 모드: 편집 셀 안이면 텍스트 선택에 맡김, 밖이면 모드 종료 후 일반 처리
-      if (td && container.contains(td) && sameCell(cellEdit, td as HTMLTableCellElement)) return;
+      // 편집 모드: 같은 셀 안이면 텍스트 선택을 허용하되, 다른 셀로 드래그 시
+      // 다중 셀 선택으로 전환할 수 있도록 드래그 기준점을 잡아둔다.
+      if (td && container.contains(td) && sameCell(cellEdit, td as HTMLTableCellElement)) {
+        cellAnchor = cellEdit;
+        cellDragging = true;
+        return;
+      }
       exitCellEditMode(container);
     }
     if (!td || !container.contains(td)) {
@@ -213,12 +218,19 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
     paintCellSelection(container);
   });
   container.addEventListener('mousemove', (e: MouseEvent) => {
-    if (cellEdit) return;
     if (!cellDragging || !cellAnchor || e.buttons !== 1) return;
     const td = (e.target as Element)?.closest?.('td');
     if (!td || !container.contains(td)) return;
     const pos = cellPosFromTd(td as HTMLTableCellElement);
     if (!pos || pos.tableDocIdx !== cellAnchor.tableDocIdx) return;
+
+    // 입력 모드 중 같은 표의 다른 셀로 드래그하면 셀 선택 모드로 전환
+    if (cellEdit) {
+      if (sameCell(cellEdit, td as HTMLTableCellElement)) return;
+      cellEdit = null;
+      window.getSelection()?.removeAllRanges();
+    }
+
     cellSel = {
       tableDocIdx: pos.tableDocIdx,
       r0: Math.min(cellAnchor.r, pos.r),
