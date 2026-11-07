@@ -180,7 +180,6 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
     cellAnchor = pos;
     cellDragging = true;
     cellSel = { tableDocIdx: pos.tableDocIdx, r0: pos.r, r1: pos.r, c0: pos.c, c1: pos.c };
-    paintCellSelection(container);
   });
   container.addEventListener('dblclick', (e: MouseEvent) => {
     const td = (e.target as Element)?.closest?.('td');
@@ -231,15 +230,18 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
       window.getSelection()?.removeAllRanges();
     }
 
-    cellSel = {
+    const next: CellSel = {
       tableDocIdx: pos.tableDocIdx,
       r0: Math.min(cellAnchor.r, pos.r),
       r1: Math.max(cellAnchor.r, pos.r),
       c0: Math.min(cellAnchor.c, pos.c),
       c1: Math.max(cellAnchor.c, pos.c),
     };
+    // 단일 셀 범위(클릭 유지/입력 진입 대기)에서는 선택 강조를 그리지 않아 깜빡임 방지
+    const isSingle = next.r0 === next.r1 && next.c0 === next.c1;
+    cellSel = next;
     window.getSelection()?.removeAllRanges();
-    paintCellSelection(container);
+    if (!isSingle) paintCellSelection(container);
   });
   document.addEventListener('mouseup', () => {
     if (!cellDragging) return;
