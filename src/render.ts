@@ -53,6 +53,62 @@ function ensureSpacers() {
   }
 }
 
+function cellParagraphHasText(p: HTMLElement): boolean {
+  return (p.textContent || '').replace(/\u200B/g, '').length > 0;
+}
+
+function resetCellParagraph(p: HTMLElement) {
+  p.innerHTML = '';
+  const span = document.createElement('span');
+  span.innerText = '\u200B';
+  p.appendChild(span);
+}
+
+function firstTextNode(el: Node): Text | null {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  return walker.nextNode() as Text | null;
+}
+
+// 표 셀에서 Enter를 눌렀을 때 브라우저 기본 동작은 <p><br></p>를 삽입한다.
+// 이 경우 문단 끝의 ↵ 표시가 <br> 다음 줄로 밀려 빈 줄이 하나 더 생긴다.
+// 커서 뒤 내용을 새 <p>로 직접 옮기고 빈 문단에는 제로폭 공백을 넣어
+// Enter 한 번당 정확히 한 줄만 늘어나도록 한다.
+function insertTableCellParagraph(td: HTMLTableCellElement): boolean {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return false;
+  if (!sel.isCollapsed) sel.deleteFromDocument();
+  const range = sel.getRangeAt(0);
+
+  const startEl = range.startContainer.nodeType === Node.TEXT_NODE
+    ? range.startContainer.parentElement
+    : (range.startContainer as HTMLElement);
+  const currentP = startEl?.closest('p') as HTMLParagraphElement | null;
+  if (!currentP || !td.contains(currentP)) return false;
+
+  const newP = document.createElement('p');
+  newP.style.margin = '0';
+  newP.contentEditable = 'true';
+
+  const tail = document.createRange();
+  tail.setStart(range.startContainer, range.startOffset);
+  tail.setEnd(currentP, currentP.childNodes.length);
+  newP.appendChild(tail.extractContents());
+
+  if (!cellParagraphHasText(currentP)) resetCellParagraph(currentP);
+  if (!cellParagraphHasText(newP)) resetCellParagraph(newP);
+
+  currentP.after(newP);
+
+  const target = firstTextNode(newP);
+  const caret = document.createRange();
+  if (target) caret.setStart(target, 0);
+  else caret.selectNodeContents(newP);
+  caret.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(caret);
+  return true;
+}
+
 function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement {
   const pageEl = document.createElement('div');
   pageEl.className = 'page';
@@ -69,6 +125,22 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
   pageEl.style.background = 'white';
   pageEl.style.margin = '0 auto';
   pageEl.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+
+  // 표 셀 안에서 Enter를 누르면 브라우저 기본 동작(<p><br></p> 삽입)이
+  // 문단 끝의 ↵ 표시를 다음 줄로 밀어 빈 줄을 만든다. 페이지 단위에서
+  // 가로채 커서 뒤 내용을 새 문단으로 직접 옮긴다.
+  // (keydown 이벤트는 현재 포커스된 편집 루트인 .page로 전달되므로 페이지에 건다)
+  pageEl.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key !== 'Enter' || e.isComposing || e.shiftKey) return;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !sel.anchorNode) return;
+    const anchor = sel.anchorNode;
+    const anchorEl = anchor.nodeType === Node.TEXT_NODE ? anchor.parentElement : (anchor as Element);
+    const td = anchorEl?.closest('td') as HTMLTableCellElement | null;
+    if (!td || !pageEl.contains(td)) return;
+    // 삽입이 실제로 일어난 경우에만 기본 동작을 막는다.
+    if (insertTableCellParagraph(td)) e.preventDefault();
+  });
 
   const padRaw = parseFloat(getComputedStyle(pageEl).paddingLeft);
   const padPx = Number.isFinite(padRaw) && padRaw > 0 ? padRaw : PAGE_PADDING; // A4 기본 여백 가정
@@ -195,19 +267,9 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
           td.dataset.r = String(modelRow);
           td.dataset.c = String(ci);
           
-          // 셀 편집 및 이벤트 디버깅 리스너 부착
+          // 셀 편집 활성화
           td.contentEditable = 'true';
           td.style.outline = 'none';
-
-          td.addEventListener('focus', (e) => {
-            console.log(`[cell-input-debug] TD focused at row=${modelRow}, col=${ci}`, e);
-          });
-          td.addEventListener('keydown', (e) => {
-            console.log(`[cell-input-debug] TD keydown key="${e.key}" code="${e.code}" target=`, e.target);
-          });
-          td.addEventListener('input', (e) => {
-            console.log(`[cell-input-debug] TD input fired! value/text=`, td.textContent, e);
-          });
 
           const cellCount = cells.length || 1;
           const colSpan = Math.max(1, cell.colSpan ?? 1);
