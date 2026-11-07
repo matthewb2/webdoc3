@@ -3,7 +3,7 @@ import type { PageModel } from './worker/doc.worker';
 import { defaultFontFamily, defaultUiFontFamily, initSettings, loadSettings } from './settings';
 import { collectProbeItems, computeBreaks } from './probe';
 import { appendStreamPages, findCursorPageIndices, getCachedPages, initRenderer, renderVirtualPages, updateVisiblePages } from './render';
-import { clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFontCombos, initFileOpen, initLineSpacingCombo, initSave, initSelectionListener, initStyleButtons, initTableInsert, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncLineSpacingCombo, syncStyleButtons, takePendingSelection } from './listener';
+import { clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFontCombos, initFileOpen, initLineSpacingCombo, initNewDocument, initSave, initSelectionListener, initStyleButtons, initTableInsert, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncLineSpacingCombo, syncStyleButtons, takePendingSelection } from './listener';
 import { initEditorListeners, isComposingActive } from './listener/keyboard';
 import { initCellSelection, paintCellSelection } from './listener/mouse';
 import { initPreviewMode } from './preview';
@@ -372,6 +372,7 @@ function buildMockDocument(): DocumentModel {
 
 initRenderer(containerEl);
 initWordProcessor();
+initNewDocument(containerEl, worker, savedCursor);
 initFileOpen(worker, containerEl);
 let pendingPages: PageModel[] | null = null;
 

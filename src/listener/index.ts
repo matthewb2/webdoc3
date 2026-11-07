@@ -763,6 +763,30 @@ export function initTableInsert(_container: HTMLDivElement, worker: Worker, curs
   });
 }
 
+export function initNewDocument(container: HTMLDivElement, worker: Worker, cursor: CursorState) {
+  const btn = document.getElementById('btn-new-file') as HTMLButtonElement | null;
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    const hwpStatus = document.getElementById('hwp-status') as HTMLSpanElement | null;
+    const model = [{ type: 'paragraph' as const, children: [{ text: '' }] }];
+    worker.postMessage({ type: 'BREAKS', payload: await computeBreaks(collectProbeItems(model as any)) });
+    worker.postMessage({ type: 'INIT_DOC', payload: model });
+    currentFileName = null;
+    cursor.docIdx = 0;
+    cursor.charIndex = 0;
+    cursor.charOffset = 0;
+    cursor.isInsideTable = false;
+    cursor.rowIndex = 0;
+    cursor.cellIndex = 0;
+    cursor.pageNumber = 0;
+    clearPendingSelection();
+    clearCellSelection(container);
+    const viewport = document.querySelector('.editor-viewport') as HTMLDivElement | null;
+    if (viewport) viewport.scrollTop = 0;
+    if (hwpStatus) hwpStatus.textContent = '새 문서';
+  });
+}
+
 export function initSave(worker: Worker) {
   document.getElementById('btn-save')?.addEventListener('click', () => {
     const filename = getCurrentFileName();
