@@ -3,7 +3,7 @@ import type { CursorState, TextRun } from '../types';
 import { breakKeyForRuns, computeBreaks } from '../probe';
 import { getCachedPages} from '../render';
 import { cachedParagraphInfo, clearPendingSelection, setAwaitingRender, snapshotSelection, selectedParagraphIndices, selectionRangeInParagraph } from './index';
-import { clearCellSelection, selectCellFromInputMode } from './mouse';
+import { clearCellSelection, selectCellFromInputMode, extendCellSelection } from './mouse';
 
 // 편집된 단락 전체 런을 캐시된 조각에서 복원해 분절점을 다시 재고 워커에 전달
 async function refreshParaBreaks(worker: Worker, docIdx: number) {
@@ -129,6 +129,17 @@ export function initEditorListeners(
         if (idx < 0) return;
         const next = cells[idx + (e.shiftKey ? -1 : 1)];
         if (next) focusTableCell(next);
+        return;
+      }
+    }
+    if (e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const dir =
+        e.key === 'ArrowLeft' ? [0, -1] :
+        e.key === 'ArrowRight' ? [0, 1] :
+        e.key === 'ArrowUp' ? [-1, 0] :
+        e.key === 'ArrowDown' ? [1, 0] : null;
+      if (dir && extendCellSelection(container, dir[0], dir[1])) {
+        e.preventDefault();
         return;
       }
     }

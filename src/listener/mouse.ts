@@ -120,6 +120,42 @@ export function selectCellFromInputMode(container?: HTMLDivElement): boolean {
   return true;
 }
 
+export function extendCellSelection(container: HTMLDivElement, dr: number, dc: number): boolean {
+  if (cellEdit || !cellSel) return false;
+  const table = container.querySelector(`table[data-p-idx="${cellSel.tableDocIdx}"]`) as HTMLTableElement | null;
+  if (!table) return false;
+
+  let maxR = 0;
+  let maxC = 0;
+  table.querySelectorAll('td[data-r][data-c]').forEach((td) => {
+    const r = parseInt((td as HTMLElement).dataset.r || '', 10);
+    const c = parseInt((td as HTMLElement).dataset.c || '', 10);
+    if (!isNaN(r) && r > maxR) maxR = r;
+    if (!isNaN(c) && c > maxC) maxC = c;
+  });
+
+  if (!cellAnchor || cellAnchor.tableDocIdx !== cellSel.tableDocIdx) {
+    cellAnchor = { tableDocIdx: cellSel.tableDocIdx, r: cellSel.r0, c: cellSel.c0 };
+  }
+  const ar = cellAnchor.r;
+  const ac = cellAnchor.c;
+  let fr = ar === cellSel.r0 ? cellSel.r1 : cellSel.r0;
+  let fc = ac === cellSel.c0 ? cellSel.c1 : cellSel.c0;
+  fr = Math.max(0, Math.min(maxR, fr + dr));
+  fc = Math.max(0, Math.min(maxC, fc + dc));
+
+  cellSel = {
+    tableDocIdx: cellSel.tableDocIdx,
+    r0: Math.min(ar, fr),
+    r1: Math.max(ar, fr),
+    c0: Math.min(ac, fc),
+    c1: Math.max(ac, fc),
+  };
+  window.getSelection()?.removeAllRanges();
+  paintCellSelection(container);
+  return true;
+}
+
 function collapseCaretToCell(container: HTMLDivElement, sel: CellSel): void {
   const table = container.querySelector(`table[data-p-idx="${sel.tableDocIdx}"]`);
   const td = table?.querySelector(`td[data-r="${sel.r0}"][data-c="${sel.c0}"]`);
