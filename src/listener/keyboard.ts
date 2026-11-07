@@ -171,9 +171,11 @@ export function initEditorListeners(
         : (rawAnchor as HTMLElement);
     }
     
-    const isInsideTableElement = anchorElement?.closest('td, table') !== null;
+    const targetEl = e.target instanceof Element ? e.target : (e.target as Node | null)?.parentElement;
+    const isInsideTableElement =
+      !!anchorElement?.closest('td, th') || !!targetEl?.closest?.('td, th');
 
-    if (cursor.isInsideTable || isInsideTableElement) {
+    if (isInsideTableElement) {
       console.log('[DEBUG TABLE INPUT] Inside table cell, bypassing custom beforeinput intercept.');
       return; // 브라우저 기본 텍스트 입력 동작 허용
     }
