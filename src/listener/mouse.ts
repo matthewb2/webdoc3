@@ -194,8 +194,57 @@ export function mergeSelectedCells(container: HTMLDivElement, worker: Worker): b
 }
 
 export function initCellSelection(container: HTMLDivElement, worker: Worker) {
+  let rowResize: { table: HTMLTableElement; tableDocIdx: number; rowIndex: number; tr: HTMLTableRowElement; startY: number; startH: number } | null = null;
+
+  function rowResizeHit(e: MouseEvent): { table: HTMLTableElement; tableDocIdx: number; rowIndex: number; tr: HTMLTableRowElement } | null {
+    const td = (e.target as Element)?.closest?.('td') as HTMLTableCellElement | null;
+    if (!td || !container.contains(td)) return null;
+    const tr = td.closest('tr') as HTMLTableRowElement | null;
+    const table = td.closest('table') as HTMLTableElement | null;
+    if (!tr || !table) return null;
+    const rect = tr.getBoundingClientRect();
+    if (Math.abs(e.clientY - rect.bottom) > 5) return null;
+    const tableDocIdx = parseInt(table.dataset.pIdx || '', 10);
+    const first = tr.querySelector('td[data-r]') as HTMLTableCellElement | null;
+    const rowIndex = parseInt(first?.dataset.r || td.dataset.r || '', 10);
+    if (isNaN(tableDocIdx) || isNaN(rowIndex)) return null;
+    return { table, tableDocIdx, rowIndex, tr };
+  }
+
+  const onRowResizeMove = (e: MouseEvent) => {
+    if (!rowResize) return;
+    const h = Math.max(24, rowResize.startH + (e.clientY - rowResize.startY));
+    rowResize.tr.style.height = `${h}px`;
+    rowResize.tr.querySelectorAll('td').forEach((td) => {
+      (td as HTMLElement).style.height = `${h}px`;
+    });
+    e.preventDefault();
+  };
+  const onRowResizeUp = (e: MouseEvent) => {
+    if (!rowResize) return;
+    const h = Math.max(24, rowResize.startH + (e.clientY - rowResize.startY));
+    const { tableDocIdx, rowIndex } = rowResize;
+    worker.postMessage({ type: 'EDIT_TABLE_ROW_HEIGHT', payload: { tableDocIdx, rowIndex, height: h } });
+    rowResize = null;
+    document.removeEventListener('mousemove', onRowResizeMove);
+    document.removeEventListener('mouseup', onRowResizeUp);
+    container.style.cursor = '';
+  };
+
   container.addEventListener('mousedown', (e: MouseEvent) => {
     if (e.button !== 0) return;
+    const hit = rowResizeHit(e);
+    if (hit) {
+      if (cellEdit) exitCellEditMode(container);
+      clearCellSelection(container);
+      rowResize = { ...hit, startY: e.clientY, startH: hit.tr.getBoundingClientRect().height };
+      container.style.cursor = 'row-resize';
+      document.addEventListener('mousemove', onRowResizeMove);
+      document.addEventListener('mouseup', onRowResizeUp);
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     const td = (e.target as Element)?.closest?.('td');
     if (cellEdit) {
       // 편집 모드: 같은 셀 안이면 텍스트 선택을 허용하되, 다른 셀로 드래그 시
@@ -253,6 +302,10 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
     paintCellSelection(container);
   });
   container.addEventListener('mousemove', (e: MouseEvent) => {
+    if (rowResize) return;
+    if (!cellDragging || e.buttons !== 1) {
+      container.style.cursor = rowResizeHit(e) ? 'row-resize' : '';
+    }
     if (!cellDragging || !cellAnchor || e.buttons !== 1) return;
     const td = (e.target as Element)?.closest?.('td');
     if (!td || !container.contains(td)) return;

@@ -186,7 +186,8 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
         }
         const contentHeight = lineHeights.reduce((acc, h) => acc + h, 0);
         // 전부 가려진 행은 높이 0 (빈 tr 렌더와 일치)
-        const rowHeight = visibleCells === 0 ? 0 : contentHeight + TABLE_CELL_VERTICAL_PADDING + TABLE_BORDER_HEIGHT;
+        let rowHeight = visibleCells === 0 ? 0 : contentHeight + TABLE_CELL_VERTICAL_PADDING + TABLE_BORDER_HEIGHT;
+        if (row.height && row.height > rowHeight) rowHeight = row.height;
 
         // 새 조각의 첫 행이면 상단 마진도 함께 검사 (이어진 조각은 상단 마진 없음)
         const overhead = currentTableInPage.rows.length === 0 ? (currentTableInPage._continued ? 0 : TABLE_MARGIN_EDGE) : 0;
@@ -217,13 +218,13 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
               ...cell,
               children: runsFromLines(cellLineList[ci].slice(splitLines)),
             }));
-            currentTableInPage.rows.push({ ...row, cells: headCells });
+            currentTableInPage.rows.push({ ...row, cells: headCells, height: undefined });
             currentTableInPage._continues = true;
             currentPage.push(currentTableInPage);
             pages.push(currentPage);
             currentPage = [];
             currentHeight = 0;
-            currentTableInPage = { type: 'table', rows: [{ ...row, cells: tailCells }], _docIdx: idx, _continued: true };
+            currentTableInPage = { type: 'table', rows: [{ ...row, cells: tailCells, height: undefined }], _docIdx: idx, _continued: true };
             const tailContent = contentHeight - (headAcc - TABLE_CELL_VERTICAL_PADDING - TABLE_BORDER_HEIGHT);
             currentHeight += tailContent + TABLE_CELL_VERTICAL_PADDING + TABLE_BORDER_HEIGHT;
             pieceRow = { ...row, cells: tailCells };
@@ -278,12 +279,12 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
               children: runsFromLines(pieceCellLines[ci].slice(k)),
             }));
             console.log(`[layout-split] docIdx=${idx} row=${prow.cells[0]?.children[0]?.text} K2=${k} headPx=${acc} tailLeft=${pieceLineHeights.length - k}`);
-            currentTableInPage.rows = [{ ...prow, cells: head2Cells }];
+            currentTableInPage.rows = [{ ...prow, cells: head2Cells, height: undefined }];
             currentTableInPage._continues = true;
             currentPage.push(currentTableInPage);
             pages.push(currentPage);
             currentPage = [];
-            pieceRow = { ...prow, cells: tail2Cells };
+            pieceRow = { ...prow, cells: tail2Cells, height: undefined };
             pieceCellLines = pieceCellLines.map((lines) => lines.slice(k));
             pieceLineHeights = pieceLineHeights.slice(k);
             currentTableInPage = { type: 'table', rows: [pieceRow], _docIdx: idx, _continued: true };

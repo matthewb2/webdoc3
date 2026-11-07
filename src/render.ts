@@ -257,6 +257,7 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
         const tr = document.createElement('tr');
         if (row.backgroundColor) tr.style.backgroundColor = row.backgroundColor;
         if (row.background) tr.style.backgroundColor = row.background;
+        if (row.height) tr.style.height = `${row.height}px`;
 
         const cells: Array<any> = row.cells || [];
         const modelRow = row._rowIdx ?? ri;
@@ -270,6 +271,7 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
           // 셀 편집 활성화
           td.contentEditable = 'true';
           td.style.outline = 'none';
+          td.style.backgroundColor = 'white';
 
           const cellCount = cells.length || 1;
           const colSpan = Math.max(1, cell.colSpan ?? 1);

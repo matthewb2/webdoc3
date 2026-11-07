@@ -110,6 +110,8 @@ self.addEventListener('message', (event: MessageEvent<any>) => {
     editTableAlign(message.payload.tableDocIdx, message.payload.rows, message.payload.cols, message.payload.align);
   } else if (message.type === 'EDIT_TABLE_MERGE') {
     editTableMerge(message.payload.tableDocIdx, message.payload.r0, message.payload.r1, message.payload.c0, message.payload.c1);
+  } else if (message.type === 'EDIT_TABLE_ROW_HEIGHT') {
+    editTableRowHeight(message.payload.tableDocIdx, message.payload.rowIndex, message.payload.height);
   } else if (message.type === 'EDIT_COLOR') {
     editColor(message.payload.paragraphIndices, message.payload.color, message.payload.backgroundColor);
   } else if (message.type === 'EDIT_FONT_RANGE') {
@@ -332,6 +334,16 @@ function editTableMerge(tableDocIdx: number, r0: number, r1: number, c0: number,
   master.rowSpan = bottom - top + 1;
   master.colSpan = right - left + 1;
   delete master.merged;
+  requestLayout();
+}
+
+function editTableRowHeight(tableDocIdx: number, rowIndex: number, height: number) {
+  const table = documentState[tableDocIdx];
+  if (!table || table.type !== 'table') return;
+  const row = table.rows.find((r: any) => r && r._rowIdx === rowIndex) ?? table.rows[rowIndex];
+  if (!row) return;
+  const h = Math.max(24, Math.min(2000, height));
+  row.height = h;
   requestLayout();
 }
 

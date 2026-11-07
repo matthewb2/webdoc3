@@ -46,6 +46,8 @@ export interface TableRowNode {
   cells: TableCellNode[];
   /** 모델 행 인덱스 (분할 조각 추적용) */
   _rowIdx?: number;
+  /** 사용자 지정 행 높이(px). 지정 시 레이아웃/렌더링의 최소 높이로 사용 */
+  height?: number;
 }
 
 export interface TableNode {
@@ -92,6 +94,7 @@ export type WorkerMessage =
   | { type: 'EDIT_ALIGN'; payload: { paragraphIndices: number[]; align: TextAlign } }
   | { type: 'EDIT_TABLE_ALIGN'; payload: { tableDocIdx: number; rows: number[]; cols: number[]; align: TextAlign } }
   | { type: 'EDIT_TABLE_MERGE'; payload: { tableDocIdx: number; r0: number; r1: number; c0: number; c1: number } }
+  | { type: 'EDIT_TABLE_ROW_HEIGHT'; payload: { tableDocIdx: number; rowIndex: number; height: number } }
   | { type: 'EDIT_COLOR'; payload: { paragraphIndices: number[]; color?: string; backgroundColor?: string } }
   | { type: 'EDIT_FONT_RANGE'; payload: { paragraphIndex: number; fromCharIndex: number; endCharIndex: number; fontFamily?: string; fontSize?: number; bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean } }
   | { type: 'EDIT_COLOR_RANGE'; payload: { paragraphIndex: number; fromCharIndex: number; endCharIndex: number; color?: string; backgroundColor?: string } };
