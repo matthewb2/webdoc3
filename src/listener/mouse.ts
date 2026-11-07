@@ -57,6 +57,7 @@ export function paintCellSelection(container?: HTMLDivElement): void {
         const c = parseInt(el.dataset.c || '', 10);
         if (!cellSel) return;
         if (r >= cellSel.r0 && r <= cellSel.r1 && c >= cellSel.c0 && c <= cellSel.c1) {
+          if (cellEdit && sameCell(cellEdit, el as HTMLTableCellElement)) return;
           el.style.backgroundColor = CELL_SEL_BG;
           el.dataset.cellsel = '1';
         }
@@ -67,6 +68,7 @@ export function paintCellSelection(container?: HTMLDivElement): void {
     const el = td as HTMLElement;
     el.style.outline = '';
     el.style.outlineOffset = '';
+    el.style.backgroundColor = '';
     delete el.dataset.celledit;
   });
   if (cellEdit) {
@@ -77,6 +79,7 @@ export function paintCellSelection(container?: HTMLDivElement): void {
     if (td) {
       td.style.outline = '2px solid #4a90d9';
       td.style.outlineOffset = '-2px';
+      td.style.backgroundColor = '#ffffff';
       td.dataset.celledit = '1';
     }
   }
@@ -160,6 +163,29 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
     cellEdit = pos;
     paintCellSelection(container);
   });
+
+  // 셀에 포커스가 들어오면(입력 모드) 배경 강조 없이 흰색으로 표시
+  container.addEventListener('focusin', (e: FocusEvent) => {
+    if (cellDragging) return;
+    const td = (e.target as Element)?.closest?.('td') as HTMLTableCellElement | null;
+    if (!td || !container.contains(td)) return;
+    const pos = cellPosFromTd(td);
+    if (!pos) return;
+    // 여러 셀 범위 선택 중이면 유지 (범위 선택 확정 전 입력 전환 방지)
+    if (
+      cellSel &&
+      (cellSel.r0 !== cellSel.r1 || cellSel.c0 !== cellSel.c1) &&
+      cellSel.tableDocIdx === pos.tableDocIdx &&
+      pos.r >= cellSel.r0 && pos.r <= cellSel.r1 &&
+      pos.c >= cellSel.c0 && pos.c <= cellSel.c1
+    ) {
+      return;
+    }
+    cellSel = null;
+    cellAnchor = null;
+    cellEdit = pos;
+    paintCellSelection(container);
+  });
   container.addEventListener('mousemove', (e: MouseEvent) => {
     if (cellEdit) return;
     if (!cellDragging || !cellAnchor || e.buttons !== 1) return;
@@ -188,7 +214,10 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
       cellSel.r0 === cellAnchor.r &&
       cellSel.c0 === cellAnchor.c
     ) {
-      // 단일 클릭: 해당 셀 선택 유지 (캐럿은 브라우저 기본 배치)
+      // 단일 클릭: 입력 모드 전환 (배경 강조 없이 흰색)
+      cellEdit = { tableDocIdx: cellSel.tableDocIdx, r: cellSel.r0, c: cellSel.c0 };
+      cellSel = null;
+      cellAnchor = null;
       paintCellSelection(container);
       return;
     }
