@@ -1,6 +1,6 @@
 // src/worker/layout.ts - 레이아웃 엔진 (줄 나눔·페이지 분할·청크 스케줄링)
 import type { DocumentModel, DocumentItem, ParagraphNode, TableNode, TableRowNode, FontMetrics, TextRun } from '../types';
-import { CONTENT_HEIGHT, CONTENT_WIDTH, TABLE_GRID_WIDTH } from '../layoutConstants';
+import { CONTENT_HEIGHT, CONTENT_WIDTH, TABLE_GRID_WIDTH } from './layoutConstants';
 
 export type PageModel = DocumentItem[];
 
