@@ -98,7 +98,6 @@ function setup(): void {
   function setRulerZoom(zoom: number | undefined): void {
     if (typeof zoom !== 'number' || !Number.isFinite(zoom) || zoom <= 0) return;
 
-    const ratio = zoom / rulerZoom;
     rulerZoom = zoom;
 
     rulerTrack.style.width = `${TRACK_WIDTH * rulerZoom}px`;
@@ -107,10 +106,9 @@ function setup(): void {
     if (getTargetParagraph()) {
       updateMarkersFromSelection();
     } else {
-      const leftIndent = (parseFloat(leftIndentMarker.style.left) || 0) * ratio;
-      const firstLine = (parseFloat(firstLineMarker.style.left) || 0) * ratio;
-      leftIndentMarker.style.left = `${leftIndent}px`;
-      firstLineMarker.style.left = `${firstLine}px`;
+      // 선택된 문단이 없으면 들여쓰기 0(본문 시작) 위치로 유지
+      leftIndentMarker.style.left = `${MARGIN_LEFT_TRACK * rulerZoom}px`;
+      firstLineMarker.style.left = `${MARGIN_LEFT_TRACK * rulerZoom}px`;
     }
   }
 
@@ -169,5 +167,8 @@ function setup(): void {
     setRulerZoom(detail?.zoom);
   });
 
+  // 초기 위치: 들여쓰기 0(본문 시작)
+  leftIndentMarker.style.left = `${MARGIN_LEFT_TRACK}px`;
+  firstLineMarker.style.left = `${MARGIN_LEFT_TRACK}px`;
   setRulerZoom(1);
 }
