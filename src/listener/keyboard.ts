@@ -3,7 +3,7 @@ import type { CursorState, TextRun } from '../types';
 import { breakKeyForRuns, computeBreaks } from '../probe';
 import { getCachedPages} from '../render';
 import { cachedParagraphInfo, clearPendingSelection, setAwaitingRender, snapshotSelection, selectedParagraphIndices, selectionRangeInParagraph } from './index';
-import { clearCellSelection} from './mouse';
+import { clearCellSelection, selectCellFromInputMode } from './mouse';
 
 // 편집된 단락 전체 런을 캐시된 조각에서 복원해 분절점을 다시 재고 워커에 전달
 async function refreshParaBreaks(worker: Worker, docIdx: number) {
@@ -90,9 +90,17 @@ export function initEditorListeners(
     compAnchor = null;
   });
 
-  container.addEventListener('keydown', (e: KeyboardEvent) => {
+  document.addEventListener('keydown', (e: KeyboardEvent) => {
     if (composingActive) return;
-    if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (e.key === 'F5') {
+      const raw = window.getSelection()?.anchorNode ?? document.activeElement;
+      const anchorEl = raw ? (raw.nodeType === Node.TEXT_NODE ? (raw as Text).parentElement : (raw as Element)) : null;
+      if (anchorEl?.closest('td') && container.contains(anchorEl) && selectCellFromInputMode(container)) {
+        e.preventDefault();
+        return;
+      }
+    }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && container.contains(e.target as Node)) {
       console.log('[DEBUG KEYDOWN] Key pressed:', e.key, 'Selection collapsed:', window.getSelection()?.isCollapsed);
     }
   });

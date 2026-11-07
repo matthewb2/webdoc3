@@ -45,6 +45,13 @@ export function paintCellSelection(container?: HTMLDivElement): void {
   const root =
     container || (document.getElementById('editor-container') as HTMLDivElement | null);
   if (!root) return;
+  root.querySelectorAll('td[data-celledit]').forEach((td) => {
+    const el = td as HTMLElement;
+    el.style.outline = '';
+    el.style.outlineOffset = '';
+    el.style.backgroundColor = '';
+    delete el.dataset.celledit;
+  });
   root.querySelectorAll('td[data-cellsel]').forEach((td) => {
     (td as HTMLElement).style.backgroundColor = '';
     delete (td as HTMLElement).dataset.cellsel;
@@ -64,13 +71,6 @@ export function paintCellSelection(container?: HTMLDivElement): void {
       });
     });
   }
-  root.querySelectorAll('td[data-celledit]').forEach((td) => {
-    const el = td as HTMLElement;
-    el.style.outline = '';
-    el.style.outlineOffset = '';
-    el.style.backgroundColor = '';
-    delete el.dataset.celledit;
-  });
   if (cellEdit) {
     const table = root.querySelector(`table[data-p-idx="${cellEdit.tableDocIdx}"]`);
     const td = table?.querySelector(
@@ -90,6 +90,34 @@ export function clearCellSelection(container?: HTMLDivElement): void {
   cellDragging = false;
   cellEdit = null;
   paintCellSelection(container);
+}
+
+export function selectCellFromInputMode(container?: HTMLDivElement): boolean {
+  const root =
+    container || (document.getElementById('editor-container') as HTMLDivElement | null);
+  if (!root) return false;
+
+  let pos = cellEdit;
+  if (!pos) {
+    const active = document.activeElement as Element | null;
+    let td = active?.closest?.('td') as HTMLTableCellElement | null;
+    if (!td || !root.contains(td)) {
+      const sel = window.getSelection();
+      const anchor = sel?.anchorNode ?? null;
+      const anchorEl = anchor?.nodeType === Node.TEXT_NODE ? anchor.parentElement : (anchor as Element | null);
+      td = (anchorEl?.closest?.('td') as HTMLTableCellElement | null) ?? null;
+    }
+    if (td && root.contains(td)) pos = cellPosFromTd(td);
+  }
+  if (!pos) return false;
+
+  cellEdit = null;
+  cellAnchor = null;
+  cellDragging = false;
+  cellSel = { tableDocIdx: pos.tableDocIdx, r0: pos.r, r1: pos.r, c0: pos.c, c1: pos.c };
+  paintCellSelection(root);
+  collapseCaretToCell(root, cellSel);
+  return true;
 }
 
 function collapseCaretToCell(container: HTMLDivElement, sel: CellSel): void {
