@@ -278,7 +278,14 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
           const rowSpan = Math.max(1, cell.rowSpan ?? 1);
           
           const contentWidth = PAGE_WIDTH - (padPx * 2);
-          td.style.width = `${(contentWidth / cellCount) * colSpan}px`;
+          const baseCol = contentWidth / cellCount;
+          let w = baseCol * colSpan;
+          if (item.colWidths && item.colWidths.length > 0) {
+            let sum = 0;
+            for (let i = 0; i < colSpan; i++) sum += item.colWidths[ci + i] ?? baseCol;
+            w = sum;
+          }
+          td.style.width = `${w}px`;
           
           if (colSpan > 1) td.colSpan = colSpan;
           if (rowSpan > 1) td.rowSpan = rowSpan;

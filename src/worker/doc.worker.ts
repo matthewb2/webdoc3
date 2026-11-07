@@ -112,6 +112,8 @@ self.addEventListener('message', (event: MessageEvent<any>) => {
     editTableMerge(message.payload.tableDocIdx, message.payload.r0, message.payload.r1, message.payload.c0, message.payload.c1);
   } else if (message.type === 'EDIT_TABLE_ROW_HEIGHT') {
     editTableRowHeight(message.payload.tableDocIdx, message.payload.rowIndex, message.payload.height);
+  } else if (message.type === 'EDIT_TABLE_COL_WIDTH') {
+    editTableColWidth(message.payload.tableDocIdx, message.payload.colIndex, message.payload.width);
   } else if (message.type === 'EDIT_COLOR') {
     editColor(message.payload.paragraphIndices, message.payload.color, message.payload.backgroundColor);
   } else if (message.type === 'EDIT_FONT_RANGE') {
@@ -344,6 +346,18 @@ function editTableRowHeight(tableDocIdx: number, rowIndex: number, height: numbe
   if (!row) return;
   const h = Math.max(24, Math.min(2000, height));
   row.height = h;
+  requestLayout();
+}
+
+function editTableColWidth(tableDocIdx: number, colIndex: number, width: number) {
+  const table = documentState[tableDocIdx];
+  if (!table || table.type !== 'table') return;
+  const n = Math.max(colIndex + 1, ...(table.rows.map((r) => r.cells.length)), table.colWidths?.length ?? 0);
+  const base = 624 / Math.max(1, table.rows[0]?.cells.length ?? n);
+  if (!table.colWidths) table.colWidths = new Array(n).fill(base);
+  while (table.colWidths.length < n) table.colWidths.push(base);
+  for (let i = 0; i < table.colWidths.length; i++) if (!table.colWidths[i]) table.colWidths[i] = base;
+  table.colWidths[colIndex] = Math.max(24, Math.min(2000, width));
   requestLayout();
 }
 

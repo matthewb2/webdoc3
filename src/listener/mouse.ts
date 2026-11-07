@@ -195,6 +195,7 @@ export function mergeSelectedCells(container: HTMLDivElement, worker: Worker): b
 
 export function initCellSelection(container: HTMLDivElement, worker: Worker) {
   let rowResize: { table: HTMLTableElement; tableDocIdx: number; rowIndex: number; tr: HTMLTableRowElement; startY: number; startH: number } | null = null;
+  let colResize: { table: HTMLTableElement; tableDocIdx: number; colIndex: number; startX: number; startW: number } | null = null;
 
   function rowResizeHit(e: MouseEvent): { table: HTMLTableElement; tableDocIdx: number; rowIndex: number; tr: HTMLTableRowElement } | null {
     const td = (e.target as Element)?.closest?.('td') as HTMLTableCellElement | null;
@@ -209,6 +210,19 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
     const rowIndex = parseInt(first?.dataset.r || td.dataset.r || '', 10);
     if (isNaN(tableDocIdx) || isNaN(rowIndex)) return null;
     return { table, tableDocIdx, rowIndex, tr };
+  }
+
+  function colResizeHit(e: MouseEvent): { table: HTMLTableElement; tableDocIdx: number; colIndex: number; td: HTMLTableCellElement } | null {
+    const td = (e.target as Element)?.closest?.('td') as HTMLTableCellElement | null;
+    if (!td || !container.contains(td)) return null;
+    const table = td.closest('table') as HTMLTableElement | null;
+    if (!table) return null;
+    const rect = td.getBoundingClientRect();
+    if (Math.abs(e.clientX - rect.right) > 5) return null;
+    const tableDocIdx = parseInt(table.dataset.pIdx || '', 10);
+    const colIndex = parseInt(td.dataset.c || '', 10);
+    if (isNaN(tableDocIdx) || isNaN(colIndex)) return null;
+    return { table, tableDocIdx, colIndex, td };
   }
 
   const onRowResizeMove = (e: MouseEvent) => {
@@ -231,8 +245,39 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
     container.style.cursor = '';
   };
 
+  const onColResizeMove = (e: MouseEvent) => {
+    if (!colResize) return;
+    const w = Math.max(24, colResize.startW + (e.clientX - colResize.startX));
+    colResize.table.querySelectorAll(`td[data-c="${colResize.colIndex}"]`).forEach((td) => {
+      (td as HTMLElement).style.width = `${w}px`;
+    });
+    e.preventDefault();
+  };
+  const onColResizeUp = (e: MouseEvent) => {
+    if (!colResize) return;
+    const w = Math.max(24, colResize.startW + (e.clientX - colResize.startX));
+    const { tableDocIdx, colIndex } = colResize;
+    worker.postMessage({ type: 'EDIT_TABLE_COL_WIDTH', payload: { tableDocIdx, colIndex, width: w } });
+    colResize = null;
+    document.removeEventListener('mousemove', onColResizeMove);
+    document.removeEventListener('mouseup', onColResizeUp);
+    container.style.cursor = '';
+  };
+
   container.addEventListener('mousedown', (e: MouseEvent) => {
     if (e.button !== 0) return;
+    const cHit = colResizeHit(e);
+    if (cHit) {
+      if (cellEdit) exitCellEditMode(container);
+      clearCellSelection(container);
+      colResize = { table: cHit.table, tableDocIdx: cHit.tableDocIdx, colIndex: cHit.colIndex, startX: e.clientX, startW: cHit.td.getBoundingClientRect().width };
+      container.style.cursor = 'col-resize';
+      document.addEventListener('mousemove', onColResizeMove);
+      document.addEventListener('mouseup', onColResizeUp);
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     const hit = rowResizeHit(e);
     if (hit) {
       if (cellEdit) exitCellEditMode(container);
@@ -302,9 +347,9 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
     paintCellSelection(container);
   });
   container.addEventListener('mousemove', (e: MouseEvent) => {
-    if (rowResize) return;
+    if (rowResize || colResize) return;
     if (!cellDragging || e.buttons !== 1) {
-      container.style.cursor = rowResizeHit(e) ? 'row-resize' : '';
+      container.style.cursor = colResizeHit(e) ? 'col-resize' : rowResizeHit(e) ? 'row-resize' : '';
     }
     if (!cellDragging || !cellAnchor || e.buttons !== 1) return;
     const td = (e.target as Element)?.closest?.('td');

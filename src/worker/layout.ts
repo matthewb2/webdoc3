@@ -151,16 +151,28 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
       }
     } else if (item.type === 'table') {
       pendingCols = null;
-      let currentTableInPage: TableNode = { type: 'table', rows: [], _docIdx: idx };
+      const tableProps = () => ({
+        colWidths: item.colWidths,
+        backgroundColor: (item as any).backgroundColor,
+        background: (item as any).background,
+      });
+      let currentTableInPage: TableNode = { type: 'table', rows: [], _docIdx: idx, ...tableProps() };
 
       item.rows.forEach((row, ri) => {
         (row as any)._rowIdx = ri;
         const n = Math.max(1, row.cells.length);
         const baseCol = TABLE_GRID_WIDTH / n;
-        const cellLineList: Glyph[][][] = row.cells.map((cell) => {
+        const colWidths = item.colWidths;
+        const cellLineList: Glyph[][][] = row.cells.map((cell, ci) => {
           if ((cell as any).merged) return [];
           const span = Math.max(1, (cell as any).colSpan ?? 1);
-          return buildRunLines(cell.children || [], baseCol * span - TABLE_CELL_PADDING - TABLE_CELL_BORDER);
+          let w = baseCol * span;
+          if (colWidths && colWidths.length > 0) {
+            let sum = 0;
+            for (let i = 0; i < span; i++) sum += colWidths[ci + i] ?? baseCol;
+            w = sum;
+          }
+          return buildRunLines(cell.children || [], Math.max(20, w - TABLE_CELL_PADDING - TABLE_CELL_BORDER));
         });
         let maxRowLines = 0;
         let visibleCells = 0;
@@ -224,7 +236,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
             pages.push(currentPage);
             currentPage = [];
             currentHeight = 0;
-            currentTableInPage = { type: 'table', rows: [{ ...row, cells: tailCells, height: undefined }], _docIdx: idx, _continued: true };
+            currentTableInPage = { type: 'table', rows: [{ ...row, cells: tailCells, height: undefined }], _docIdx: idx, _continued: true, ...tableProps() };
             const tailContent = contentHeight - (headAcc - TABLE_CELL_VERTICAL_PADDING - TABLE_BORDER_HEIGHT);
             currentHeight += tailContent + TABLE_CELL_VERTICAL_PADDING + TABLE_BORDER_HEIGHT;
             pieceRow = { ...row, cells: tailCells };
@@ -240,14 +252,14 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
               pages.push(currentPage);
               currentPage = [];
               currentHeight = 0;
-              currentTableInPage = { type: 'table', rows: [row], _docIdx: idx, _continued: true };
+              currentTableInPage = { type: 'table', rows: [row], _docIdx: idx, _continued: true, ...tableProps() };
               currentHeight += rowHeight;
               pieceRow = row;
               pieceCellLines = cellLineList;
               pieceLineHeights = lineHeights;
             } else {
               // 빈 페이지에 거대 행 하나: 빈 페이지 푸시 없이 그대로 배치
-              currentTableInPage = { type: 'table', rows: [row], _docIdx: idx };
+              currentTableInPage = { type: 'table', rows: [row], _docIdx: idx, ...tableProps() };
               currentHeight += TABLE_MARGIN_EDGE + rowHeight;
               pieceRow = row;
               pieceCellLines = cellLineList;
@@ -287,7 +299,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
             pieceRow = { ...prow, cells: tail2Cells, height: undefined };
             pieceCellLines = pieceCellLines.map((lines) => lines.slice(k));
             pieceLineHeights = pieceLineHeights.slice(k);
-            currentTableInPage = { type: 'table', rows: [pieceRow], _docIdx: idx, _continued: true };
+            currentTableInPage = { type: 'table', rows: [pieceRow], _docIdx: idx, _continued: true, ...tableProps() };
             currentHeight = pieceLineHeights.reduce((a, h) => a + h, 0) + TABLE_CELL_VERTICAL_PADDING + TABLE_BORDER_HEIGHT;
           }
         } else {
