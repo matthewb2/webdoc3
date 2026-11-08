@@ -1,0 +1,34 @@
+import type { ControlPageNumberPosition } from "../../../../object/bodytext/control/ControlPageNumberPosition.js";
+import type { CtrlHeaderPageNumberPosition } from "../../../../object/bodytext/control/ctrlheader/CtrlHeaderPageNumberPosition.js";
+import type { StreamReader } from "../../../../util/compoundFile/reader/StreamReader.js";
+
+/**
+ * 쪽 번호 위치 컨트롤을 읽기 위한 객체
+ *
+ * @author neolord
+ */
+export class ForControlPageNumberPosition {
+  /**
+   * 쪽 번호 위치 컨트롤을 읽는다.
+   *
+   * @param pgnp 쪽 번호 위치 컨트롤 객체
+   * @param sr   스트림 리더
+   */
+  public static read(pgnp: ControlPageNumberPosition, sr: StreamReader): void {
+    ForControlPageNumberPosition.ctrlHeader(pgnp.getHeader(), sr);
+  }
+
+  /**
+   * 쪽 번호 위치 컨트롤의 컨트롤 헤더 레코드를 읽는다.
+   *
+   * @param header 쪽 번호 위치 컨트롤 헤더 레코드
+   * @param sr     스트림 리더
+   */
+  private static ctrlHeader(header: CtrlHeaderPageNumberPosition, sr: StreamReader): void {
+    header.getProperty().setValue(sr.readUInt4());
+    header.setNumber(sr.readUInt2());
+    header.getUserSymbol().setBytes(sr.readWChar());
+    header.getBeforeDecorationLetter().setBytes(sr.readWChar());
+    header.getAfterDecorationLetter().setBytes(sr.readWChar());
+  }
+}

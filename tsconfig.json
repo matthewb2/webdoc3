@@ -9,7 +9,8 @@
     /* Bundler mode */
     "moduleResolution": "bundler",
     "paths": {
-      "@hwp.js/parser": ["./src/hwp/hwp.d.ts"]
+      "@hwp.js/parser": ["./src/hwp/hwp.d.ts"],
+      "@hwplib-js": ["./src/hwp/hwplib-js.d.ts"]
     },
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
