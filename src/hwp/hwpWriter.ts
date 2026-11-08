@@ -1,6 +1,6 @@
 import { HWPWriter as HwplibWriter } from '@hwplib-js';
 import type { DocumentModel } from '../types';
-import { Doc3Adapter } from './Doc3Adapter';
+import { Doc3Adapter } from './doc3Adapter';
 
 export class HwpWriter {
   private docModel: DocumentModel;
