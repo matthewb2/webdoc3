@@ -155,6 +155,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
         colWidths: item.colWidths,
         backgroundColor: (item as any).backgroundColor,
         background: (item as any).background,
+        borderStyle: (item as any).borderStyle,
       });
       let currentTableInPage: TableNode = { type: 'table', rows: [], _docIdx: idx, ...tableProps() };
 

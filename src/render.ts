@@ -245,8 +245,10 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
       table.dataset.pIdx = docIdx.toString();
       if (item._continued) table.style.marginTop = '0';
       if (item._continues) table.style.marginBottom = '0';
-      
+
       table.style.borderCollapse = 'collapse';
+      if (item.borderStyle === 'none') table.classList.add('tbl-border-none');
+      else if (item.borderStyle === 'no-vertical') table.classList.add('tbl-border-no-vertical');
       if (item.colWidths && item.colWidths.length > 0) {
         const totalW = item.colWidths.reduce((a: number, b: number) => a + (b || 0), 0);
         if (totalW > 0) table.style.width = `${totalW}px`;

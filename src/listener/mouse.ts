@@ -81,6 +81,26 @@ export function paintCellSelection(container?: HTMLDivElement): void {
       td.dataset.celledit = '1';
     }
   }
+  window.dispatchEvent(new CustomEvent('table-context-change'));
+}
+
+export function getActiveTableDocIdx(container?: HTMLDivElement): number | null {
+  if (cellSel) return cellSel.tableDocIdx;
+  if (cellEdit) return cellEdit.tableDocIdx;
+  const root =
+    container || (document.getElementById('editor-container') as HTMLDivElement | null);
+  if (!root) return null;
+  const active = document.activeElement as Element | null;
+  let td = active?.closest?.('td') as HTMLTableCellElement | null;
+  if (!td || !root.contains(td)) {
+    const sel = window.getSelection();
+    const anchor = sel?.anchorNode ?? null;
+    const anchorEl = anchor?.nodeType === Node.TEXT_NODE ? anchor.parentElement : (anchor as Element | null);
+    td = (anchorEl?.closest?.('td') as HTMLTableCellElement | null) ?? null;
+  }
+  if (!td || !root.contains(td)) return null;
+  const pos = cellPosFromTd(td);
+  return pos ? pos.tableDocIdx : null;
 }
 
 export function clearCellSelection(container?: HTMLDivElement): void {

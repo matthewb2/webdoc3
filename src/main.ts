@@ -3,12 +3,12 @@ import type { PageModel } from './worker/doc.worker';
 import { defaultFontFamily, defaultUiFontFamily, initSettings, loadSettings } from './settings';
 import { collectProbeItems, computeBreaks } from './probe';
 import { appendStreamPages, findCursorPageIndices, getCachedPages, initRenderer, renderVirtualPages, updateVisiblePages } from './render';
-import { clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFontCombos, initFileOpen, initLineSpacingCombo, initNewDocument, initSave, initSelectionListener, initStyleButtons, initTableInsert, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncLineSpacingCombo, syncStyleButtons, takePendingSelection } from './listener';
+import { clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFontCombos, initFileOpen, initLineSpacingCombo, initNewDocument, initSave, initSelectionListener, initStyleButtons, initTableInsert, initTableProperties, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, setCurrentFileName, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncLineSpacingCombo, syncStyleButtons, syncTablePropertiesRibbon, takePendingSelection } from './listener';
 import { initEditorListeners, isComposingActive } from './listener/keyboard';
 import { initCellSelection, paintCellSelection } from './listener/mouse';
 import { initPreviewMode } from './preview';
 import { ruler } from './ruler';
-import { parseHwpToDocumentModel } from './hwp/hwpParser';
+import { parseOdtToDocumentModel } from './odt/odtParser';
 import logoUrl from './assets/logo.svg';
 
 // 타이틀바(탭) 로고
@@ -283,17 +283,29 @@ async function initWordProcessor() {
   const fontMetrics = generateFontMetrics(`16px "${defaultFontFamily()}", Arial`);
   worker.postMessage({ type: 'INIT_METRICS', payload: fontMetrics });
 
-  // 기본 문서: dev 실행 시 public의 입법예고 HWP를 바로 로드 (실패 시 더미로 폴백)
-  const defaultHwpUrl = encodeURI('/table.hwp');
-  fetch(defaultHwpUrl)
+  // ?new=1: 새 탭에서 빈 제목 없음.odt로 시작 (현재 탭은 유지)
+  const openNew = new URLSearchParams(window.location.search).get('new') === '1';
+  if (openNew) {
+    const model: DocumentModel = [{ type: 'paragraph', children: [{ text: '' }] }];
+    worker.postMessage({ type: 'BREAKS', payload: await computeBreaks(collectProbeItems(model)) });
+    worker.postMessage({ type: 'INIT_DOC', payload: model });
+    setCurrentFileName('제목 없음.odt');
+    containerEl.style.display = 'inline-flex';
+    return;
+  }
+
+  // 기본 문서: dev 실행 시 public/테이블.odt
+  const defaultDocUrl = encodeURI('/테이블.odt');
+  fetch(defaultDocUrl)
     .then((res) => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.arrayBuffer();
     })
     .then(async (buffer) => {
-      const model = parseHwpToDocumentModel(new Uint8Array(buffer));
+      const model = parseOdtToDocumentModel(new Uint8Array(buffer));
       worker.postMessage({ type: 'BREAKS', payload: await computeBreaks(collectProbeItems(model)) });
       worker.postMessage({ type: 'INIT_DOC', payload: model });
+      setCurrentFileName('테이블.odt');
       containerEl.style.display = 'inline-flex';
     })
     .catch(async (err: Error) => {
@@ -392,6 +404,7 @@ function applyReadyPages(pages: PageModel[]) {
   syncLineSpacingCombo();
   updateCursorPage();
   paintCellSelection(containerEl);
+  syncTablePropertiesRibbon(containerEl);
 }
 
 // 상태바에 커서 위치 페이지 표시 (현재 / 전체)
@@ -423,7 +436,7 @@ initWorkerListener(worker, (pages) => {
   appendStreamPages(pages);
 });
 initViewportScrollListener(() => { updateVisiblePages(); paintCellSelection(containerEl); });
-initSelectionListener(() => { clearPendingSelection(); saveCursorPosition(); syncFontCombos(); syncColumnCombo(); syncAlignCombo(); syncColorControls(); syncStyleButtons(); syncLineSpacingCombo(); updateCursorPage(); });
+initSelectionListener(() => { clearPendingSelection(); saveCursorPosition(); syncFontCombos(); syncColumnCombo(); syncAlignCombo(); syncColorControls(); syncStyleButtons(); syncLineSpacingCombo(); syncTablePropertiesRibbon(containerEl); updateCursorPage(); });
 initEditorListeners(containerEl, worker, savedCursor, saveCursorPosition, flushPendingRender, () => { pendingPages = null; });
 initFontCombos(containerEl, worker, savedCursor);
 initColumnCombo(containerEl, worker, savedCursor);
@@ -433,6 +446,7 @@ initColorControls(containerEl, worker, savedCursor);
 initStyleButtons(containerEl, worker, savedCursor);
 initTableInsert(containerEl, worker, savedCursor);
 initCellSelection(containerEl, worker);
+initTableProperties(containerEl, worker);
 initZoomControls(containerEl);
 ruler();
 initSave(worker);

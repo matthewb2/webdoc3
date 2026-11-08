@@ -1,5 +1,5 @@
 import type { PageModel } from '../worker/doc.worker';
-import type { CursorState } from '../types';
+import type { CursorState, TableBorderStyle } from '../types';
 import { defaultAlign, defaultFontFamily, defaultFontSize, defaultLineSpacing } from '../settings';
 import { parseHwpToDocumentModel } from '../hwp/hwpParser';
 import { parseDocxToDocumentModel } from '../docx/docxParser';
@@ -9,7 +9,7 @@ import { getCachedPages, setRenderZoom, updateVisiblePages } from '../render';
 import { saveCurrentDocument } from '../odt/odtExport';
 import { saveCurrentDocumentDocx } from '../docx/docxExport';
 import { saveCurrentDocumentHwp } from '../hwp/hwpExport';
-import { cellPosFromTd, clearCellSelection, getCellSelection } from './mouse';
+import { cellPosFromTd, clearCellSelection, getActiveTableDocIdx, getCellSelection } from './mouse';
 import type { CellSel } from './mouse';
 
 const FONT_FAMILIES = [
@@ -385,7 +385,7 @@ export function initFileOpen(worker: Worker, containerEl: HTMLDivElement) {
         worker.postMessage({ type: 'BREAKS', payload: await computeBreaks(collectProbeItems(model)) });
         worker.postMessage({ type: 'INIT_DOC', payload: model });
         containerEl.style.display = 'inline-flex';
-        currentFileName = file.name;
+        setCurrentFileName(file.name);
         clearCellSelection(containerEl);
         hwpStatus.textContent = `파싱 완료: ${file.name} (${model.length}개 항목)`;
       })
@@ -645,11 +645,20 @@ export function initZoomControls(container: HTMLDivElement) {
   apply(1);
 }
 
-// 현재 문서 파일명 (파일열기로 열린 파일 기준, 없으면 document.hwp)
+// 현재 문서 파일명 (열린 파일 기준, 없으면 제목 없음.odt)
 let currentFileName: string | null = null;
 
+function updateDocumentTitle() {
+  document.title = `Doc3 - ${getCurrentFileName()}`;
+}
+
+export function setCurrentFileName(name: string | null) {
+  currentFileName = name;
+  updateDocumentTitle();
+}
+
 export function getCurrentFileName(): string {
-  return currentFileName ?? 'document.hwp';
+  return currentFileName ?? '제목 없음.odt';
 }
 
 function anchorSpan(): HTMLSpanElement | null {
@@ -764,27 +773,69 @@ export function initTableInsert(_container: HTMLDivElement, worker: Worker, curs
 }
 
 export function initNewDocument(container: HTMLDivElement, worker: Worker, cursor: CursorState) {
+  void container;
+  void worker;
+  void cursor;
   const btn = document.getElementById('btn-new-file') as HTMLButtonElement | null;
   if (!btn) return;
-  btn.addEventListener('click', async () => {
-    const hwpStatus = document.getElementById('hwp-status') as HTMLSpanElement | null;
-    const model = [{ type: 'paragraph' as const, children: [{ text: '' }] }];
-    worker.postMessage({ type: 'BREAKS', payload: await computeBreaks(collectProbeItems(model as any)) });
-    worker.postMessage({ type: 'INIT_DOC', payload: model });
-    currentFileName = null;
-    cursor.docIdx = 0;
-    cursor.charIndex = 0;
-    cursor.charOffset = 0;
-    cursor.isInsideTable = false;
-    cursor.rowIndex = 0;
-    cursor.cellIndex = 0;
-    cursor.pageNumber = 0;
-    clearPendingSelection();
-    clearCellSelection(container);
-    const viewport = document.querySelector('.editor-viewport') as HTMLDivElement | null;
-    if (viewport) viewport.scrollTop = 0;
-    if (hwpStatus) hwpStatus.textContent = '새 문서';
+  btn.addEventListener('click', () => {
+    // 현재 탭은 유지하고, 새 탭에서 빈 문서를 연다.
+    const url = new URL(window.location.href);
+    url.search = '?new=1';
+    url.hash = '';
+    window.open(url.toString(), '_blank');
   });
+}
+
+export function initTableProperties(container: HTMLDivElement, worker: Worker) {
+  const group = document.getElementById('ribbon-group-table-props') as HTMLDivElement | null;
+  const btnDefault = document.getElementById('btn-table-border-default') as HTMLButtonElement | null;
+  const btnNone = document.getElementById('btn-table-border-none') as HTMLButtonElement | null;
+  const btnNoV = document.getElementById('btn-table-border-no-v') as HTMLButtonElement | null;
+  if (!group || !btnDefault || !btnNone || !btnNoV) return;
+
+  const apply = (borderStyle: TableBorderStyle) => {
+    const tableDocIdx = getActiveTableDocIdx(container);
+    if (tableDocIdx == null) return;
+    worker.postMessage({ type: 'EDIT_TABLE_BORDER', payload: { tableDocIdx, borderStyle } });
+  };
+
+  const bind = (btn: HTMLButtonElement, style: TableBorderStyle) => {
+    btn.addEventListener('mousedown', (e) => e.preventDefault());
+    btn.addEventListener('click', () => apply(style));
+  };
+  bind(btnDefault, 'default');
+  bind(btnNone, 'none');
+  bind(btnNoV, 'no-vertical');
+
+  window.addEventListener('table-context-change', () => syncTablePropertiesRibbon(container));
+}
+
+export function syncTablePropertiesRibbon(container?: HTMLDivElement) {
+  const group = document.getElementById('ribbon-group-table-props') as HTMLDivElement | null;
+  if (!group) return;
+  const tableDocIdx = getActiveTableDocIdx(container);
+  group.style.display = tableDocIdx != null ? '' : 'none';
+
+  const btnDefault = document.getElementById('btn-table-border-default') as HTMLButtonElement | null;
+  const btnNone = document.getElementById('btn-table-border-none') as HTMLButtonElement | null;
+  const btnNoV = document.getElementById('btn-table-border-no-v') as HTMLButtonElement | null;
+  [btnDefault, btnNone, btnNoV].forEach((b) => b?.classList.remove('active'));
+  if (tableDocIdx == null) return;
+
+  let borderStyle: TableBorderStyle = 'default';
+  outer: for (const page of getCachedPages() as any[]) {
+    const items = Array.isArray(page) ? page : (page as any).items;
+    if (!items) continue;
+    for (const item of items) {
+      if (item && item.type === 'table' && (item as any)._docIdx === tableDocIdx) {
+        borderStyle = ((item as any).borderStyle as TableBorderStyle) || 'default';
+        break outer;
+      }
+    }
+  }
+  const activeBtn = borderStyle === 'none' ? btnNone : borderStyle === 'no-vertical' ? btnNoV : btnDefault;
+  activeBtn?.classList.add('active');
 }
 
 export function initSave(worker: Worker) {

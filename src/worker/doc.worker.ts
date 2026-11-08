@@ -116,6 +116,12 @@ self.addEventListener('message', (event: MessageEvent<any>) => {
     editTableColWidth(message.payload.tableDocIdx, message.payload.colIndex, message.payload.width);
   } else if (message.type === 'EDIT_INSERT_TABLE') {
     editInsertTable(message.payload.paragraphIndex, message.payload.charIndex, message.payload.rows, message.payload.cols);
+  } else if (message.type === 'EDIT_TABLE_BORDER') {
+    const node = documentState[message.payload.tableDocIdx];
+    if (node && node.type === 'table') {
+      (node as any).borderStyle = message.payload.borderStyle;
+      requestLayout();
+    }
   } else if (message.type === 'EDIT_COLOR') {
     editColor(message.payload.paragraphIndices, message.payload.color, message.payload.backgroundColor);
   } else if (message.type === 'EDIT_FONT_RANGE') {
