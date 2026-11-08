@@ -21,7 +21,10 @@ const ALIGN_MAP: Record<string, 'left' | 'center' | 'right' | 'justify'> = {
 
 interface ParaProps {
   align?: 'left' | 'center' | 'right' | 'justify';
+  /** @deprecated use leftIndent/textIndent */
   indent?: number;
+  leftIndent?: number;
+  textIndent?: number;
 }
 
 interface TextProps {
@@ -58,13 +61,27 @@ function attr(el: Element, local: string): string | null {
   return null;
 }
 
-function parseSizePt(value: string | null): number | undefined {
+function parseLengthToPx(value: string | null): number | undefined {
   if (!value) return undefined;
-  const m = value.match(/^([\d.]+)\s*pt$/i);
-  if (m) return Math.round(parseFloat(m[1]) * PT_TO_PX * 100) / 100;
-  const n = parseFloat(value);
-  if (!isNaN(n)) return Math.round(n * PT_TO_PX * 100) / 100;
-  return undefined;
+  const s = value.trim();
+  const m = s.match(/^(-?[\d.]+)\s*([a-z%]*)$/i);
+  if (!m) return undefined;
+  const n = parseFloat(m[1]);
+  if (!Number.isFinite(n)) return undefined;
+  const unit = (m[2] || '').toLowerCase();
+  let px: number;
+  if (unit === 'pt') px = n * PT_TO_PX;
+  else if (unit === 'px') px = n;
+  else if (unit === 'cm') px = (n * 96) / 2.54;
+  else if (unit === 'mm') px = (n * 96) / 25.4;
+  else if (unit === 'in') px = n * 96;
+  else if (unit === '' || unit === 'pc' || unit === '%') return undefined; // ambiguous/unitless/%: skip
+  else return undefined;
+  return Math.round(px * 100) / 100;
+}
+
+function parseSizePt(value: string | null): number | undefined {
+  return parseLengthToPx(value);
 }
 
 function parseTextProps(el: Element | null): TextProps {
@@ -92,12 +109,17 @@ function parseParaProps(el: Element | null): ParaProps {
   if (!el) return props;
   const align = ALIGN_MAP[attr(el, 'text-align') ?? ''];
   if (align) props.align = align;
-  const textIndent = parseSizePt(attr(el, 'text-indent'));
-  if (textIndent) props.indent = textIndent;
-  else {
-    const marginLeft = parseSizePt(attr(el, 'margin-left'));
-    if (marginLeft) props.indent = marginLeft;
+  if (attr(el, 'text-indent') != null) {
+    const v = parseLengthToPx(attr(el, 'text-indent'));
+    if (v !== undefined) props.textIndent = v;
   }
+  if (attr(el, 'margin-left') != null) {
+    const v = parseLengthToPx(attr(el, 'margin-left'));
+    if (v !== undefined) props.leftIndent = v;
+  }
+  // legacy fallback (kept for compatibility with older code paths)
+  if (props.textIndent !== undefined) props.indent = props.textIndent;
+  else if (props.leftIndent !== undefined) props.indent = props.leftIndent;
   return props;
 }
 
@@ -203,6 +225,8 @@ function parseParaLike(
   baseProps: TextProps,
   paraAlign?: 'left' | 'center' | 'right' | 'justify',
   paraIndent?: number,
+  paraLeftIndent?: number,
+  paraTextIndent?: number,
 ): ParagraphNode {
   const runs: TextRun[] = [];
   const pushText = (props: TextProps, text: string) => {
@@ -240,7 +264,9 @@ function parseParaLike(
   walkInline(p, baseProps);
   const node: ParagraphNode = { type: 'paragraph', children: runs.length > 0 ? runs : [{ text: '' }] };
   if (paraAlign) node.align = paraAlign;
-  if (paraIndent) node.indent = paraIndent;
+  if (paraLeftIndent !== undefined) node.leftIndent = paraLeftIndent;
+  if (paraTextIndent !== undefined) node.textIndent = paraTextIndent;
+  if (paraIndent !== undefined) node.indent = paraIndent;
   return node;
 }
 
@@ -248,7 +274,7 @@ function parsePara(p: Element, ctx: Ctx): ParagraphNode {
   const styleName = attr(p, 'style-name');
   const paraProps = resolveParaProps(ctx, styleName);
   const baseProps = resolveTextProps(ctx, styleName);
-  return parseParaLike(p, ctx, baseProps, paraProps.align, paraProps.indent);
+  return parseParaLike(p, ctx, baseProps, paraProps.align, paraProps.indent, paraProps.leftIndent, paraProps.textIndent);
 }
 
 function parseCellParas(cell: Element, ctx: Ctx): TextRun[] {

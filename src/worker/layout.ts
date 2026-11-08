@@ -98,7 +98,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
           pendingCols = { columns, total: paraTotal };
         }
         currentHeight += spaceBefore;
-        const colFragment = buildParagraphFragment(lines, idx, 0, item.align, columns, item.indent, item.lineSpacing, spaceBefore, spaceAfter);
+        const colFragment = buildParagraphFragment(lines, idx, 0, item.align, columns, item.indent, item.lineSpacing, spaceBefore, spaceAfter, item.leftIndent, item.textIndent);
         if (colFragment && colFragment.children.length > 0) {
           currentPage.push(colFragment);
         }
@@ -122,7 +122,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
             console.log(`[para-break] docIdx=${idx} cur=${currentHeight} lh=${lineHeight} text=${JSON.stringify(runs.map((r) => r.text).join('').slice(0, 30))}`);
           }
           if (currentParagraphLines.length > 0) {
-            const fragment = buildParagraphFragment(currentParagraphLines, idx, charOffset, item.align, undefined, item.indent, item.lineSpacing, fragmentCount === 0 ? spaceBefore : undefined, undefined);
+            const fragment = buildParagraphFragment(currentParagraphLines, idx, charOffset, item.align, undefined, item.indent, item.lineSpacing, fragmentCount === 0 ? spaceBefore : undefined, undefined, item.leftIndent, item.textIndent);
             if (fragment && fragment.children.length > 0) {
               currentPage.push(fragment);
               charOffset += fragment.children.reduce((acc, run) => acc + run.text.length, 0);
@@ -142,7 +142,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
       });
 
       if (currentParagraphLines.length > 0) {
-        const fragment = buildParagraphFragment(currentParagraphLines, idx, charOffset, item.align, undefined, item.indent, item.lineSpacing, fragmentCount === 0 ? spaceBefore : undefined, spaceAfter);
+        const fragment = buildParagraphFragment(currentParagraphLines, idx, charOffset, item.align, undefined, item.indent, item.lineSpacing, fragmentCount === 0 ? spaceBefore : undefined, spaceAfter, item.leftIndent, item.textIndent);
         if (fragment && fragment.children.length > 0) {
           currentPage.push(fragment);
         }
@@ -358,6 +358,8 @@ function buildParagraphFragment(
   spacing?: number,
   spaceBefore?: number,
   spaceAfter?: number,
+  leftIndent?: number,
+  textIndent?: number,
 ): ParagraphNode | null {
   // 정렬은 CSS text-align으로 처리한다. 스페이서 런을 넣으면 fragment 텍스트가
   // 원문과 달라져 커서 오프셋과 편집 인덱스가 어긋나므로 절대 추가하지 않는다.
@@ -376,6 +378,12 @@ function buildParagraphFragment(
   }
   if (columns && columns > 1) {
     fragment.columns = columns;
+  }
+  if (leftIndent !== undefined) {
+    fragment.leftIndent = leftIndent;
+  }
+  if (textIndent !== undefined) {
+    fragment.textIndent = textIndent;
   }
   if (indent) {
     fragment.indent = indent;

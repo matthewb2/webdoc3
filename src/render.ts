@@ -209,15 +209,28 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
       p.style.textAlign = effectiveAlign;
       p.dataset.align = effectiveAlign;
 
-      const effectiveIndent = item.indent ?? defaultIndent();
-      if (effectiveIndent) {
-        if (effectiveIndent > 0) {
-          p.style.textIndent = `${effectiveIndent}px`;
-        } else {
-          p.style.paddingLeft = `${-effectiveIndent}px`;
-          p.style.textIndent = `${effectiveIndent}px`;
+      if (item.leftIndent !== undefined || item.textIndent !== undefined) {
+        const left = item.leftIndent ?? 0;
+        const first = item.textIndent ?? 0;
+        if (left) {
+          p.style.paddingLeft = `${left}px`;
+          p.dataset.leftIndent = String(left);
         }
-        p.dataset.indent = String(effectiveIndent);
+        if (first) {
+          p.style.textIndent = `${first}px`;
+          p.dataset.textIndent = String(first);
+        }
+      } else {
+        const effectiveIndent = item.indent ?? defaultIndent();
+        if (effectiveIndent) {
+          if (effectiveIndent > 0) {
+            p.style.textIndent = `${effectiveIndent}px`;
+          } else {
+            p.style.paddingLeft = `${-effectiveIndent}px`;
+            p.style.textIndent = `${effectiveIndent}px`;
+          }
+          p.dataset.indent = String(effectiveIndent);
+        }
       }
 
       const children: Array<{ text: string; bold?: boolean }> = item.children || [];

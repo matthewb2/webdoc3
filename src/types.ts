@@ -17,8 +17,12 @@ export interface ParagraphNode {
   children: TextRun[];
   columns?: number;
   align?: TextAlign;
-  /** 왼쪽(첫 줄) 들여쓰기(px). 양수=들여쓰기, 음수=내어쓰기, 기본값 0 */
+  /** 들여쓰기 (px) - legacy: left/text indent fallback */
   indent?: number;
+  /** 문단 왼쪽 들여쓰기(margin-left, px) */
+  leftIndent?: number;
+  /** 첫 줄 들여쓰기(text-indent, px, 음수=내어쓰기) */
+  textIndent?: number;
   /** 줄간격(퍼센트). 기본값 160 */
   lineSpacing?: number;
   /** 문단 위 간격(px). HWP 문단 모양의 marginTop을 변환한 값 */
