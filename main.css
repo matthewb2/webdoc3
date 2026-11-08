@@ -211,7 +211,8 @@ html {
 
         /* 눈금자 컨테이너: 스크롤 영역 내부 최상단에 sticky로 고정되어 스크롤바 폭을 에디터와 완벽 공유 */
         .ruler-container {
-            position: sticky;
+            visibility: hidden;
+            position: sticky;            
             top: 0;
             left: 0;
             right: 0;
@@ -302,6 +303,10 @@ html {
             cursor: ew-resize;
             z-index: 2;
             transform: translateX(-50%);
+            visibility: hidden;
+        }
+        .ruler-track.ruler-ready .ruler-marker {
+            visibility: visible;
         }
         .ruler-marker-first-line {
             top: 0;

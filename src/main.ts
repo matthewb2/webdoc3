@@ -295,7 +295,7 @@ async function initWordProcessor() {
   }
 
   // 기본 문서: dev 실행 시 public/테이블.odt
-  const defaultDocUrl = encodeURI('/테이블.odt');
+  const defaultDocUrl = encodeURI('/There.odt');
   fetch(defaultDocUrl)
     .then((res) => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -382,6 +382,13 @@ function buildMockDocument(): DocumentModel {
   return [tableTest.title, tableTest.table, tableTest.trailing, ...mockDocument];
 }
 
+// 뷰포트가 준비되면 편집포트(에디터 컨테이너) 로드 직전에 눈금자를 초기화
+const viewportEl = document.querySelector('.editor-viewport') as HTMLDivElement | null;
+if (viewportEl) {
+  ruler();
+} else {
+  document.addEventListener('DOMContentLoaded', () => ruler(), { once: true });
+}
 initRenderer(containerEl);
 initWordProcessor();
 initNewDocument(containerEl, worker, savedCursor);
@@ -448,6 +455,5 @@ initTableInsert(containerEl, worker, savedCursor);
 initCellSelection(containerEl, worker);
 initTableProperties(containerEl, worker);
 initZoomControls(containerEl);
-ruler();
 initSave(worker);
 initPreviewMode();

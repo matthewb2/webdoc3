@@ -171,4 +171,7 @@ function setup(): void {
   leftIndentMarker.style.left = `${MARGIN_LEFT_TRACK}px`;
   firstLineMarker.style.left = `${MARGIN_LEFT_TRACK}px`;
   setRulerZoom(1);
+  rulerTrack.classList.add('ruler-ready');
+  const container = rulerTrack.closest('.ruler-container') as HTMLElement | null;
+  if (container) container.style.visibility = 'visible';
 }
