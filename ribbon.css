@@ -194,3 +194,43 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
+
+        .ribbon-group-recent .ribbon-group-items {
+            min-width: 160px;
+            max-width: 260px;
+        }
+        .recent-files-list {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            max-height: 58px;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        .recent-files-item {
+            display: block;
+            width: 100%;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            background: transparent;
+            color: #333;
+            font: inherit;
+            font-size: 12px;
+            line-height: 1.2;
+            text-align: left;
+            padding: 3px 6px;
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .recent-files-item:hover {
+            background: #eef2f5;
+            border-color: #d8dde3;
+        }
+        .recent-files-empty {
+            font-size: 11px;
+            color: #98a2ad;
+            padding: 2px 4px;
+            white-space: nowrap;
+        }

@@ -1,6 +1,6 @@
 import type { PageModel } from '../worker/doc.worker';
 import type { CursorState, TableBorderStyle } from '../types';
-import { defaultAlign, defaultFontFamily, defaultFontSize, defaultLineSpacing, loadSettings, saveSettings } from '../settings';
+import { addRecentFile, defaultAlign, defaultFontFamily, defaultFontSize, defaultLineSpacing, getRecentFiles, loadSettings, saveSettings } from '../settings';
 import { setPageMargins } from '../worker/layoutConstants';
 import { parseHwpToDocumentModel } from '../hwp/hwpParser';
 import { parseDocxToDocumentModel } from '../docx/docxParser';
@@ -386,7 +386,10 @@ export function initFileOpen(worker: Worker, containerEl: HTMLDivElement) {
         worker.postMessage({ type: 'BREAKS', payload: await computeBreaks(collectProbeItems(model)) });
         worker.postMessage({ type: 'INIT_DOC', payload: model });
         containerEl.style.display = 'inline-flex';
+        setCurrentFileHandle(null);
         setCurrentFileName(file.name);
+        addRecentFile(file.name);
+        refreshRecentFiles();
         clearCellSelection(containerEl);
         hwpStatus.textContent = `파싱 완료: ${file.name} (${model.length}개 항목)`;
       })
@@ -648,6 +651,7 @@ export function initZoomControls(container: HTMLDivElement) {
 
 // 현재 문서 파일명 (열린 파일 기준, 없으면 제목 없음.odt)
 let currentFileName: string | null = null;
+let currentFileHandle: FileSystemFileHandle | null = null;
 
 function updateDocumentTitle() {
   document.title = `Doc3 - ${getCurrentFileName()}`;
@@ -660,6 +664,14 @@ export function setCurrentFileName(name: string | null) {
 
 export function getCurrentFileName(): string {
   return currentFileName ?? '제목 없음.odt';
+}
+
+export function setCurrentFileHandle(handle: FileSystemFileHandle | null) {
+  currentFileHandle = handle;
+}
+
+export function getCurrentFileHandle(): FileSystemFileHandle | null {
+  return currentFileHandle;
 }
 
 function anchorSpan(): HTMLSpanElement | null {
@@ -680,6 +692,55 @@ function spanStyleState(span: HTMLSpanElement): { bold: boolean; italic: boolean
     italic: span.style.fontStyle === 'italic',
     underline: (span.style.textDecoration || '').includes('underline'),
   };
+}
+
+export function initParagraphStyles(_container: HTMLDivElement, worker: Worker, cursor: CursorState) {
+  const bodyBtn = document.getElementById('btn-style-body') as HTMLButtonElement | null;
+  const titleBtn = document.getElementById('btn-style-title') as HTMLButtonElement | null;
+  if (!bodyBtn || !titleBtn) return;
+  [bodyBtn, titleBtn].forEach((btn) => btn.addEventListener('mousedown', (e) => e.preventDefault()));
+  const targetParagraphIndices = (): number[] => {
+    if (cursor.isInsideTable) return [];
+    return [cursor.docIdx];
+  };
+  bodyBtn.addEventListener('click', () => {
+    const indices = targetParagraphIndices();
+    if (indices.length === 0) return;
+    worker.postMessage({
+      type: 'EDIT_APPLY_STYLE',
+      payload: {
+        paragraphIndices: indices,
+        align: defaultAlign(),
+        lineSpacing: defaultLineSpacing(),
+        fontFamily: defaultFontFamily(),
+        fontSize: defaultFontSize(),
+        bold: false,
+        italic: false,
+        underline: false,
+        strike: false,
+        color: '',
+      },
+    });
+  });
+  titleBtn.addEventListener('click', () => {
+    const indices = targetParagraphIndices();
+    if (indices.length === 0) return;
+    worker.postMessage({
+      type: 'EDIT_APPLY_STYLE',
+      payload: {
+        paragraphIndices: indices,
+        align: 'center',
+        lineSpacing: 160,
+        fontFamily: defaultFontFamily(),
+        fontSize: 28,
+        bold: true,
+        italic: false,
+        underline: false,
+        strike: false,
+        color: '',
+      },
+    });
+  });
 }
 
 export function initStyleButtons(container: HTMLDivElement, worker: Worker, cursor: CursorState) {
@@ -857,6 +918,35 @@ export function syncTablePropertiesRibbon(container?: HTMLDivElement) {
   activeBtn?.classList.add('active');
 }
 
+export function refreshRecentFiles() {
+  const list = document.getElementById('recent-files-list') as HTMLDivElement | null;
+  if (!list) return;
+  const files = getRecentFiles();
+  list.innerHTML = '';
+  if (files.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'recent-files-empty';
+    empty.textContent = '항목 없음';
+    list.appendChild(empty);
+    return;
+  }
+  files.forEach((name) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'recent-files-item';
+    btn.textContent = name;
+    btn.title = `${name}\n(클릭하면 파일 열기)`;
+    btn.addEventListener('click', () => {
+      (document.getElementById('file-input') as HTMLInputElement | null)?.click();
+    });
+    list.appendChild(btn);
+  });
+}
+
+export function initRecentFiles() {
+  refreshRecentFiles();
+}
+
 export function initPageMargins(worker: Worker) {
   const ids = {
     top: 'margin-top-input',
@@ -906,15 +996,205 @@ export function initPageMargins(worker: Worker) {
   });
 }
 
+type FindPosMsg = { docIdx: number; charIndex: number; isInsideTable: boolean; rowIndex: number; cellIndex: number };
+type MatchMsg = FindPosMsg & { length: number };
+
+let lastFindFrom: FindPosMsg | null = null;
+let lastFindQuery = '';
+
+function locateInElement(root: Element, modelIndex: number): { node: Node; offset: number } | null {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let tn = walker.nextNode();
+  let remaining = Math.max(0, modelIndex);
+  let lastText: Node | null = null;
+  let lastLen = 0;
+  while (tn) {
+    const t = tn.textContent || '';
+    const modelLen = t.length - Array.from(t).filter((ch) => ch.charCodeAt(0) === 0x200b).length;
+    lastText = tn;
+    lastLen = t.length;
+    if (remaining <= modelLen) return { node: tn, offset: Math.min(remaining, t.length) };
+    remaining -= modelLen;
+    tn = walker.nextNode();
+  }
+  if (lastText) return { node: lastText, offset: lastLen };
+  return null;
+}
+
+function locateParagraphOffset(container: HTMLElement, docIdx: number, charIndex: number): { node: Node; offset: number } | null {
+  const matches = Array.from(container.querySelectorAll(`p[data-p-idx="${docIdx}"]`)) as HTMLParagraphElement[];
+  let target: HTMLParagraphElement | null = null;
+  for (const m of matches) {
+    const off = parseInt(m.dataset.pOffset || '0', 10);
+    const len = m.textContent?.length || 0;
+    if (charIndex >= off) target = m;
+    if (charIndex <= off + len) break;
+  }
+  target = target || matches[0] || null;
+  if (!target) return null;
+  const fragOffset = parseInt(target.dataset.pOffset || '0', 10);
+  return locateInElement(target, charIndex - fragOffset);
+}
+
+function selectModelMatch(container: HTMLElement, cursor: CursorState, match: MatchMsg) {
+  cursor.docIdx = match.docIdx;
+  cursor.charIndex = match.charIndex;
+  cursor.charOffset = 0;
+  cursor.isInsideTable = !!match.isInsideTable;
+  cursor.rowIndex = match.rowIndex || 0;
+  cursor.cellIndex = match.cellIndex || 0;
+
+  const sel = window.getSelection();
+  if (!sel) return;
+  let start: { node: Node; offset: number } | null = null;
+  let end: { node: Node; offset: number } | null = null;
+
+  if (match.isInsideTable) {
+    const table = container.querySelector(`table[data-p-idx="${match.docIdx}"]`) as HTMLTableElement | null;
+    const cell = table?.querySelectorAll('tr')[match.rowIndex]?.querySelectorAll('td')[match.cellIndex] as HTMLElement | undefined;
+    if (cell) {
+      start = locateInElement(cell, match.charIndex);
+      end = locateInElement(cell, match.charIndex + (match.length || 0));
+      const page = cell.closest('.page') as HTMLElement | null;
+      if (page?.dataset.pageNumber) cursor.pageNumber = parseInt(page.dataset.pageNumber, 10) || 0;
+    }
+  } else {
+    start = locateParagraphOffset(container, match.docIdx, match.charIndex);
+    end = locateParagraphOffset(container, match.docIdx, match.charIndex + (match.length || 0));
+    const p = (start?.node as any)?.parentElement?.closest?.('p') as HTMLElement | null;
+    const page = p?.closest('.page') as HTMLElement | null;
+    if (page?.dataset.pageNumber) cursor.pageNumber = parseInt(page.dataset.pageNumber, 10) || 0;
+  }
+
+  if (start && end) {
+    try {
+      sel.setBaseAndExtent(start.node, start.offset, end.node, end.offset);
+      (start.node.parentElement as HTMLElement | null)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    } catch {
+      /* ignore */
+    }
+  } else if (start) {
+    const r = document.createRange();
+    r.setStart(start.node, start.offset);
+    r.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(r);
+  }
+}
+
+export function initViewOptions() {
+  const checkbox = document.getElementById('show-para-marks-checkbox') as HTMLInputElement | null;
+  if (!checkbox) return;
+  const apply = (on: boolean) => {
+    document.getElementById('editor-container')?.classList.toggle('show-para-marks', on);
+    document.getElementById('preview-container')?.classList.toggle('show-para-marks', on);
+  };
+  const initial = !!loadSettings().showParaMarks;
+  checkbox.checked = initial;
+  apply(initial);
+  checkbox.addEventListener('change', () => {
+    const on = checkbox.checked;
+    saveSettings({ showParaMarks: on });
+    apply(on);
+  });
+}
+
+export function initFindReplace(worker: Worker, cursor?: CursorState, container?: HTMLDivElement) {
+  const root = container || (document.getElementById('editor-container') as HTMLDivElement | null);
+  if (!root) return;
+  const status = () => document.getElementById('hwp-status') as HTMLSpanElement | null;
+  const findInput = () => document.getElementById('find-text-input') as HTMLInputElement | null;
+  const replaceInput = () => document.getElementById('replace-text-input') as HTMLInputElement | null;
+  const curCursor = cursor || ({ docIdx: 0, charIndex: 0, charOffset: 0, isInsideTable: false, rowIndex: 0, cellIndex: 0, pageNumber: 0 } as CursorState);
+
+  const fromPos = (): FindPosMsg => lastFindFrom || {
+    docIdx: curCursor.docIdx,
+    charIndex: curCursor.charIndex,
+    isInsideTable: !!curCursor.isInsideTable,
+    rowIndex: curCursor.rowIndex || 0,
+    cellIndex: curCursor.cellIndex || 0,
+  };
+
+  worker.addEventListener('message', (event: MessageEvent<any>) => {
+    const msg = event.data;
+    if (msg?.type === 'FIND_RESULT') {
+      const { found, match } = msg.payload || {};
+      if (found && match) {
+        selectModelMatch(root, curCursor, match as MatchMsg);
+        lastFindFrom = { docIdx: match.docIdx, charIndex: match.charIndex, isInsideTable: !!match.isInsideTable, rowIndex: match.rowIndex || 0, cellIndex: match.cellIndex || 0 };
+        if (status()) status()!.textContent = '찾음';
+      } else {
+        lastFindFrom = null;
+        if (status()) status()!.textContent = '찾는 내용이 없습니다';
+      }
+    } else if (msg?.type === 'REPLACE_RESULT') {
+      const { replaced, next } = msg.payload || {};
+      if (replaced && next) {
+        selectModelMatch(root, curCursor, next as MatchMsg);
+        lastFindFrom = { docIdx: next.docIdx, charIndex: next.charIndex, isInsideTable: !!next.isInsideTable, rowIndex: next.rowIndex || 0, cellIndex: next.cellIndex || 0 };
+        if (status()) status()!.textContent = '바꾸기 완료';
+      } else if (replaced) {
+        lastFindFrom = null;
+        if (status()) status()!.textContent = '바꾸기 완료';
+      } else {
+        if (status()) status()!.textContent = '찾는 내용이 없습니다';
+      }
+    } else if (msg?.type === 'REPLACE_ALL_RESULT') {
+      const count = msg.payload?.count ?? 0;
+      lastFindFrom = null;
+      if (status()) status()!.textContent = count > 0 ? `모두 바꾸기: ${count}건` : '찾는 내용이 없습니다';
+    }
+  });
+
+  const runFind = () => {
+    const q = findInput()?.value ?? '';
+    if (!q) { if (status()) status()!.textContent = '찾을 내용을 입력하세요'; return; }
+    if (q !== lastFindQuery) { lastFindQuery = q; lastFindFrom = null; }
+    worker.postMessage({ type: 'EDIT_FIND', payload: { query: q, from: fromPos(), direction: 'forward' } });
+  };
+  const runReplace = () => {
+    const q = findInput()?.value ?? '';
+    if (!q) return;
+    if (q !== lastFindQuery) { lastFindQuery = q; lastFindFrom = null; }
+    worker.postMessage({ type: 'EDIT_REPLACE', payload: { query: q, replacement: replaceInput()?.value ?? '', from: fromPos() } });
+  };
+  const runReplaceAll = () => {
+    const q = findInput()?.value ?? '';
+    if (!q) return;
+    worker.postMessage({ type: 'EDIT_REPLACE_ALL', payload: { query: q, replacement: replaceInput()?.value ?? '' } });
+  };
+
+  document.getElementById('btn-find-next')?.addEventListener('click', runFind);
+  document.getElementById('btn-replace')?.addEventListener('click', runReplace);
+  document.getElementById('btn-replace-all')?.addEventListener('click', runReplaceAll);
+  findInput()?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); runFind(); } });
+  replaceInput()?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); runReplace(); } });
+  findInput()?.addEventListener('input', () => { lastFindFrom = null; lastFindQuery = ''; });
+}
+
+function getSaveFn(lower: string) {
+  if (/\.docx$/i.test(lower)) return saveCurrentDocumentDocx;
+  if (/\.odt$/i.test(lower)) return saveCurrentDocument;
+  return saveCurrentDocumentHwp;
+}
+
+async function runSave(worker: Worker, saveAs: boolean) {
+  const filename = getCurrentFileName();
+  const lower = filename.toLowerCase();
+  const saveFn = getSaveFn(lower);
+  const result = await saveFn(worker, filename, { saveAs, handle: currentFileHandle });
+  currentFileHandle = result.handle ?? null;
+  if (result.filename) setCurrentFileName(result.filename);
+}
+
 export function initSave(worker: Worker) {
   document.getElementById('btn-save')?.addEventListener('click', () => {
-    const filename = getCurrentFileName();
-    const lower = filename.toLowerCase();
-    const save = /\.docx$/i.test(lower)
-      ? saveCurrentDocumentDocx(worker, filename)
-      : /\.odt$/i.test(lower)
-        ? saveCurrentDocument(worker, filename)
-        : saveCurrentDocumentHwp(worker, filename);
-    save.catch(() => {});
+    runSave(worker, false).catch(() => {});
+  });
+}
+
+export function initSaveAs(worker: Worker) {
+  document.getElementById('btn-save-as')?.addEventListener('click', () => {
+    runSave(worker, true).catch(() => {});
   });
 }

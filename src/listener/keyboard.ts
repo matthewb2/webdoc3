@@ -286,6 +286,20 @@ export function initEditorListeners(
       return;
     }
 
+    if (e.inputType === 'insertParagraph') {
+      e.preventDefault();
+      saveCursorPosition();
+      clearCellSelection(container);
+      await refreshParaBreaks(worker, cursor.docIdx);
+      clearPendingSelection();
+      markEditPending();
+      worker.postMessage({ type: 'EDIT_SPLIT', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
+      cursor.docIdx += 1;
+      cursor.charIndex = 0;
+      cursor.charOffset = 0;
+      return;
+    }
+
     if (e.data) {
       e.preventDefault();
       saveCursorPosition();

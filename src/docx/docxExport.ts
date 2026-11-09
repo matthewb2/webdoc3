@@ -113,33 +113,80 @@ function requestDocSnapshot(worker: Worker): Promise<DocumentModel> {
   });
 }
 
-export async function saveCurrentDocumentDocx(worker: Worker, filename = 'document.docx'): Promise<void> {
+export async function buildDocxBlob(worker: Worker): Promise<Blob> {
+  const model = await requestDocSnapshot(worker);
+  const children: Array<Paragraph | Table> = [];
+  model.forEach((item) => {
+    if (item.type === 'paragraph') {
+      children.push(toParagraph(item.children || [], (item as any).align, (item as any).lineSpacing));
+    } else if (item.type === 'table') {
+      const table = toTable(item as TableNode);
+      if (table) children.push(table);
+    }
+  });
+  if (children.length === 0) children.push(new Paragraph({ children: [new TextRun('')] }));
+  return await Packer.toBlob(new Document({ sections: [{ children }] }));
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    URL.revokeObjectURL(a.href);
+    a.remove();
+  }, 1000);
+}
+
+export async function saveCurrentDocumentDocx(
+  worker: Worker,
+  filename = 'document.docx',
+  opts?: { saveAs?: boolean; handle?: FileSystemFileHandle | null },
+): Promise<{ filename: string; handle: FileSystemFileHandle | null }> {
   const status = document.getElementById('hwp-status') as HTMLSpanElement | null;
+  const saveAs = !!opts?.saveAs;
   try {
-    if (status) status.textContent = 'DOCX 생성 중...';
-    const model = await requestDocSnapshot(worker);
-    const children: Array<Paragraph | Table> = [];
-    model.forEach((item) => {
-      if (item.type === 'paragraph') {
-        children.push(toParagraph(item.children || [], (item as any).align, (item as any).lineSpacing));
-      } else if (item.type === 'table') {
-        const table = toTable(item as TableNode);
-        if (table) children.push(table);
+    if (status) status.textContent = saveAs ? '다른 이름으로 저장...' : 'DOCX 생성 중...';
+    const blob = await buildDocxBlob(worker);
+
+    let handle = opts?.handle ?? null;
+    if (saveAs) {
+      if (typeof window.showSaveFilePicker === 'function') {
+        handle = await window.showSaveFilePicker({
+          suggestedName: filename,
+          types: [{ description: 'Word Document', accept: { 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        const outName = handle.name || filename;
+        if (status) status.textContent = `DOCX 저장 완료: ${outName}`;
+        return { filename: outName, handle };
       }
-    });
-    if (children.length === 0) children.push(new Paragraph({ children: [new TextRun('')] }));
-    const blob = await Packer.toBlob(new Document({ sections: [{ children }] }));
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      URL.revokeObjectURL(a.href);
-      a.remove();
-    }, 1000);
+      downloadBlob(blob, filename);
+      if (status) status.textContent = `DOCX 저장 완료: ${filename}`;
+      return { filename, handle: null };
+    }
+
+    if (handle) {
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      const outName = handle.name || filename;
+      if (status) status.textContent = `DOCX 저장 완료: ${outName}`;
+      return { filename: outName, handle };
+    }
+
+    downloadBlob(blob, filename);
     if (status) status.textContent = `DOCX 저장 완료: ${filename}`;
+    return { filename, handle: null };
   } catch (err) {
+    if ((err as any)?.name === 'AbortError') {
+      if (status) status.textContent = '저장이 취소되었습니다.';
+      return { filename, handle: opts?.handle ?? null };
+    }
     if (status) status.textContent = `DOCX 저장 실패: ${(err as Error).message}`;
     throw err;
   }

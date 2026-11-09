@@ -35,6 +35,10 @@ export interface UserSettings {
   paraShape: ParaShapeSetting;
   /** 페이지 여백(px, 96dpi) */
   pageMargins: PageMarginsSetting;
+  /** 최근 사용한 파일(파일명, 최신순) */
+  recentFiles: string[];
+  /** 문단부호(¶) 표시 */
+  showParaMarks: boolean;
 }
 
 const ALIGN_VALUES: TextAlign[] = ['left', 'center', 'right', 'justify'];
@@ -50,6 +54,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
   charShape: { bold: false, italic: false, underline: false, strike: false },
   paraShape: { align: 'justify', indent: 0, lineSpacing: 160 },
   pageMargins: { top: 85, right: 85, bottom: 85, left: 85 },
+  recentFiles: [],
+  showParaMarks: false,
 };
 
 function validCharShape(v: unknown): CharShapeSetting {
@@ -88,6 +94,16 @@ function validPageMargins(v: unknown): PageMarginsSetting {
   return base;
 }
 
+function validRecentFiles(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  const out: string[] = [];
+  for (const item of v) {
+    if (typeof item === 'string' && item.length > 0) out.push(item);
+    if (out.length >= 10) break;
+  }
+  return out;
+}
+
 const STORAGE_KEY = 'webdoc3-settings';
 const SETTINGS_URL = `${import.meta.env.BASE_URL}settings.json`;
 
@@ -120,6 +136,8 @@ export async function initSettings(): Promise<UserSettings> {
       next.charShape = validCharShape(parsed.charShape);
       next.paraShape = validParaShape(parsed.paraShape);
       next.pageMargins = validPageMargins((parsed as any).pageMargins);
+      next.recentFiles = validRecentFiles((parsed as any).recentFiles);
+      if (typeof (parsed as any).showParaMarks === 'boolean') next.showParaMarks = (parsed as any).showParaMarks;
       fileSettings = next;
     }
   } catch {
@@ -148,12 +166,14 @@ function mergedSettings(): UserSettings {
         charShape: parsed.charShape !== undefined ? validCharShape(parsed.charShape) : { ...base.charShape },
         paraShape: parsed.paraShape !== undefined ? validParaShape(parsed.paraShape) : { ...base.paraShape },
         pageMargins: (parsed as any).pageMargins !== undefined ? validPageMargins((parsed as any).pageMargins) : { ...base.pageMargins },
+        recentFiles: (parsed as any).recentFiles !== undefined ? validRecentFiles((parsed as any).recentFiles) : [...(base.recentFiles ?? [])],
+        showParaMarks: typeof (parsed as any).showParaMarks === 'boolean' ? (parsed as any).showParaMarks : !!base.showParaMarks,
       };
     }
   } catch {
     /* 저장소 접근 실패 시 파일 설정 */
   }
-  return { ...base, charShape: { ...base.charShape }, paraShape: { ...base.paraShape }, pageMargins: { ...base.pageMargins } };
+  return { ...base, charShape: { ...base.charShape }, paraShape: { ...base.paraShape }, pageMargins: { ...base.pageMargins }, recentFiles: [...(base.recentFiles ?? [])], showParaMarks: !!base.showParaMarks };
 }
 
 export function loadSettings(): UserSettings {
@@ -168,6 +188,8 @@ export function saveSettings(patch: Partial<UserSettings>): UserSettings {
     charShape: { ...cur.charShape, ...(patch.charShape ?? {}) },
     paraShape: { ...cur.paraShape, ...(patch.paraShape ?? {}) },
     pageMargins: { ...cur.pageMargins, ...(patch.pageMargins ?? {}) },
+    recentFiles: patch.recentFiles !== undefined ? validRecentFiles(patch.recentFiles) : [...cur.recentFiles],
+    showParaMarks: typeof patch.showParaMarks === 'boolean' ? patch.showParaMarks : cur.showParaMarks,
   };
   if (next.fontFamily.length === 0) next.fontFamily = DEFAULT_SETTINGS.fontFamily;
   if (!(next.fontSize > 0)) next.fontSize = DEFAULT_SETTINGS.fontSize;
@@ -175,6 +197,8 @@ export function saveSettings(patch: Partial<UserSettings>): UserSettings {
   next.charShape = validCharShape(next.charShape);
   next.paraShape = validParaShape(next.paraShape);
   next.pageMargins = validPageMargins(next.pageMargins);
+  next.recentFiles = validRecentFiles(next.recentFiles);
+  next.showParaMarks = !!next.showParaMarks;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   } catch {
@@ -217,4 +241,17 @@ export function defaultIndent(): number {
 
 export function defaultLineSpacing(): number {
   return loadSettings().paraShape.lineSpacing;
+}
+
+export function getRecentFiles(): string[] {
+  return [...loadSettings().recentFiles];
+}
+
+export function addRecentFile(name: string): string[] {
+  if (!name || !/\.(hwp|docx|odt)$/i.test(name)) return getRecentFiles();
+  const cur = getRecentFiles().filter((n) => n !== name);
+  cur.unshift(name);
+  const next = cur.slice(0, 10);
+  saveSettings({ recentFiles: next });
+  return next;
 }

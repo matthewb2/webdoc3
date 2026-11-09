@@ -319,6 +319,16 @@ html {
         .page p::after {
             vertical-align: top;
         }
+        .show-para-marks .page p::after,
+        .show-para-marks#preview-container .page p::after,
+        #preview-container.show-para-marks .page p::after {
+            content: '↵';
+            color: #8a94a0;
+            font-size: 0.85em;
+            margin-left: 1px;
+            user-select: none;
+            pointer-events: none;
+        }
 		p:has(span:empty)::after {
 			position: absolute;
 			left: 0;

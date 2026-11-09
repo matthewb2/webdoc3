@@ -1,5 +1,5 @@
 // src/dump.ts - /dump.html 엔트리: ?file= 또는 로컬 파일 덤프 렌더링
-import { dumpHwp, type HwpDump } from './hwp/hwpDump';
+import { dumpHwp, type HwpDump } from '../hwp/hwpDump';
 
 const statusEl = document.getElementById('status') as HTMLDivElement;
 const outEl = document.getElementById('out') as HTMLDivElement;

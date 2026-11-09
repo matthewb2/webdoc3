@@ -137,6 +137,20 @@ self.addEventListener('message', (event: MessageEvent<any>) => {
     editFontRange(message.payload.paragraphIndex, message.payload.fromCharIndex, message.payload.endCharIndex, message.payload);
   } else if (message.type === 'EDIT_COLOR_RANGE') {
     editColorRange(message.payload.paragraphIndex, message.payload.fromCharIndex, message.payload.endCharIndex, message.payload.color, message.payload.backgroundColor);
+  } else if (message.type === 'EDIT_FIND') {
+    const { query, from, direction } = message.payload || {};
+    const match = findInModel(query || '', from || null, direction === 'backward' ? 'backward' : 'forward');
+    self.postMessage({ type: 'FIND_RESULT', payload: { found: !!match, match: match || undefined } });
+  } else if (message.type === 'EDIT_REPLACE') {
+    const { query, replacement, from } = message.payload || {};
+    const result = replaceOneInModel(query || '', replacement ?? '', from || null);
+    self.postMessage({ type: 'REPLACE_RESULT', payload: result });
+  } else if (message.type === 'EDIT_REPLACE_ALL') {
+    const { query, replacement } = message.payload || {};
+    const count = replaceAllInModel(query || '', replacement ?? '');
+    self.postMessage({ type: 'REPLACE_ALL_RESULT', payload: { count } });
+  } else if (message.type === 'EDIT_APPLY_STYLE') {
+    editApplyStyle(message.payload?.paragraphIndices || [], message.payload || {});
   }
 });
 
@@ -399,6 +413,48 @@ function editLineSpacing(docIndices: number[], lineSpacing: number) {
   requestLayout();
 }
 
+function editApplyStyle(
+  docIndices: number[],
+  style: {
+    align?: string;
+    lineSpacing?: number;
+    fontFamily?: string;
+    fontSize?: number;
+    bold?: boolean;
+    italic?: boolean;
+    underline?: boolean;
+    strike?: boolean;
+    color?: string;
+  },
+) {
+  const validAlign = ['left', 'center', 'right', 'justify'];
+  const indices = Array.isArray(docIndices) ? docIndices : [];
+  if (indices.length === 0) return;
+  indices.forEach((docIdx) => {
+    const item = documentState[docIdx];
+    if (item?.type !== 'paragraph') return;
+    if (style.align && validAlign.includes(style.align)) item.align = style.align as any;
+    if (typeof style.lineSpacing === 'number' && isFinite(style.lineSpacing)) {
+      item.lineSpacing = Math.min(300, Math.max(50, style.lineSpacing));
+    }
+    item.children.forEach((run) => {
+      if (style.fontFamily !== undefined) run.fontFamily = style.fontFamily;
+      if (style.fontSize !== undefined) run.fontSize = style.fontSize;
+      if (style.color !== undefined) {
+        if (style.color === '') delete run.color;
+        else run.color = style.color;
+      } else {
+        // 본문/제목 스타일 적용 시 명시적으로 색을 지정하지 않으면 기본(검정)으로 정리
+      }
+      if (style.bold !== undefined) { if (style.bold) run.bold = true; else delete run.bold; }
+      if (style.italic !== undefined) { if (style.italic) run.italic = true; else delete run.italic; }
+      if (style.underline !== undefined) { if (style.underline) run.underline = true; else delete run.underline; }
+      if (style.strike !== undefined) { if (style.strike) run.strike = true; else delete run.strike; }
+    });
+  });
+  requestLayout();
+}
+
 function editColumns(docIndices: number[], columns: number) {
   const value = columns && columns > 1 ? columns : undefined;
   (Array.isArray(docIndices) ? docIndices : []).forEach((docIdx) => {
@@ -575,6 +631,163 @@ function editInsertTable(docIdx: number, charIndex: number, rows: number, cols: 
 
 
 
+
+type FindPos = { docIdx: number; charIndex: number; isInsideTable: boolean; rowIndex: number; cellIndex: number };
+type MatchPos = FindPos & { length: number };
+type SearchSeg = { pos: FindPos; runs: TextRun[]; text: string };
+
+function collectSearchSegments(): SearchSeg[] {
+  const segs: SearchSeg[] = [];
+  for (let docIdx = 0; docIdx < documentState.length; docIdx++) {
+    const item = documentState[docIdx];
+    if (!item) continue;
+    if (item.type === 'paragraph') {
+      const runs = item.children || [];
+      segs.push({
+        pos: { docIdx, charIndex: 0, isInsideTable: false, rowIndex: 0, cellIndex: 0 },
+        runs,
+        text: runs.map((r) => r.text || '').join(''),
+      });
+    } else if (item.type === 'table') {
+      item.rows.forEach((row, rowIndex) => {
+        row.cells.forEach((cell, cellIndex) => {
+          if (!cell || (cell as any).merged) return;
+          const runs = cell.children || [];
+          segs.push({
+            pos: { docIdx, charIndex: 0, isInsideTable: true, rowIndex, cellIndex },
+            runs,
+            text: runs.map((r) => r.text || '').join(''),
+          });
+        });
+      });
+    }
+  }
+  return segs;
+}
+
+function samePos(a: FindPos | null | undefined, b: FindPos): boolean {
+  if (!a) return false;
+  return a.docIdx === b.docIdx && a.isInsideTable === b.isInsideTable && a.rowIndex === b.rowIndex && a.cellIndex === b.cellIndex;
+}
+
+function posAfter(from: FindPos | null, queryLen: number, seg: SearchSeg, forward: boolean): number {
+  if (!from || !samePos(from, seg.pos)) return 0;
+  const base = Math.max(0, from.charIndex);
+  return forward ? base + Math.max(1, queryLen) : Math.max(0, base - 1);
+}
+
+function findInModel(query: string, from: FindPos | null, direction: 'forward' | 'backward'): MatchPos | null {
+  if (!query) return null;
+  const segs = collectSearchSegments();
+  if (segs.length === 0) return null;
+  let fromSegIdx = -1;
+  if (from) {
+    fromSegIdx = segs.findIndex((s) => samePos(from, s.pos));
+  }
+  if (direction === 'forward') {
+    for (let pass = 0; pass < 2; pass++) {
+      const start = pass === 0 ? Math.max(0, fromSegIdx) : 0;
+      const end = pass === 0 ? segs.length : Math.max(0, fromSegIdx + 1);
+      for (let si = start; si < end; si++) {
+        const seg = segs[si];
+        const offset = pass === 0 ? posAfter(from, query.length, seg, true) : 0;
+        const idx = seg.text.indexOf(query, offset);
+        if (idx >= 0) return { ...seg.pos, charIndex: idx, length: query.length };
+      }
+      if (fromSegIdx < 0) break;
+    }
+  } else {
+    for (let pass = 0; pass < 2; pass++) {
+      const start = pass === 0 ? (fromSegIdx >= 0 ? fromSegIdx : segs.length - 1) : segs.length - 1;
+      const end = pass === 0 ? -1 : (fromSegIdx >= 0 ? fromSegIdx - 1 : -1);
+      for (let si = start; si > end; si--) {
+        const seg = segs[si];
+        let searchFrom = seg.text.length;
+        if (pass === 0 && from && samePos(from, seg.pos)) searchFrom = Math.max(0, from.charIndex - 1);
+        const idx = seg.text.lastIndexOf(query, searchFrom);
+        if (idx >= 0) return { ...seg.pos, charIndex: idx, length: query.length };
+      }
+      if (fromSegIdx < 0) break;
+    }
+  }
+  return null;
+}
+
+function replaceInRuns(runs: TextRun[], charIndex: number, length: number, replacement: string): boolean {
+  if (runs.length === 0) runs.push(seedRun());
+  const total = runs.reduce((acc, r) => acc + (r.text?.length || 0), 0);
+  const from = Math.max(0, Math.min(charIndex, total));
+  const to = Math.max(from, Math.min(charIndex + length, total));
+  if (to < from) return false;
+  if (to > from) {
+    const startIdx = splitRunAt(runs, from);
+    const endIdx = splitRunAt(runs, to);
+    for (let i = startIdx; i < endIdx; i++) runs[i].text = '';
+  }
+  if (replacement.length > 0) {
+    const { runIndex, localIndex } = locateRun(runs, from);
+    const run = runs[runIndex];
+    if (run && isBareRun(run)) applyDefaultShape(run);
+    if (run) {
+      const t = run.text || '';
+      run.text = t.slice(0, localIndex) + replacement + t.slice(localIndex);
+    }
+  }
+  // 빈 run 정리(최소 1개 유지)
+  const compacted = runs.filter((r) => (r.text || '').length > 0 || runs.length === 1);
+  if (compacted.length === 0) compacted.push(seedRun());
+  runs.length = 0;
+  runs.push(...compacted);
+  return true;
+}
+
+function getRunsForPos(pos: FindPos): TextRun[] | null {
+  const item = documentState[pos.docIdx];
+  if (!item) return null;
+  if (!pos.isInsideTable && item.type === 'paragraph') return item.children || [];
+  if (pos.isInsideTable && item.type === 'table') {
+    const cell = item.rows[pos.rowIndex]?.cells[pos.cellIndex];
+    if (!cell || (cell as any).merged) return null;
+    if (!cell.children) cell.children = [];
+    return cell.children;
+  }
+  return null;
+}
+
+function replaceOneInModel(query: string, replacement: string, from: FindPos | null): { replaced: boolean; count?: number; next?: MatchPos | null } {
+  if (!query) return { replaced: false };
+  const match = findInModel(query, from, 'forward');
+  if (!match) return { replaced: false, next: null };
+  const runs = getRunsForPos(match);
+  if (!runs) return { replaced: false };
+  replaceInRuns(runs, match.charIndex, match.length, replacement);
+  requestLayout();
+  // 교체 지점 이후부터 다시 찾기
+  const nextFrom: FindPos = { ...match, charIndex: match.charIndex + replacement.length };
+  const next = findInModel(query, nextFrom, 'forward');
+  return { replaced: true, count: 1, next: next || null };
+}
+
+function replaceAllInModel(query: string, replacement: string): number {
+  if (!query) return 0;
+  let count = 0;
+  // 뒤에서부터 치환하면 인덱스가 덜 꼬이지만 세그먼트/런 구조상 텍스트를 다시 계산하므로,
+  // 각 세그먼트 내에서 뒤에서부터 모든 발생을 치환한다.
+  const segs = collectSearchSegments();
+  for (const seg of segs) {
+    let text = seg.runs.map((r) => r.text || '').join('');
+    if (!text.includes(query)) continue;
+    let idx = text.lastIndexOf(query);
+    while (idx >= 0) {
+      replaceInRuns(seg.runs, idx, query.length, replacement);
+      count++;
+      text = seg.runs.map((r) => r.text || '').join('');
+      idx = text.lastIndexOf(query, idx - 1);
+    }
+  }
+  if (count > 0) requestLayout();
+  return count;
+}
 
 let layoutToken: { cancelled: boolean } = { cancelled: true };
 

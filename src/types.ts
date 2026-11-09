@@ -111,4 +111,8 @@ export type WorkerMessage =
   | { type: 'EDIT_TABLE_BORDER'; payload: { tableDocIdx: number; borderStyle: TableBorderStyle } }
   | { type: 'EDIT_COLOR'; payload: { paragraphIndices: number[]; color?: string; backgroundColor?: string } }
   | { type: 'EDIT_FONT_RANGE'; payload: { paragraphIndex: number; fromCharIndex: number; endCharIndex: number; fontFamily?: string; fontSize?: number; bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean } }
-  | { type: 'EDIT_COLOR_RANGE'; payload: { paragraphIndex: number; fromCharIndex: number; endCharIndex: number; color?: string; backgroundColor?: string } };
+  | { type: 'EDIT_COLOR_RANGE'; payload: { paragraphIndex: number; fromCharIndex: number; endCharIndex: number; color?: string; backgroundColor?: string } }
+  | { type: 'EDIT_FIND'; payload: { query: string; from: { docIdx: number; charIndex: number; isInsideTable: boolean; rowIndex: number; cellIndex: number } | null; direction: 'forward' | 'backward' } }
+  | { type: 'EDIT_REPLACE'; payload: { query: string; replacement: string; from: { docIdx: number; charIndex: number; isInsideTable: boolean; rowIndex: number; cellIndex: number } | null } }
+  | { type: 'EDIT_REPLACE_ALL'; payload: { query: string; replacement: string } }
+  | { type: 'EDIT_APPLY_STYLE'; payload: { paragraphIndices: number[]; align?: TextAlign; lineSpacing?: number; fontFamily?: string; fontSize?: number; bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean; color?: string } };

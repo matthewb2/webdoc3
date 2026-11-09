@@ -14,7 +14,8 @@
 
     <div class="toolbar">
         <div class="ribbon-tabs">
-            <button type="button" class="ribbon-tab active" data-tab-target="edit">편집</button>
+            <button type="button" class="ribbon-tab active" data-tab-target="file">파일</button>
+            <button type="button" class="ribbon-tab" data-tab-target="edit">편집</button>
             <button type="button" class="ribbon-tab" data-tab-target="view">보기</button>
             <button type="button" class="ribbon-tab" data-tab-target="input">입력</button>
             <button type="button" class="ribbon-tab" data-tab-target="format">서식</button>
@@ -23,16 +24,42 @@
             <span id="hwp-status" class="status"></span>
         </div>
         <div class="ribbon-body">
-            <div class="ribbon-panel active" data-tab="edit">
+            <div class="ribbon-panel active" data-tab="file">
                 <div class="ribbon-group">
                     <div class="ribbon-group-items">
                         <div class="ribbon-row">
                             <button id="btn-new-file" class="toolbar-btn" type="button" title="새 문서 만들기">새 문서</button>
                             <button id="btn-open-file" class="toolbar-btn" type="button">파일 열기</button>
-                            <button id="btn-save" class="toolbar-btn" type="button" title="열린 파일의 확장자로 저장 (기본 HWP)">저장</button>
+                            <button id="btn-save" class="toolbar-btn" type="button" title="현재 문서에 덮어쓰기 저장">저장</button>
+                            <button id="btn-save-as" class="toolbar-btn" type="button" title="다른 이름으로 저장">다른 이름으로 저장</button>
                         </div>
                     </div>
                     <div class="ribbon-group-title">파일</div>
+                </div>
+                <div class="ribbon-group ribbon-group-recent">
+                    <div class="ribbon-group-items">
+                        <div id="recent-files-list" class="recent-files-list" aria-label="최근 사용한 파일"></div>
+                    </div>
+                    <div class="ribbon-group-title">최근 사용한 파일</div>
+                </div>
+            </div>
+
+            <div class="ribbon-panel" data-tab="edit">
+                <div class="ribbon-group">
+                    <div class="ribbon-group-items">
+                        <div class="ribbon-row">
+                            <label class="toolbar-label" for="find-text-input">찾기</label>
+                            <input id="find-text-input" class="toolbar-select" type="text" placeholder="찾을 내용" style="width:140px" title="찾을 내용">
+                            <button id="btn-find-next" class="toolbar-btn" type="button" title="다음 찾기">다음 찾기</button>
+                        </div>
+                        <div class="ribbon-row">
+                            <label class="toolbar-label" for="replace-text-input">바꾸기</label>
+                            <input id="replace-text-input" class="toolbar-select" type="text" placeholder="바꿀 내용" style="width:140px" title="바꿀 내용">
+                            <button id="btn-replace" class="toolbar-btn" type="button" title="바꾸기">바꾸기</button>
+                            <button id="btn-replace-all" class="toolbar-btn" type="button" title="모두 바꾸기">모두 바꾸기</button>
+                        </div>
+                    </div>
+                    <div class="ribbon-group-title">찾기 및 바꾸기</div>
                 </div>
             </div>
 
@@ -44,6 +71,16 @@
                         </div>
                     </div>
                     <div class="ribbon-group-title">문서 보기</div>
+                </div>
+                <div class="ribbon-group">
+                    <div class="ribbon-group-items">
+                        <div class="ribbon-row">
+                            <label class="toolbar-label" for="show-para-marks-checkbox" title="문단 끝에 문단부호(¶) 표시">
+                                <input id="show-para-marks-checkbox" type="checkbox"> 문단부호
+                            </label>
+                        </div>
+                    </div>
+                    <div class="ribbon-group-title">표시</div>
                 </div>
             </div>
 
@@ -94,6 +131,16 @@
             </div>
 
             <div class="ribbon-panel" data-tab="format">
+                <div class="ribbon-group">
+                    <div class="ribbon-group-items">
+                        <div class="ribbon-row">
+                            <button id="btn-style-body" class="toolbar-btn" type="button" title="본문 스타일 적용">본문</button>
+                            <button id="btn-style-title" class="toolbar-btn" type="button" title="제목 스타일 적용">제목</button>
+                        </div>
+                    </div>
+                    <div class="ribbon-group-title">스타일</div>
+                </div>
+
                 <div class="ribbon-group">
                     <div class="ribbon-group-items">
                         <div class="ribbon-row">

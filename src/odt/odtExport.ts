@@ -184,28 +184,77 @@ function requestDocSnapshot(worker: Worker): Promise<DocumentModel> {
   });
 }
 
-export async function saveCurrentDocument(worker: Worker, filename = 'document.odt'): Promise<void> {
+export async function buildOdtBlob(worker: Worker): Promise<Blob> {
+  const model = await requestDocSnapshot(worker);
+  const html = buildOdtHtml(model);
+  const tplBuf = await (await fetch('/odt/empty.odt')).arrayBuffer();
+  const doc = new ODTDocument(tplBuf);
+  doc.setHTMLUnsafe(html);
+  const out = doc.getODT({ type: 'uint8array', compression: 'DEFLATE' }) as Uint8Array;
+  return new Blob([out.slice().buffer as ArrayBuffer], { type: 'application/vnd.oasis.opendocument.text' });
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    URL.revokeObjectURL(a.href);
+    a.remove();
+  }, 1000);
+}
+
+export async function saveCurrentDocument(
+  worker: Worker,
+  filename = 'document.odt',
+  opts?: { saveAs?: boolean; handle?: FileSystemFileHandle | null },
+): Promise<{ filename: string; handle: FileSystemFileHandle | null }> {
   const status = document.getElementById('hwp-status') as HTMLSpanElement | null;
+  const saveAs = !!opts?.saveAs;
   try {
-    if (status) status.textContent = 'ODT 생성 중...';
-    const model = await requestDocSnapshot(worker);
-    const html = buildOdtHtml(model);
-    const tplBuf = await (await fetch('/odt/empty.odt')).arrayBuffer();
-    const doc = new ODTDocument(tplBuf);
-    doc.setHTMLUnsafe(html);
-    const out = doc.getODT({ type: 'uint8array', compression: 'DEFLATE' }) as Uint8Array;
-    const blob = new Blob([out.slice().buffer as ArrayBuffer], { type: 'application/vnd.oasis.opendocument.text' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      URL.revokeObjectURL(a.href);
-      a.remove();
-    }, 1000);
+    if (status) status.textContent = saveAs ? '다른 이름으로 저장...' : 'ODT 생성 중...';
+    const blob = await buildOdtBlob(worker);
+
+    let handle = opts?.handle ?? null;
+    if (saveAs) {
+      if (typeof window.showSaveFilePicker === 'function') {
+        handle = await window.showSaveFilePicker({
+          suggestedName: filename,
+          types: [{ description: 'OpenDocument Text', accept: { 'application/vnd.oasis.opendocument.text': ['.odt'] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        const outName = handle.name || filename;
+        if (status) status.textContent = `ODT 저장 완료: ${outName}`;
+        return { filename: outName, handle };
+      }
+      downloadBlob(blob, filename);
+      if (status) status.textContent = `ODT 저장 완료: ${filename}`;
+      return { filename, handle: null };
+    }
+
+    // 저장: 핸들이 있으면 대화상자 없이 덮어쓰기
+    if (handle) {
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      const outName = handle.name || filename;
+      if (status) status.textContent = `ODT 저장 완료: ${outName}`;
+      return { filename: outName, handle };
+    }
+
+    // 핸들 없음: 파일 대화상자를 띄우지 않도록 다운로드(브라우저 설정에 따름)
+    downloadBlob(blob, filename);
     if (status) status.textContent = `ODT 저장 완료: ${filename}`;
+    return { filename, handle: null };
   } catch (err) {
+    if ((err as any)?.name === 'AbortError') {
+      if (status) status.textContent = '저장이 취소되었습니다.';
+      return { filename, handle: opts?.handle ?? null };
+    }
     if (status) status.textContent = `ODT 저장 실패: ${(err as Error).message}`;
     throw err;
   }
