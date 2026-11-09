@@ -1,33 +1,30 @@
 // src/worker/layout.ts - 레이아웃 엔진 (줄 나눔·페이지 분할·청크 스케줄링)
 import type { DocumentModel, DocumentItem, ParagraphNode, TableNode, TableRowNode, FontMetrics, TextRun } from '../types';
-import { CONTENT_HEIGHT, CONTENT_WIDTH, TABLE_GRID_WIDTH } from './layoutConstants';
+import { pageLayout } from './layoutConstants';
 
 export type PageModel = DocumentItem[];
 
 // 워커는 HMR 대상이 아니라 전체 새로고침해야 교체됨 — 실행 중인 엔진 식별용
 console.log('[worker] boot, engine bytes:', runLayoutEngineAsync.toString().length);
 
-// A4 규격(794 x 1123 px) 및 상하 여백(85px * 2 = 170px) 반영
-const PAGE_MAX_HEIGHT = CONTENT_HEIGHT; // 953
 const LINE_HEIGHT = 26;
 // 기본 줄간격(%), 설정 파일 값으로 INIT_SETTINGS를 통해 갱신
 let defaultLineSpacing = 160;
+
+function getPageMaxHeight() { return pageLayout.contentHeight; }
 
 export function setDefaultLineSpacing(pct: number): void {
   if (pct > 0 && isFinite(pct)) defaultLineSpacing = pct;
 }
 
-// A4 가로 폭(794px) 및 좌우 여백(85px * 2 = 170px) 반영
-const EDITOR_MAX_WIDTH = CONTENT_WIDTH; // 624
 const TABLE_CELL_PADDING = 16;
 const TABLE_CELL_BORDER = 1;
-// TABLE_GRID_WIDTH는 layoutConstants에서 가져온다 (probe.ts와 동일 값)
 
 // 셀 내용 너비: collapse 병합 테두리 반영 실측치와 일치
-// (표 599px 중 셀 패딩 16px/셀 + 공유 내부선 1px씩 제외, 외곽선은 표 바깥)
+// (표 내용 폭 중 셀 패딩 16px/셀 + 공유 내부선 1px씩 제외, 외곽선은 표 바깥)
 function tableCellContentWidth(cellCount: number): number {
   const n = Math.max(1, cellCount);
-  return (TABLE_GRID_WIDTH - TABLE_CELL_PADDING * n - (n - 1) * TABLE_CELL_BORDER) / n;
+  return (pageLayout.tableGridWidth - TABLE_CELL_PADDING * n - (n - 1) * TABLE_CELL_BORDER) / n;
 }
 const TABLE_CELL_VERTICAL_PADDING = 14;
 const TABLE_MARGIN_EDGE = 15;
@@ -37,7 +34,7 @@ const COLUMN_GAP = 20;
 
 function columnWidth(columns: number): number {
   const n = Math.max(1, columns);
-  return (EDITOR_MAX_WIDTH - COLUMN_GAP * (n - 1)) / n;
+  return (pageLayout.contentWidth - COLUMN_GAP * (n - 1)) / n;
 }
 
 type Glyph = { ch: string; run: TextRun; w?: number };
@@ -88,7 +85,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
           pendingCols.total += paraTotal;
           charge = Math.ceil(pendingCols.total / columns) - prevBalanced;
         }
-        if (currentHeight + spaceBefore + charge > PAGE_MAX_HEIGHT) {
+        if (currentHeight + spaceBefore + charge > getPageMaxHeight()) {
           if (currentPage.length > 0) {
             pages.push(currentPage);
             currentPage = [];
@@ -106,7 +103,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
       } else {
       pendingCols = null;
       const runs = item.children || [];
-      const lines = buildRunLines(runs, EDITOR_MAX_WIDTH);
+      const lines = buildRunLines(runs, pageLayout.contentWidth);
       let currentParagraphLines: Glyph[][] = [];
       let charOffset = 0;
       let fragmentCount = 0;
@@ -116,7 +113,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
         const lineHeight = lineHeightOfLine(line, spacing);
         const before = lineIndex === 0 ? spaceBefore : 0;
 
-        if (currentHeight + before + lineHeight > PAGE_MAX_HEIGHT) {
+        if (currentHeight + before + lineHeight > getPageMaxHeight()) {
           console.log(`[layout-break] 페이지 초과 발생! docIdx=${idx}, lineIdx=${lineIndex}, 누적높이=${currentHeight + before + lineHeight}`);
           if (currentParagraphLines.length === 0 && currentPage.length > 0) {
             console.log(`[para-break] docIdx=${idx} cur=${currentHeight} lh=${lineHeight} text=${JSON.stringify(runs.map((r) => r.text).join('').slice(0, 30))}`);
@@ -162,7 +159,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
       item.rows.forEach((row, ri) => {
         (row as any)._rowIdx = ri;
         const n = Math.max(1, row.cells.length);
-        const baseCol = TABLE_GRID_WIDTH / n;
+        const baseCol = pageLayout.tableGridWidth / n;
         const colWidths = item.colWidths;
         const cellLineList: Glyph[][][] = row.cells.map((cell, ci) => {
           if ((cell as any).merged) return [];
@@ -204,9 +201,9 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
 
         // 새 조각의 첫 행이면 상단 마진도 함께 검사 (이어진 조각은 상단 마진 없음)
         const overhead = currentTableInPage.rows.length === 0 ? (currentTableInPage._continued ? 0 : TABLE_MARGIN_EDGE) : 0;
-        if (currentHeight + overhead + rowHeight > PAGE_MAX_HEIGHT) {
+        if (currentHeight + overhead + rowHeight > getPageMaxHeight()) {
           // 글자(줄) 높이 기준 분할: 남은 공간에 들어가는 줄 수 (뒷부분에 최소 1줄 남김)
-          const remaining = PAGE_MAX_HEIGHT - currentHeight - overhead;
+          const remaining = getPageMaxHeight() - currentHeight - overhead;
           let splitLines = 0;
           let headAcc = TABLE_CELL_VERTICAL_PADDING + TABLE_BORDER_HEIGHT;
           while (splitLines < maxRowLines - 1 && headAcc + lineHeights[splitLines] <= remaining) {
@@ -271,10 +268,10 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
           while (
             pieceRow !== null &&
             currentTableInPage.rows.length === 1 &&
-            currentHeight > PAGE_MAX_HEIGHT
+            currentHeight > getPageMaxHeight()
           ) {
             const firstOverhead = currentTableInPage._continued ? 0 : TABLE_MARGIN_EDGE;
-            const rem = PAGE_MAX_HEIGHT - firstOverhead;
+            const rem = getPageMaxHeight() - firstOverhead;
             let k = 0;
             let acc = TABLE_CELL_VERTICAL_PADDING + TABLE_BORDER_HEIGHT;
             while (k < pieceLineHeights.length - 1 && acc + pieceLineHeights[k] <= rem) {
@@ -468,6 +465,10 @@ const breakCache = new Map<string, number[]>();
 export function setBreaks(incoming: Record<string, number[]>) {
   Object.keys(incoming).forEach((k) => breakCache.set(k, incoming[k]));
   if (breakCache.size > 8000) breakCache.clear();
+}
+
+export function clearBreaks() {
+  breakCache.clear();
 }
 
 function breakKeyForRuns(runs: TextRun[], width: number): string {

@@ -1,5 +1,6 @@
 import type { DocumentModel, TableCellNode, TableNode, TableRowNode, TextRun } from '../types';
-import { runLayoutEngineAsync, setBreaks, setDefaultLineSpacing, setFontMetrics } from './layout';
+import { clearBreaks, runLayoutEngineAsync, setBreaks, setDefaultLineSpacing, setFontMetrics } from './layout';
+import { setPageMargins } from './layoutConstants';
 export type { PageModel } from './layout';
 
 
@@ -94,6 +95,10 @@ self.addEventListener('message', (event: MessageEvent<any>) => {
     if (typeof message.payload?.lineSpacing === 'number') {
       setDefaultLineSpacing(message.payload.lineSpacing);
     }
+    if (message.payload?.pageMargins) {
+      setPageMargins(message.payload.pageMargins);
+      clearBreaks();
+    }
   } else if (message.type === 'EDIT_LINE_SPACING') {
     editLineSpacing(message.payload.paragraphIndices, message.payload.lineSpacing);
   } else if (message.type === 'EDIT_SPLIT') {
@@ -122,6 +127,10 @@ self.addEventListener('message', (event: MessageEvent<any>) => {
       (node as any).borderStyle = message.payload.borderStyle;
       requestLayout();
     }
+  } else if (message.type === 'SET_PAGE_MARGINS') {
+    setPageMargins(message.payload);
+    clearBreaks();
+    requestLayout();
   } else if (message.type === 'EDIT_COLOR') {
     editColor(message.payload.paragraphIndices, message.payload.color, message.payload.backgroundColor);
   } else if (message.type === 'EDIT_FONT_RANGE') {

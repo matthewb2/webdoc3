@@ -1,7 +1,7 @@
 // src/render.ts - 페이지 DOM 생성 + 가상화 뷰포트
 import type { PageModel } from './worker/doc.worker';
 import { defaultAlign, defaultIndent } from './settings';
-import { PAGE_GAP, PAGE_HEIGHT, PAGE_PADDING, PAGE_PITCH, PAGE_WIDTH } from './worker/layoutConstants';
+import { PAGE_GAP, PAGE_HEIGHT, PAGE_PITCH, PAGE_WIDTH, pageLayout } from './worker/layoutConstants';
 
 let rendererContainer!: HTMLDivElement;
 
@@ -117,9 +117,10 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
   pageEl.dataset.pageNumber = (pIndex + 1).toString();
 
   // A4 기준 스타일 적용
+  const m = pageLayout.margins;
   pageEl.style.width = `${PAGE_WIDTH}px`;
   pageEl.style.minHeight = `${PAGE_HEIGHT}px`;
-  pageEl.style.padding = `${PAGE_PADDING}px`;
+  pageEl.style.padding = `${m.top}px ${m.right}px ${m.bottom}px ${m.left}px`;
   pageEl.style.boxSizing = 'border-box';
   pageEl.style.position = 'relative';
   pageEl.style.background = 'white';
@@ -142,12 +143,14 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
     if (insertTableCellParagraph(td)) e.preventDefault();
   });
 
-  const padRaw = parseFloat(getComputedStyle(pageEl).paddingLeft);
-  const padPx = Number.isFinite(padRaw) && padRaw > 0 ? padRaw : PAGE_PADDING; // A4 기본 여백 가정
+  const padLeft = pageLayout.margins.left;
+  const padRight = pageLayout.margins.right;
+  const padTop = pageLayout.margins.top;
+  const padBottom = pageLayout.margins.bottom;
   const dpr = window.devicePixelRatio || 1;
   const marginCanvas = document.createElement('canvas');
   marginCanvas.className = 'margin-lines';
-  
+
   // A4 캔버스 크기
   marginCanvas.width = Math.round(PAGE_WIDTH * dpr);
   marginCanvas.height = Math.round(PAGE_HEIGHT * dpr);
@@ -158,14 +161,14 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
   marginCanvas.style.height = `${PAGE_HEIGHT}px`;
   marginCanvas.style.pointerEvents = 'none';
   marginCanvas.contentEditable = 'false';
-  
+
   const mctx = marginCanvas.getContext('2d');
   if (mctx) {
     const D = (v: number) => Math.round(v * dpr);
     mctx.fillStyle = '#8a94a0';
     const tick = Math.round(18 * dpr);
     const lw = Math.max(1, Math.round(dpr));
-    const x0 = D(padPx), x1 = D(PAGE_WIDTH - padPx), y0 = D(padPx), y1 = D(PAGE_HEIGHT - padPx);
+    const x0 = D(padLeft), x1 = D(PAGE_WIDTH - padRight), y0 = D(padTop), y1 = D(PAGE_HEIGHT - padBottom);
     mctx.fillRect(x0 - tick, y0 - lw, tick, lw);
     mctx.fillRect(x0 - lw, y0 - tick, lw, tick);
     mctx.fillRect(x1, y0 - lw, tick, lw);
@@ -296,7 +299,7 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
           const colSpan = Math.max(1, cell.colSpan ?? 1);
           const rowSpan = Math.max(1, cell.rowSpan ?? 1);
           
-          const contentWidth = PAGE_WIDTH - (padPx * 2);
+          const contentWidth = pageLayout.contentWidth;
           const baseCol = contentWidth / cellCount;
           let w = baseCol * colSpan;
           if (item.colWidths && item.colWidths.length > 0) {

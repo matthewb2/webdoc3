@@ -1,10 +1,8 @@
 // src/probe.ts - 브라우저 실측 줄바꿈 (숨김 probe로 런별 분절점을 재서 워커에 전달)
 import type { BreakMap, DocumentModel, TextRun } from './types';
-import { CONTENT_WIDTH, TABLE_GRID_WIDTH } from './worker/layoutConstants';
+import { pageLayout } from './worker/layoutConstants';
 
 // 워커(layout.ts)의 기하 상수와 동일해야 함
-const EDITOR_W = CONTENT_WIDTH;
-const TABLE_GRID_W = TABLE_GRID_WIDTH;
 const CELL_PAD = 16;
 const CELL_BD = 1;
 
@@ -32,12 +30,13 @@ export function collectProbeItems(model: DocumentModel): ProbeItem[] {
   model.forEach((item) => {
     if (item.type === 'paragraph') {
       const columns = item.columns && item.columns > 1 ? item.columns : 1;
-      const width = columns > 1 ? (EDITOR_W - 20 * (columns - 1)) / columns : EDITOR_W;
+      const editorW = pageLayout.contentWidth;
+      const width = columns > 1 ? (editorW - 20 * (columns - 1)) / columns : editorW;
       add(item.children || [], width);
     } else {
       item.rows.forEach((row) => {
         const n = Math.max(1, row.cells.length);
-        const cw = (TABLE_GRID_W - CELL_PAD * n - (n - 1) * CELL_BD) / n;
+        const cw = (pageLayout.tableGridWidth - CELL_PAD * n - (n - 1) * CELL_BD) / n;
         row.cells.forEach((cell) => add(cell.children || [], cw));
       });
     }

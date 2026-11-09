@@ -1,6 +1,7 @@
 import type { PageModel } from '../worker/doc.worker';
 import type { CursorState, TableBorderStyle } from '../types';
-import { defaultAlign, defaultFontFamily, defaultFontSize, defaultLineSpacing } from '../settings';
+import { defaultAlign, defaultFontFamily, defaultFontSize, defaultLineSpacing, loadSettings, saveSettings } from '../settings';
+import { setPageMargins } from '../worker/layoutConstants';
 import { parseHwpToDocumentModel } from '../hwp/hwpParser';
 import { parseDocxToDocumentModel } from '../docx/docxParser';
 import { parseOdtToDocumentModel } from '../odt/odtParser';
@@ -787,6 +788,24 @@ export function initNewDocument(container: HTMLDivElement, worker: Worker, curso
   });
 }
 
+function activateRibbonTab(tab: string) {
+  document.querySelectorAll<HTMLElement>('.ribbon-tab[data-tab-target]').forEach((el) => {
+    el.classList.toggle('active', el.dataset.tabTarget === tab);
+  });
+  document.querySelectorAll<HTMLElement>('.ribbon-panel[data-tab]').forEach((el) => {
+    el.classList.toggle('active', el.dataset.tab === tab);
+  });
+}
+
+export function initRibbonTabs() {
+  document.querySelectorAll<HTMLElement>('.ribbon-tab[data-tab-target]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const tab = el.dataset.tabTarget;
+      if (tab) activateRibbonTab(tab);
+    });
+  });
+}
+
 export function initTableProperties(container: HTMLDivElement, worker: Worker) {
   const group = document.getElementById('ribbon-group-table-props') as HTMLDivElement | null;
   const btnDefault = document.getElementById('btn-table-border-default') as HTMLButtonElement | null;
@@ -836,6 +855,55 @@ export function syncTablePropertiesRibbon(container?: HTMLDivElement) {
   }
   const activeBtn = borderStyle === 'none' ? btnNone : borderStyle === 'no-vertical' ? btnNoV : btnDefault;
   activeBtn?.classList.add('active');
+}
+
+export function initPageMargins(worker: Worker) {
+  const ids = {
+    top: 'margin-top-input',
+    bottom: 'margin-bottom-input',
+    left: 'margin-left-input',
+    right: 'margin-right-input',
+  } as const;
+  const pxToMm = (px: number) => Math.round((px * 25.4 / 96) * 10) / 10;
+  const mmToPx = (mm: number) => (mm * 96) / 25.4;
+  const get = (k: keyof typeof ids) => document.getElementById(ids[k]) as HTMLInputElement | null;
+
+  const sync = () => {
+    const m = loadSettings().pageMargins;
+    (['top', 'bottom', 'left', 'right'] as const).forEach((k) => {
+      const el = get(k);
+      if (el) el.value = String(pxToMm(m[k]));
+    });
+  };
+  sync();
+
+  const apply = () => {
+    const cur = loadSettings().pageMargins;
+    const read = (k: keyof typeof ids, fb: number) => {
+      const v = parseFloat(get(k)?.value ?? '');
+      if (!Number.isFinite(v)) return fb;
+      return Math.max(0, Math.min(300, mmToPx(v)));
+    };
+    const next = {
+      top: read('top', cur.top),
+      bottom: read('bottom', cur.bottom),
+      left: read('left', cur.left),
+      right: read('right', cur.right),
+    };
+    // 본문 영역이 최소 크기를 유지하도록 보정
+    if (next.left + next.right > 700) { next.left = cur.left; next.right = cur.right; }
+    if (next.top + next.bottom > 1000) { next.top = cur.top; next.bottom = cur.bottom; }
+    saveSettings({ pageMargins: next });
+    setPageMargins(next);
+    worker.postMessage({ type: 'SET_PAGE_MARGINS', payload: next });
+    sync();
+    window.dispatchEvent(new CustomEvent('page-margins-change'));
+  };
+
+  document.getElementById('btn-apply-margins')?.addEventListener('click', apply);
+  (['top', 'bottom', 'left', 'right'] as const).forEach((k) => {
+    get(k)?.addEventListener('keydown', (e) => { if (e.key === 'Enter') apply(); });
+  });
 }
 
 export function initSave(worker: Worker) {

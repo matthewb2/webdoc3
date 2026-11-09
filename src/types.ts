@@ -92,7 +92,8 @@ export type WorkerMessage =
   | { type: 'INIT_METRICS'; payload: FontMetrics }
   | { type: 'BREAKS'; payload: BreakMap }
   | { type: 'INIT_DOC'; payload: DocumentModel }
-  | { type: 'INIT_SETTINGS'; payload: { charShape: { bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean; color?: string }; lineSpacing?: number } }
+  | { type: 'INIT_SETTINGS'; payload: { charShape: { bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean; color?: string }; lineSpacing?: number; pageMargins?: { top: number; right: number; bottom: number; left: number } } }
+  | { type: 'SET_PAGE_MARGINS'; payload: { top: number; right: number; bottom: number; left: number } }
   | { type: 'EDIT_LINE_SPACING'; payload: { paragraphIndices: number[]; lineSpacing: number } }
   | { type: 'EDIT_INSERT'; payload: { paragraphIndex: number; charIndex: number; text: string } }
   | { type: 'EDIT_DELETE'; payload: { paragraphIndex: number; charIndex: number } }

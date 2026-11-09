@@ -1,9 +1,10 @@
 import type { CursorState, DocumentModel, FontMetrics, ParagraphNode, TableNode, TableRowNode } from './types';
 import type { PageModel } from './worker/doc.worker';
 import { defaultFontFamily, defaultUiFontFamily, initSettings, loadSettings } from './settings';
+import { setPageMargins } from './worker/layoutConstants';
 import { collectProbeItems, computeBreaks } from './probe';
 import { appendStreamPages, findCursorPageIndices, getCachedPages, initRenderer, renderVirtualPages, updateVisiblePages } from './render';
-import { clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFontCombos, initFileOpen, initLineSpacingCombo, initNewDocument, initSave, initSelectionListener, initStyleButtons, initTableInsert, initTableProperties, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, setCurrentFileName, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncLineSpacingCombo, syncStyleButtons, syncTablePropertiesRibbon, takePendingSelection } from './listener';
+import { clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFontCombos, initFileOpen, initLineSpacingCombo, initNewDocument, initPageMargins, initRibbonTabs, initSave, initSelectionListener, initStyleButtons, initTableInsert, initTableProperties, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, setCurrentFileName, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncLineSpacingCombo, syncStyleButtons, syncTablePropertiesRibbon, takePendingSelection } from './listener';
 import { initEditorListeners, isComposingActive } from './listener/keyboard';
 import { initCellSelection, paintCellSelection } from './listener/mouse';
 import { initPreviewMode } from './preview';
@@ -277,9 +278,11 @@ function restoreCursorPosition() {
 
 async function initWordProcessor() {
   await initSettings();
+  const settings = loadSettings();
+  setPageMargins(settings.pageMargins);
   document.documentElement.style.setProperty('--doc-font', `"${defaultFontFamily()}"`);
   document.documentElement.style.setProperty('--ui-font', `"${defaultUiFontFamily()}"`);
-  worker.postMessage({ type: 'INIT_SETTINGS', payload: { charShape: loadSettings().charShape, lineSpacing: loadSettings().paraShape.lineSpacing } });
+  worker.postMessage({ type: 'INIT_SETTINGS', payload: { charShape: settings.charShape, lineSpacing: settings.paraShape.lineSpacing, pageMargins: settings.pageMargins } });
   const fontMetrics = generateFontMetrics(`16px "${defaultFontFamily()}", Arial`);
   worker.postMessage({ type: 'INIT_METRICS', payload: fontMetrics });
 
@@ -391,6 +394,8 @@ if (viewportEl) {
 }
 initRenderer(containerEl);
 initWordProcessor();
+initRibbonTabs();
+initPageMargins(worker);
 initNewDocument(containerEl, worker, savedCursor);
 initFileOpen(worker, containerEl);
 let pendingPages: PageModel[] | null = null;

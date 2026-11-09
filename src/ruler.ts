@@ -1,10 +1,12 @@
 // 편집용지 눈금자: 줌 배율에 맞춰 눈금/마커를 다시 그리고,
 // 마커 드래그로 현재 문단의 들여쓰기를 조절한다.
+import { pageLayout } from './worker/layoutConstants';
 
-const MARGIN_LEFT_TRACK = 85; // 페이지 내부 패딩
-const CONTENT_WIDTH = 624; // 순수 편집 영역 너비 (794 - 85*2)
 const TRACK_WIDTH = 794; // A4 페이지 너비
 const SCALE_STEP = 40;
+
+function marginLeftTrack() { return pageLayout.margins.left; }
+function contentWidth() { return pageLayout.contentWidth; }
 
 type EditorZoomDetail = { zoom?: number };
 
@@ -45,8 +47,8 @@ function setup(): void {
 
   function renderRulerTicks(): void {
     rulerTicksContainer.innerHTML = '';
-    rulerTicksContainer.style.left = `${MARGIN_LEFT_TRACK * rulerZoom}px`;
-    for (let px = 0; px <= CONTENT_WIDTH; px += 10) {
+    rulerTicksContainer.style.left = `${marginLeftTrack() * rulerZoom}px`;
+    for (let px = 0; px <= contentWidth(); px += 10) {
       const left = px * rulerZoom;
       const tick = document.createElement('div');
       tick.className = 'ruler-tick';
@@ -90,9 +92,12 @@ function setup(): void {
     if (!targetP) return;
     const paddingLeft = parseFloat(window.getComputedStyle(targetP).paddingLeft) || 0;
     const textIndent = parseFloat(window.getComputedStyle(targetP).textIndent) || 0;
+    // CSS text-indent is relative to the padding edge, so absolute first-line = paddingLeft + textIndent
+    const leftAbs = paddingLeft;
+    const firstAbs = paddingLeft + textIndent;
 
-    leftIndentMarker.style.left = `${(MARGIN_LEFT_TRACK + paddingLeft) * rulerZoom}px`;
-    firstLineMarker.style.left = `${(MARGIN_LEFT_TRACK + textIndent) * rulerZoom}px`;
+    leftIndentMarker.style.left = `${(marginLeftTrack() + leftAbs) * rulerZoom}px`;
+    firstLineMarker.style.left = `${(marginLeftTrack() + firstAbs) * rulerZoom}px`;
   }
 
   function setRulerZoom(zoom: number | undefined): void {
@@ -107,8 +112,8 @@ function setup(): void {
       updateMarkersFromSelection();
     } else {
       // 선택된 문단이 없으면 들여쓰기 0(본문 시작) 위치로 유지
-      leftIndentMarker.style.left = `${MARGIN_LEFT_TRACK * rulerZoom}px`;
-      firstLineMarker.style.left = `${MARGIN_LEFT_TRACK * rulerZoom}px`;
+      leftIndentMarker.style.left = `${marginLeftTrack() * rulerZoom}px`;
+      firstLineMarker.style.left = `${marginLeftTrack() * rulerZoom}px`;
     }
   }
 
@@ -127,27 +132,38 @@ function setup(): void {
   function onMouseMove(event: MouseEvent): void {
     if (!activeMarker) return;
     const rect = rulerTrack.getBoundingClientRect();
-    const margin = MARGIN_LEFT_TRACK * rulerZoom;
-    const content = CONTENT_WIDTH * rulerZoom;
+    const margin = marginLeftTrack() * rulerZoom;
+    const content = contentWidth() * rulerZoom;
 
     let posX = event.clientX - rect.left;
     posX = Math.max(margin, Math.min(posX, margin + content));
 
-    activeMarker.style.left = `${posX}px`;
-
-    const markerRect = activeMarker.getBoundingClientRect();
-    updateGuideLine(markerRect.left + markerRect.width / 2);
-
-    const indentValue = (posX - margin) / rulerZoom;
+    const absValue = (posX - margin) / rulerZoom;
     const targetP = getTargetParagraph();
 
     if (targetP) {
+      const curPad = parseFloat(window.getComputedStyle(targetP).paddingLeft) || 0;
+      const curIndent = parseFloat(window.getComputedStyle(targetP).textIndent) || 0;
       if (activeMarker === leftIndentMarker) {
-        targetP.style.paddingLeft = `${Math.max(0, indentValue)}px`;
+        const newLeft = Math.max(0, absValue);
+        // 왼쪽 들여쓰기 이동 시 첫 줄 들여쓰기(상대 오프셋)를 유지해 함께 이동
+        const firstOffset = curIndent;
+        targetP.style.paddingLeft = `${newLeft}px`;
+        targetP.style.textIndent = `${firstOffset}px`;
+        leftIndentMarker.style.left = `${(marginLeftTrack() + newLeft) * rulerZoom}px`;
+        firstLineMarker.style.left = `${(marginLeftTrack() + newLeft + firstOffset) * rulerZoom}px`;
       } else if (activeMarker === firstLineMarker) {
-        targetP.style.textIndent = `${indentValue}px`;
+        const relIndent = absValue - curPad;
+        targetP.style.textIndent = `${relIndent}px`;
+        leftIndentMarker.style.left = `${(marginLeftTrack() + curPad) * rulerZoom}px`;
+        firstLineMarker.style.left = `${(marginLeftTrack() + curPad + relIndent) * rulerZoom}px`;
       }
+    } else {
+      activeMarker.style.left = `${posX}px`;
     }
+
+    const markerRect = activeMarker.getBoundingClientRect();
+    updateGuideLine(markerRect.left + markerRect.width / 2);
   }
 
   function onMouseUp(): void {
@@ -167,9 +183,14 @@ function setup(): void {
     setRulerZoom(detail?.zoom);
   });
 
+  window.addEventListener('page-margins-change', () => {
+    setRulerZoom(rulerZoom);
+    updateMarkersFromSelection();
+  });
+
   // 초기 위치: 들여쓰기 0(본문 시작)
-  leftIndentMarker.style.left = `${MARGIN_LEFT_TRACK}px`;
-  firstLineMarker.style.left = `${MARGIN_LEFT_TRACK}px`;
+  leftIndentMarker.style.left = `${marginLeftTrack()}px`;
+  firstLineMarker.style.left = `${marginLeftTrack()}px`;
   setRulerZoom(1);
   rulerTrack.classList.add('ruler-ready');
   const container = rulerTrack.closest('.ruler-container') as HTMLElement | null;

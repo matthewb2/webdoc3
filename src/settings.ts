@@ -15,6 +15,13 @@ export interface ParaShapeSetting {
   lineSpacing: number;
 }
 
+export interface PageMarginsSetting {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
 export interface UserSettings {
   /** 본문 기본 글꼴 */
   fontFamily: string;
@@ -26,6 +33,8 @@ export interface UserSettings {
   charShape: CharShapeSetting;
   /** 기본 문단 모양 (align이 기본 정렬) */
   paraShape: ParaShapeSetting;
+  /** 페이지 여백(px, 96dpi) */
+  pageMargins: PageMarginsSetting;
 }
 
 const ALIGN_VALUES: TextAlign[] = ['left', 'center', 'right', 'justify'];
@@ -40,6 +49,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   uiFontFamily: '맑은 고딕',
   charShape: { bold: false, italic: false, underline: false, strike: false },
   paraShape: { align: 'justify', indent: 0, lineSpacing: 160 },
+  pageMargins: { top: 85, right: 85, bottom: 85, left: 85 },
 };
 
 function validCharShape(v: unknown): CharShapeSetting {
@@ -67,6 +77,17 @@ function validParaShape(v: unknown): ParaShapeSetting {
   return base;
 }
 
+function validPageMargins(v: unknown): PageMarginsSetting {
+  const base: PageMarginsSetting = { ...DEFAULT_SETTINGS.pageMargins };
+  if (typeof v !== 'object' || v === null) return base;
+  const o = v as Record<string, unknown>;
+  (['top', 'right', 'bottom', 'left'] as const).forEach((k) => {
+    const n = o[k];
+    if (typeof n === 'number' && isFinite(n)) base[k] = Math.max(0, Math.min(300, n));
+  });
+  return base;
+}
+
 const STORAGE_KEY = 'webdoc3-settings';
 const SETTINGS_URL = `${import.meta.env.BASE_URL}settings.json`;
 
@@ -85,6 +106,7 @@ export async function initSettings(): Promise<UserSettings> {
         ...DEFAULT_SETTINGS,
         charShape: { ...DEFAULT_SETTINGS.charShape },
         paraShape: { ...DEFAULT_SETTINGS.paraShape },
+        pageMargins: { ...DEFAULT_SETTINGS.pageMargins },
       };
       if (typeof parsed.fontFamily === 'string' && parsed.fontFamily.length > 0) {
         next.fontFamily = parsed.fontFamily;
@@ -97,6 +119,7 @@ export async function initSettings(): Promise<UserSettings> {
       }
       next.charShape = validCharShape(parsed.charShape);
       next.paraShape = validParaShape(parsed.paraShape);
+      next.pageMargins = validPageMargins((parsed as any).pageMargins);
       fileSettings = next;
     }
   } catch {
@@ -124,12 +147,13 @@ function mergedSettings(): UserSettings {
             : base.uiFontFamily,
         charShape: parsed.charShape !== undefined ? validCharShape(parsed.charShape) : { ...base.charShape },
         paraShape: parsed.paraShape !== undefined ? validParaShape(parsed.paraShape) : { ...base.paraShape },
+        pageMargins: (parsed as any).pageMargins !== undefined ? validPageMargins((parsed as any).pageMargins) : { ...base.pageMargins },
       };
     }
   } catch {
     /* 저장소 접근 실패 시 파일 설정 */
   }
-  return { ...base };
+  return { ...base, charShape: { ...base.charShape }, paraShape: { ...base.paraShape }, pageMargins: { ...base.pageMargins } };
 }
 
 export function loadSettings(): UserSettings {
@@ -137,23 +161,30 @@ export function loadSettings(): UserSettings {
 }
 
 export function saveSettings(patch: Partial<UserSettings>): UserSettings {
+  const cur = loadSettings();
   const next: UserSettings = {
-    ...loadSettings(),
+    ...cur,
     ...patch,
-    charShape: { ...loadSettings().charShape, ...(patch.charShape ?? {}) },
-    paraShape: { ...loadSettings().paraShape, ...(patch.paraShape ?? {}) },
+    charShape: { ...cur.charShape, ...(patch.charShape ?? {}) },
+    paraShape: { ...cur.paraShape, ...(patch.paraShape ?? {}) },
+    pageMargins: { ...cur.pageMargins, ...(patch.pageMargins ?? {}) },
   };
   if (next.fontFamily.length === 0) next.fontFamily = DEFAULT_SETTINGS.fontFamily;
   if (!(next.fontSize > 0)) next.fontSize = DEFAULT_SETTINGS.fontSize;
   if (!next.uiFontFamily || next.uiFontFamily.length === 0) next.uiFontFamily = DEFAULT_SETTINGS.uiFontFamily;
   next.charShape = validCharShape(next.charShape);
   next.paraShape = validParaShape(next.paraShape);
+  next.pageMargins = validPageMargins(next.pageMargins);
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   } catch {
     /* 저장 실패 무시 */
   }
   return next;
+}
+
+export function defaultPageMargins(): PageMarginsSetting {
+  return loadSettings().pageMargins;
 }
 
 export function defaultFontFamily(): string {

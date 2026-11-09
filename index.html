@@ -14,159 +14,210 @@
 
     <div class="toolbar">
         <div class="ribbon-tabs">
-            <span class="ribbon-tab active">홈</span>
+            <button type="button" class="ribbon-tab active" data-tab-target="edit">편집</button>
+            <button type="button" class="ribbon-tab" data-tab-target="view">보기</button>
+            <button type="button" class="ribbon-tab" data-tab-target="input">입력</button>
+            <button type="button" class="ribbon-tab" data-tab-target="format">서식</button>
+            <button type="button" class="ribbon-tab" data-tab-target="page">쪽</button>
+            <span class="ribbon-tabs-spacer"></span>
             <span id="hwp-status" class="status"></span>
         </div>
         <div class="ribbon-body">
-            <div class="ribbon-group">
-                <div class="ribbon-group-items">
-                    <div class="ribbon-row">
-                        <button id="btn-new-file" class="toolbar-btn" type="button" title="새 문서 만들기">새 문서</button>
-                        <button id="btn-open-file" class="toolbar-btn" type="button">파일 열기</button>
-                        <button id="btn-save" class="toolbar-btn" type="button" title="열린 파일의 확장자로 저장 (기본 HWP)">저장</button>
-                        <button id="btn-preview" class="toolbar-btn" type="button" title="읽기 전용 미리보기">미리보기</button>
+            <div class="ribbon-panel active" data-tab="edit">
+                <div class="ribbon-group">
+                    <div class="ribbon-group-items">
+                        <div class="ribbon-row">
+                            <button id="btn-new-file" class="toolbar-btn" type="button" title="새 문서 만들기">새 문서</button>
+                            <button id="btn-open-file" class="toolbar-btn" type="button">파일 열기</button>
+                            <button id="btn-save" class="toolbar-btn" type="button" title="열린 파일의 확장자로 저장 (기본 HWP)">저장</button>
+                        </div>
                     </div>
+                    <div class="ribbon-group-title">파일</div>
                 </div>
-                <div class="ribbon-group-title">파일</div>
             </div>
 
-            <div class="ribbon-group">
-                <div class="ribbon-group-items">
-                    <div class="ribbon-row">
-                        <label class="toolbar-label" for="font-family-select">글꼴</label>
-                        <select id="font-family-select" class="toolbar-select" disabled>
-                          <option>Arial</option>
-                          <option>Verdana</option>
-                          <option>Tahoma</option>
-                          <option>Times New Roman</option>
-                          <option>Georgia</option>
-                          <option>Courier New</option>
-                          <option>맑은 고딕</option>
-                          <option>굴림</option>
-                          <option>돋움</option>
-                          <option>바탕</option>
-                          <option>궁서</option>
-                          <option>나눔고딕</option>
-                          <option>Noto Sans KR</option>
-                        </select>
-                        <label class="toolbar-label" for="font-size-select">크기</label>
-                        <select id="font-size-select" class="toolbar-select" disabled>
-                          <option>8</option>
-                          <option>9</option>
-                          <option>10</option>
-                          <option>11</option>
-                          <option>12</option>
-                          <option>14</option>
-                          <option>16</option>
-                          <option>18</option>
-                          <option>20</option>
-                          <option>22</option>
-                          <option>24</option>
-                          <option>26</option>
-                          <option>28</option>
-                          <option>32</option>
-                          <option>36</option>
-                          <option>48</option>
-                          <option>72</option>
-                        </select>
+            <div class="ribbon-panel" data-tab="view">
+                <div class="ribbon-group">
+                    <div class="ribbon-group-items">
+                        <div class="ribbon-row">
+                            <button id="btn-preview" class="toolbar-btn" type="button" title="읽기 전용 미리보기">미리보기</button>
+                        </div>
                     </div>
-                    <div class="ribbon-row">
-                        <button id="btn-style-normal" class="toolbar-btn" type="button" title="보통 (서식 지우기)">보통</button>
-                        <button id="btn-style-bold" class="toolbar-btn toolbar-btn-style" type="button" title="굵게"><b>B</b></button>
-                        <button id="btn-style-italic" class="toolbar-btn toolbar-btn-style" type="button" title="기울임"><i>I</i></button>
-                        <button id="btn-style-underline" class="toolbar-btn toolbar-btn-style" type="button" title="밑줄"><u>U</u></button>
-                    </div>
+                    <div class="ribbon-group-title">문서 보기</div>
                 </div>
-                <div class="ribbon-group-title">글꼴</div>
             </div>
 
-            <div class="ribbon-group">
-                <div class="ribbon-group-items">
-                    <div class="ribbon-row">
-                        <label class="toolbar-label" for="column-count-select">다단</label>
-                        <select id="column-count-select" class="toolbar-select">
-                          <option value="1">1단</option>
-                          <option value="2">2단</option>
-                          <option value="3">3단</option>
-                        </select>
-                        <label class="toolbar-label" for="align-select">정렬</label>
-                        <select id="align-select" class="toolbar-select">
-                          <option value="left">왼쪽</option>
-                          <option value="center">가운데</option>
-                          <option value="right">오른쪽</option>
-                          <option value="justify">양쪽</option>
-                        </select>
+            <div class="ribbon-panel" data-tab="input">
+                <div class="ribbon-group">
+                    <div class="ribbon-group-items">
+                        <div class="ribbon-row">
+                            <label class="toolbar-label" for="table-rows-input">행</label>
+                            <select id="table-rows-input" class="toolbar-select" style="width:52px" title="행 수">
+                              <option value="1">1</option>
+                              <option value="2" selected>2</option>
+                              <option value="3">3</option>
+                              <option value="4">4</option>
+                              <option value="5">5</option>
+                              <option value="6">6</option>
+                              <option value="8">8</option>
+                              <option value="10">10</option>
+                            </select>
+                            <label class="toolbar-label" for="table-cols-input">열</label>
+                            <select id="table-cols-input" class="toolbar-select" style="width:52px" title="열 수">
+                              <option value="1">1</option>
+                              <option value="2">2</option>
+                              <option value="3" selected>3</option>
+                              <option value="4">4</option>
+                              <option value="5">5</option>
+                              <option value="6">6</option>
+                              <option value="8">8</option>
+                              <option value="10">10</option>
+                            </select>
+                        </div>
+                        <div class="ribbon-row">
+                            <button id="btn-insert-table" class="toolbar-btn" type="button" title="표 삽입">표 삽입</button>
+                        </div>
                     </div>
-                    <div class="ribbon-row">
-                        <label class="toolbar-label" for="line-spacing-select">줄간격</label>
-                        <select id="line-spacing-select" class="toolbar-select">
-                          <option value="100">100%</option>
-                          <option value="120">120%</option>
-                          <option value="150">150%</option>
-                          <option value="160">160%</option>
-                          <option value="200">200%</option>
-                        </select>
-                    </div>
+                    <div class="ribbon-group-title">표</div>
                 </div>
-                <div class="ribbon-group-title">단락</div>
+
+                <div id="ribbon-group-table-props" class="ribbon-group" style="display:none">
+                    <div class="ribbon-group-items">
+                        <div class="ribbon-row">
+                            <button id="btn-table-border-default" class="toolbar-btn" type="button" title="모든 테두리 표시">기본</button>
+                            <button id="btn-table-border-none" class="toolbar-btn" type="button" title="테두리 없음">테두리 없음</button>
+                            <button id="btn-table-border-no-v" class="toolbar-btn" type="button" title="세로줄 없음">세로줄 없음</button>
+                        </div>
+                    </div>
+                    <div class="ribbon-group-title">표 속성</div>
+                </div>
             </div>
 
-            <div class="ribbon-group">
-                <div class="ribbon-group-items">
-                    <div class="ribbon-row">
-                        <label class="toolbar-label" for="text-color-input">글자색</label>
-                        <input id="text-color-input" class="toolbar-color" type="color" value="#000000" title="글자색 (두 번 클릭하면 기본값)">
+            <div class="ribbon-panel" data-tab="format">
+                <div class="ribbon-group">
+                    <div class="ribbon-group-items">
+                        <div class="ribbon-row">
+                            <label class="toolbar-label" for="font-family-select">글꼴</label>
+                            <select id="font-family-select" class="toolbar-select" disabled>
+                              <option>Arial</option>
+                              <option>Verdana</option>
+                              <option>Tahoma</option>
+                              <option>Times New Roman</option>
+                              <option>Georgia</option>
+                              <option>Courier New</option>
+                              <option>맑은 고딕</option>
+                              <option>굴림</option>
+                              <option>돋움</option>
+                              <option>바탕</option>
+                              <option>궁서</option>
+                              <option>나눔고딕</option>
+                              <option>Noto Sans KR</option>
+                            </select>
+                            <label class="toolbar-label" for="font-size-select">크기</label>
+                            <select id="font-size-select" class="toolbar-select" disabled>
+                              <option>8</option>
+                              <option>9</option>
+                              <option>10</option>
+                              <option>11</option>
+                              <option>12</option>
+                              <option>14</option>
+                              <option>16</option>
+                              <option>18</option>
+                              <option>20</option>
+                              <option>22</option>
+                              <option>24</option>
+                              <option>26</option>
+                              <option>28</option>
+                              <option>32</option>
+                              <option>36</option>
+                              <option>48</option>
+                              <option>72</option>
+                            </select>
+                        </div>
+                        <div class="ribbon-row">
+                            <button id="btn-style-normal" class="toolbar-btn" type="button" title="보통 (서식 지우기)">보통</button>
+                            <button id="btn-style-bold" class="toolbar-btn toolbar-btn-style" type="button" title="굵게"><b>B</b></button>
+                            <button id="btn-style-italic" class="toolbar-btn toolbar-btn-style" type="button" title="기울임"><i>I</i></button>
+                            <button id="btn-style-underline" class="toolbar-btn toolbar-btn-style" type="button" title="밑줄"><u>U</u></button>
+                        </div>
                     </div>
-                    <div class="ribbon-row">
-                        <label class="toolbar-label" for="bg-color-input">배경색</label>
-                        <input id="bg-color-input" class="toolbar-color" type="color" value="#ffffff" title="배경색 (두 번 클릭하면 없음)">
-                    </div>
+                    <div class="ribbon-group-title">글꼴</div>
                 </div>
-                <div class="ribbon-group-title">색</div>
+
+                <div class="ribbon-group">
+                    <div class="ribbon-group-items">
+                        <div class="ribbon-row">
+                            <label class="toolbar-label" for="column-count-select">다단</label>
+                            <select id="column-count-select" class="toolbar-select">
+                              <option value="1">1단</option>
+                              <option value="2">2단</option>
+                              <option value="3">3단</option>
+                            </select>
+                            <label class="toolbar-label" for="align-select">정렬</label>
+                            <select id="align-select" class="toolbar-select">
+                              <option value="left">왼쪽</option>
+                              <option value="center">가운데</option>
+                              <option value="right">오른쪽</option>
+                              <option value="justify">양쪽</option>
+                            </select>
+                        </div>
+                        <div class="ribbon-row">
+                            <label class="toolbar-label" for="line-spacing-select">줄간격</label>
+                            <select id="line-spacing-select" class="toolbar-select">
+                              <option value="100">100%</option>
+                              <option value="120">120%</option>
+                              <option value="150">150%</option>
+                              <option value="160">160%</option>
+                              <option value="200">200%</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="ribbon-group-title">단락</div>
+                </div>
+
+                <div class="ribbon-group">
+                    <div class="ribbon-group-items">
+                        <div class="ribbon-row">
+                            <label class="toolbar-label" for="text-color-input">글자색</label>
+                            <input id="text-color-input" class="toolbar-color" type="color" value="#000000" title="글자색 (두 번 클릭하면 기본값)">
+                        </div>
+                        <div class="ribbon-row">
+                            <label class="toolbar-label" for="bg-color-input">배경색</label>
+                            <input id="bg-color-input" class="toolbar-color" type="color" value="#ffffff" title="배경색 (두 번 클릭하면 없음)">
+                        </div>
+                    </div>
+                    <div class="ribbon-group-title">색</div>
+                </div>
             </div>
 
-            <div class="ribbon-group">
-                <div class="ribbon-group-items">
-                    <div class="ribbon-row">
-                        <label class="toolbar-label" for="table-rows-input">행</label>
-                        <select id="table-rows-input" class="toolbar-select" style="width:52px" title="행 수">
-                          <option value="1">1</option>
-                          <option value="2" selected>2</option>
-                          <option value="3">3</option>
-                          <option value="4">4</option>
-                          <option value="5">5</option>
-                          <option value="6">6</option>
-                          <option value="8">8</option>
-                          <option value="10">10</option>
-                        </select>
-                        <label class="toolbar-label" for="table-cols-input">열</label>
-                        <select id="table-cols-input" class="toolbar-select" style="width:52px" title="열 수">
-                          <option value="1">1</option>
-                          <option value="2">2</option>
-                          <option value="3" selected>3</option>
-                          <option value="4">4</option>
-                          <option value="5">5</option>
-                          <option value="6">6</option>
-                          <option value="8">8</option>
-                          <option value="10">10</option>
-                        </select>
+            <div class="ribbon-panel" data-tab="page">
+                <div class="ribbon-group">
+                    <div class="ribbon-group-items">
+                        <div class="ribbon-row">
+                            <span class="toolbar-label">용지</span>
+                            <span class="toolbar-label" title="현재 고정 설정">A4 (210 × 297mm)</span>
+                        </div>
                     </div>
-                    <div class="ribbon-row">
-                        <button id="btn-insert-table" class="toolbar-btn" type="button" title="표 삽입">표 삽입</button>
-                    </div>
+                    <div class="ribbon-group-title">용지</div>
                 </div>
-                <div class="ribbon-group-title">표</div>
-            </div>
-
-            <div id="ribbon-group-table-props" class="ribbon-group" style="display:none">
-                <div class="ribbon-group-items">
-                    <div class="ribbon-row">
-                        <button id="btn-table-border-default" class="toolbar-btn" type="button" title="모든 테두리 표시">기본</button>
-                        <button id="btn-table-border-none" class="toolbar-btn" type="button" title="테두리 없음">테두리 없음</button>
-                        <button id="btn-table-border-no-v" class="toolbar-btn" type="button" title="세로줄 없음">세로줄 없음</button>
+                <div class="ribbon-group">
+                    <div class="ribbon-group-items">
+                        <div class="ribbon-row">
+                            <label class="toolbar-label" for="margin-top-input">위</label>
+                            <input id="margin-top-input" class="toolbar-select" type="number" min="0" max="80" step="1" style="width:56px" title="위쪽 여백(mm)">
+                            <label class="toolbar-label" for="margin-bottom-input">아래</label>
+                            <input id="margin-bottom-input" class="toolbar-select" type="number" min="0" max="80" step="1" style="width:56px" title="아래쪽 여백(mm)">
+                        </div>
+                        <div class="ribbon-row">
+                            <label class="toolbar-label" for="margin-left-input">왼쪽</label>
+                            <input id="margin-left-input" class="toolbar-select" type="number" min="0" max="80" step="1" style="width:56px" title="왼쪽 여백(mm)">
+                            <label class="toolbar-label" for="margin-right-input">오른쪽</label>
+                            <input id="margin-right-input" class="toolbar-select" type="number" min="0" max="80" step="1" style="width:56px" title="오른쪽 여백(mm)">
+                            <button id="btn-apply-margins" class="toolbar-btn" type="button" title="페이지 여백 적용">적용</button>
+                        </div>
                     </div>
+                    <div class="ribbon-group-title">여백 (mm)</div>
                 </div>
-                <div class="ribbon-group-title">표 속성</div>
             </div>
         </div>
         <input id="file-input" type="file" accept=".hwp,.docx,.odt" hidden />
