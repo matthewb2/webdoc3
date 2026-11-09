@@ -388,15 +388,15 @@ function buildMockDocument(): DocumentModel {
 // 뷰포트가 준비되면 편집포트(에디터 컨테이너) 로드 직전에 눈금자를 초기화
 const viewportEl = document.querySelector('.editor-viewport') as HTMLDivElement | null;
 if (viewportEl) {
-  ruler();
+  ruler(worker);
 } else {
-  document.addEventListener('DOMContentLoaded', () => ruler(), { once: true });
+  document.addEventListener('DOMContentLoaded', () => ruler(worker), { once: true });
 }
 initRenderer(containerEl);
 initWordProcessor();
 initRibbonTabs();
 initPageMargins(worker);
-initRecentFiles();
+initRecentFiles(worker, containerEl);
 initViewOptions();
 initFindReplace(worker, savedCursor, containerEl);
 initNewDocument(containerEl, worker, savedCursor);

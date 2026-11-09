@@ -37,7 +37,7 @@ export interface UserSettings {
   pageMargins: PageMarginsSetting;
   /** 최근 사용한 파일(파일명, 최신순) */
   recentFiles: string[];
-  /** 문단부호(¶) 표시 */
+  /** 문단부호 표시 */
   showParaMarks: boolean;
 }
 
@@ -55,7 +55,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   paraShape: { align: 'justify', indent: 0, lineSpacing: 160 },
   pageMargins: { top: 85, right: 85, bottom: 85, left: 85 },
   recentFiles: [],
-  showParaMarks: false,
+  showParaMarks: true,
 };
 
 function validCharShape(v: unknown): CharShapeSetting {

@@ -151,6 +151,8 @@ self.addEventListener('message', (event: MessageEvent<any>) => {
     self.postMessage({ type: 'REPLACE_ALL_RESULT', payload: { count } });
   } else if (message.type === 'EDIT_APPLY_STYLE') {
     editApplyStyle(message.payload?.paragraphIndices || [], message.payload || {});
+  } else if (message.type === 'EDIT_INDENT') {
+    editIndent(message.payload?.paragraphIndices || [], message.payload || {});
   }
 });
 
@@ -413,6 +415,25 @@ function editLineSpacing(docIndices: number[], lineSpacing: number) {
   requestLayout();
 }
 
+function editIndent(docIndices: number[], payload: { leftIndent?: number; textIndent?: number }) {
+  (Array.isArray(docIndices) ? docIndices : []).forEach((docIdx) => {
+    const item = documentState[docIdx];
+    if (item?.type !== 'paragraph') return;
+    if (payload.leftIndent !== undefined) {
+      const v = Number(payload.leftIndent);
+      if (Number.isFinite(v)) item.leftIndent = Math.max(0, Math.min(600, Math.round(v * 100) / 100));
+    }
+    if (payload.textIndent !== undefined) {
+      const v = Number(payload.textIndent);
+      if (Number.isFinite(v)) item.textIndent = Math.max(-600, Math.min(600, Math.round(v * 100) / 100));
+    }
+    if (payload.leftIndent !== undefined || payload.textIndent !== undefined) {
+      delete item.indent;
+    }
+  });
+  requestLayout();
+}
+
 function editApplyStyle(
   docIndices: number[],
   style: {
@@ -574,6 +595,8 @@ function editSplit(docIdx: number, charIndex: number) {
     align: item.align,
     columns: item.columns,
     indent: item.indent,
+    leftIndent: item.leftIndent,
+    textIndent: item.textIndent,
     lineSpacing: item.lineSpacing,
     spaceBefore: item.spaceBefore,
     spaceAfter: item.spaceAfter,
@@ -614,6 +637,8 @@ function editInsertTable(docIdx: number, charIndex: number, rows: number, cols: 
       align: item.align,
       columns: item.columns,
       indent: item.indent,
+      leftIndent: item.leftIndent,
+      textIndent: item.textIndent,
       lineSpacing: item.lineSpacing,
       spaceBefore: item.spaceBefore,
       spaceAfter: item.spaceAfter,

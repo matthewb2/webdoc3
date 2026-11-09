@@ -1,6 +1,6 @@
 // src/render.ts - 페이지 DOM 생성 + 가상화 뷰포트
 import type { PageModel } from './worker/doc.worker';
-import { defaultAlign, defaultIndent } from './settings';
+import { defaultAlign, defaultIndent, defaultLineSpacing } from './settings';
 import { PAGE_GAP, PAGE_HEIGHT, PAGE_PITCH, PAGE_WIDTH, pageLayout } from './worker/layoutConstants';
 
 let rendererContainer!: HTMLDivElement;
@@ -13,7 +13,7 @@ export function getCachedPages(): PageModel[] {
   return cachedPages;
 }
 
-function applyRunStyle(span: HTMLSpanElement, run: any) {
+function applyRunStyle(span: HTMLSpanElement, run: any, lineSpacing?: number) {
   if (run.bold) span.style.fontWeight = 'bold';
   if (run.italic) span.style.fontStyle = 'italic';
   const decorations: string[] = [];
@@ -21,9 +21,13 @@ function applyRunStyle(span: HTMLSpanElement, run: any) {
   if (run.strike) decorations.push('line-through');
   if (decorations.length > 0) span.style.textDecoration = decorations.join(' ');
   if (run.fontFamily) span.style.fontFamily = run.fontFamily;
-  if (run.fontSize) span.style.fontSize = `${run.fontSize}px`;
+  const fs = run.fontSize ?? 16;
+  span.style.fontSize = `${fs}px`;
   if (run.color) span.style.color = run.color;
   if (run.backgroundColor) span.style.backgroundColor = run.backgroundColor;
+  // 텍스트 런(글자) 기준 줄높이: 단위 없는 배수(자기 font-size 기준). 문단 strut은 p에서 제거됨.
+  const spacing = typeof lineSpacing === 'number' && isFinite(lineSpacing) ? lineSpacing : 160;
+  span.style.lineHeight = `${spacing / 100}`;
 }
 
 // 가상화 계산은 실제 페이지 높이 + CSS margin-bottom(PAGE_GAP)과 일치해야 한다.
@@ -203,8 +207,11 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
       const p = document.createElement('p');
       p.dataset.pIdx = docIdx.toString();
       p.dataset.pOffset = (item._charOffset ?? 0).toString();
-      if (item.lineHeight) p.style.lineHeight = `${item.lineHeight}px`;
-      if (item.lineSpacing) p.dataset.lineSpacing = String(item.lineSpacing);
+      // 줄간격은 텍스트 런(span) 기준으로 적용한다. p에 고정 px lineHeight를 주면
+      // (font-size:0이어도 절대값 strut이 생겨) 문단 전체 줄높이가 고정되므로 px 폴백을 사용하지 않는다.
+      const pLineSpacing = item.lineSpacing ?? defaultLineSpacing();
+      p.dataset.lineSpacing = String(pLineSpacing);
+      p.style.lineHeight = '0';
       if (item.spaceBefore) p.style.paddingTop = `${item.spaceBefore}px`;
       if (item.spaceAfter) p.style.paddingBottom = `${item.spaceAfter}px`;
 
@@ -236,11 +243,12 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
         }
       }
 
+      const runLineSpacing = item.lineSpacing ?? defaultLineSpacing();
       const children: Array<{ text: string; bold?: boolean }> = item.children || [];
       children.forEach((run) => {
         const span = document.createElement('span');
         span.innerText = run.text === '' ? '\u200B' : run.text;
-        applyRunStyle(span, run);
+        applyRunStyle(span, run, runLineSpacing);
         p.appendChild(span);
       });
       const colN = colCountOf(item);
@@ -335,7 +343,7 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
                 pChildren.forEach((run: any) => {
                   const span = document.createElement('span');
                   span.innerText = run.text === '' ? '\u200B' : run.text;
-                  applyRunStyle(span, run);
+                  applyRunStyle(span, run, defaultLineSpacing());
                   p.appendChild(span);
                 });
               }
@@ -353,7 +361,7 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
               cellChildren.forEach((run: any) => {
                 const span = document.createElement('span');
                 span.innerText = run.text === '' ? '\u200B' : run.text;
-                applyRunStyle(span, run);
+                applyRunStyle(span, run, defaultLineSpacing());
                 p.appendChild(span);
               });
             }

@@ -24,6 +24,8 @@ declare global {
     getFile(): Promise<File>;
     createWritable(options?: unknown): Promise<FileSystemWritableFileStream>;
     isSameEntry(other: FileSystemHandle): Promise<boolean>;
+    queryPermission?(descriptor?: { mode?: 'read' | 'readwrite' }): Promise<PermissionState>;
+    requestPermission?(descriptor?: { mode?: 'read' | 'readwrite' }): Promise<PermissionState>;
   }
 
   interface FileSystemHandle {
@@ -32,8 +34,14 @@ declare global {
     isSameEntry(other: FileSystemHandle): Promise<boolean>;
   }
 
+  interface OpenFilePickerOptions {
+    multiple?: boolean;
+    types?: FilePickerAcceptType[];
+    excludeAcceptAllOption?: boolean;
+  }
+
   interface Window {
     showSaveFilePicker?(options?: SaveFilePickerOptions): Promise<FileSystemFileHandle>;
-    showOpenFilePicker?(options?: unknown): Promise<FileSystemFileHandle[]>;
+    showOpenFilePicker?(options?: OpenFilePickerOptions): Promise<FileSystemFileHandle[]>;
   }
 }

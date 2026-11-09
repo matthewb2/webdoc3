@@ -33,14 +33,14 @@
                             <button id="btn-save" class="toolbar-btn" type="button" title="현재 문서에 덮어쓰기 저장">저장</button>
                             <button id="btn-save-as" class="toolbar-btn" type="button" title="다른 이름으로 저장">다른 이름으로 저장</button>
                         </div>
+                        <div class="ribbon-row">
+                            <label class="toolbar-label" for="recent-files-select">최근 파일</label>
+                            <select id="recent-files-select" class="toolbar-select recent-files-select" title="최근 사용한 파일">
+                                <option value="">최근 사용한 파일</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="ribbon-group-title">파일</div>
-                </div>
-                <div class="ribbon-group ribbon-group-recent">
-                    <div class="ribbon-group-items">
-                        <div id="recent-files-list" class="recent-files-list" aria-label="최근 사용한 파일"></div>
-                    </div>
-                    <div class="ribbon-group-title">최근 사용한 파일</div>
                 </div>
             </div>
 
@@ -160,25 +160,25 @@
                               <option>나눔고딕</option>
                               <option>Noto Sans KR</option>
                             </select>
-                            <label class="toolbar-label" for="font-size-select">크기</label>
+                            <label class="toolbar-label" for="font-size-select">크기(pt)</label>
                             <select id="font-size-select" class="toolbar-select" disabled>
-                              <option>8</option>
-                              <option>9</option>
-                              <option>10</option>
-                              <option>11</option>
-                              <option>12</option>
-                              <option>14</option>
-                              <option>16</option>
-                              <option>18</option>
-                              <option>20</option>
-                              <option>22</option>
-                              <option>24</option>
-                              <option>26</option>
-                              <option>28</option>
-                              <option>32</option>
-                              <option>36</option>
-                              <option>48</option>
-                              <option>72</option>
+                              <option value="8">8</option>
+                              <option value="9">9</option>
+                              <option value="10">10</option>
+                              <option value="10.5">10.5</option>
+                              <option value="11">11</option>
+                              <option value="12">12</option>
+                              <option value="14">14</option>
+                              <option value="16">16</option>
+                              <option value="18">18</option>
+                              <option value="20">20</option>
+                              <option value="22">22</option>
+                              <option value="24">24</option>
+                              <option value="26">26</option>
+                              <option value="28">28</option>
+                              <option value="36">36</option>
+                              <option value="48">48</option>
+                              <option value="72">72</option>
                             </select>
                         </div>
                         <div class="ribbon-row">

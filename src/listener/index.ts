@@ -1,6 +1,7 @@
 import type { PageModel } from '../worker/doc.worker';
 import type { CursorState, TableBorderStyle } from '../types';
-import { addRecentFile, defaultAlign, defaultFontFamily, defaultFontSize, defaultLineSpacing, getRecentFiles, loadSettings, saveSettings } from '../settings';
+import { defaultAlign, defaultFontFamily, defaultFontSize, defaultLineSpacing, loadSettings, saveSettings } from '../settings';
+import { addRecentEntry, getRecentEntries, getRecentHandle, verifyReadPermission } from '../recentFileStore';
 import { setPageMargins } from '../worker/layoutConstants';
 import { parseHwpToDocumentModel } from '../hwp/hwpParser';
 import { parseDocxToDocumentModel } from '../docx/docxParser';
@@ -16,7 +17,9 @@ import type { CellSel } from './mouse';
 const FONT_FAMILIES = [
   'Arial', 'Verdana', 'Tahoma', 'Times New Roman', 'Georgia', 'Courier New', '맑은 고딕', '굴림', '돋움', '바탕',  '궁서', '나눔고딕', 'Noto Sans KR'
 ];
-const FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 32, 36, 48, 72];
+const FONT_SIZES_PT = [8, 9, 10, 10.5, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72];
+const pxToPt = (px: number) => Math.round((px * 72 / 96) * 10) / 10;
+const ptToPx = (pt: number) => Math.round((pt * 96 / 72) * 100) / 100;
 
 let fontContainer: HTMLDivElement | null = null;
 let fontWorker: Worker | null = null;
@@ -58,9 +61,12 @@ export function initFontCombos(container: HTMLDivElement, worker: Worker, cursor
   const sizeSelect = document.getElementById('font-size-select') as HTMLSelectElement | null;
   if (!familySelect || !sizeSelect) return;
   fillSelect(familySelect, FONT_FAMILIES);
-  fillSelect(sizeSelect, FONT_SIZES);
+  fillSelect(sizeSelect, FONT_SIZES_PT.map(String));
   familySelect.disabled = false;
   sizeSelect.disabled = false;
+  familySelect.value = defaultFontFamily();
+  const initPt = pxToPt(defaultFontSize());
+  sizeSelect.value = Math.abs(initPt - Math.round(initPt)) < 0.01 ? String(Math.round(initPt)) : String(initPt);
   familySelect.addEventListener('pointerdown', () => stashSelection(container));
   sizeSelect.addEventListener('pointerdown', () => stashSelection(container));
   familySelect.addEventListener('change', () => {
@@ -69,9 +75,9 @@ export function initFontCombos(container: HTMLDivElement, worker: Worker, cursor
     }
   });
   sizeSelect.addEventListener('change', () => {
-    const size = parseFloat(sizeSelect.value);
-    if (fontWorker && fontCursor && !isNaN(size)) {
-      postFontStyle(container, fontWorker, fontCursor, { fontSize: size });
+    const ptSize = parseFloat(sizeSelect.value);
+    if (fontWorker && fontCursor && !isNaN(ptSize)) {
+      postFontStyle(container, fontWorker, fontCursor, { fontSize: ptToPx(ptSize) });
     }
   });
   syncFontCombos();
@@ -275,8 +281,11 @@ export function syncFontCombos() {
   const span = el?.closest?.('span') as HTMLSpanElement | null;
   if (!span || !fontContainer.contains(span)) return;
   setSelectValue(familySelect, span.style.fontFamily || defaultFontFamily());
-  const size = parseFloat(span.style.fontSize);
-  setSelectValue(sizeSelect, isNaN(size) ? String(defaultFontSize()) : String(Math.round(size * 100) / 100));
+  const sizePx = parseFloat(span.style.fontSize);
+  const pt = isNaN(sizePx) ? pxToPt(defaultFontSize()) : pxToPt(sizePx);
+  // 10.5 같은 값 표시 정규화
+  const ptText = Math.abs(pt - Math.round(pt)) < 0.01 ? String(Math.round(pt)) : String(pt);
+  setSelectValue(sizeSelect, ptText);
 }
 
 export function initWorkerListener(
@@ -359,49 +368,74 @@ export function cachedParagraphInfo(docIdx: number): { isParagraph: boolean; exi
   return { isParagraph, exists, length };
 }
 
-export function initFileOpen(worker: Worker, containerEl: HTMLDivElement) {
+async function loadDocumentFile(
+  file: File,
+  handle: FileSystemFileHandle | null,
+  worker: Worker,
+  containerEl: HTMLDivElement,
+) {
+  const hwpStatus = document.getElementById('hwp-status') as HTMLSpanElement | null;
+  const lower = file.name.toLowerCase();
+  const kind = /\.hwp$/i.test(lower) ? 'hwp' : /\.docx$/i.test(lower) ? 'docx' : /\.odt$/i.test(lower) ? 'odt' : null;
+  if (!kind) {
+    if (hwpStatus) hwpStatus.textContent = '.hwp, .docx, .odt 파일을 선택해 주세요';
+    return;
+  }
+  if (hwpStatus) hwpStatus.textContent = `파싱 중... (${file.name})`;
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const model =
+      kind === 'hwp'
+        ? parseHwpToDocumentModel(bytes)
+        : kind === 'docx'
+          ? parseDocxToDocumentModel(bytes)
+          : parseOdtToDocumentModel(bytes);
+    worker.postMessage({ type: 'BREAKS', payload: await computeBreaks(collectProbeItems(model)) });
+    worker.postMessage({ type: 'INIT_DOC', payload: model });
+    containerEl.style.display = 'inline-flex';
+    setCurrentFileHandle(handle);
+    setCurrentFileName(file.name);
+    await addRecentEntry(file.name, handle);
+    refreshRecentFiles();
+    clearCellSelection(containerEl);
+    if (hwpStatus) hwpStatus.textContent = `파싱 완료: ${file.name} (${model.length}개 항목)`;
+  } catch (err) {
+    if ((err as any)?.name === 'AbortError') return;
+    if (hwpStatus) hwpStatus.textContent = `파싱 실패: ${(err as Error).message}`;
+  }
+}
 
+export function initFileOpen(worker: Worker, containerEl: HTMLDivElement) {
   const openFileButton = document.getElementById('btn-open-file') as HTMLButtonElement;
   const fileInput = document.getElementById('file-input') as HTMLInputElement;
-  const hwpStatus = document.getElementById('hwp-status') as HTMLSpanElement;
   const editorViewport = document.querySelector('.editor-viewport') as HTMLDivElement;
 
-  function renderFile(file: File) {
-    const lower = file.name.toLowerCase();
-    const kind = /\.hwp$/i.test(lower) ? 'hwp' : /\.docx$/i.test(lower) ? 'docx' : /\.odt$/i.test(lower) ? 'odt' : null;
-    if (!kind) {
-      hwpStatus.textContent = '.hwp, .docx, .odt 파일을 선택해 주세요';
-      return;
+  openFileButton.addEventListener('click', async () => {
+    // FSAA 사용 시 핸들을 받아 최근 파일에서 대화상자 없이 바로 열 수 있게 한다.
+    if (typeof window.showOpenFilePicker === 'function') {
+      try {
+        const [handle] = await window.showOpenFilePicker({
+          multiple: false,
+          types: [
+            { description: '문서', accept: { 'application/x-hwp': ['.hwp'], 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'], 'application/vnd.oasis.opendocument.text': ['.odt'] } },
+          ],
+        });
+        if (handle) {
+          const file = await handle.getFile();
+          await loadDocumentFile(file, handle, worker, containerEl);
+        }
+        return;
+      } catch (err) {
+        if ((err as any)?.name === 'AbortError') return;
+        // 실패 시 input 폴백
+      }
     }
-    hwpStatus.textContent = `파싱 중... (${file.name})`;
-    file.arrayBuffer()
-      .then(async (buffer) => {
-        const bytes = new Uint8Array(buffer);
-        const model =
-          kind === 'hwp'
-            ? parseHwpToDocumentModel(bytes)
-            : kind === 'docx'
-              ? parseDocxToDocumentModel(bytes)
-              : parseOdtToDocumentModel(bytes);
-        worker.postMessage({ type: 'BREAKS', payload: await computeBreaks(collectProbeItems(model)) });
-        worker.postMessage({ type: 'INIT_DOC', payload: model });
-        containerEl.style.display = 'inline-flex';
-        setCurrentFileHandle(null);
-        setCurrentFileName(file.name);
-        addRecentFile(file.name);
-        refreshRecentFiles();
-        clearCellSelection(containerEl);
-        hwpStatus.textContent = `파싱 완료: ${file.name} (${model.length}개 항목)`;
-      })
-      .catch((err: Error) => {
-        hwpStatus.textContent = `파싱 실패: ${(err as Error).message}`;
-      });
-  }
+    fileInput.click();
+  });
 
-  openFileButton.addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', () => {
     const file = fileInput.files?.[0];
-    if (file) renderFile(file);
+    if (file) void loadDocumentFile(file, null, worker, containerEl);
     fileInput.value = '';
   });
 
@@ -428,7 +462,7 @@ export function initFileOpen(worker: Worker, containerEl: HTMLDivElement) {
     editorViewport.classList.remove('is-dragging');
     const files = Array.from(e.dataTransfer?.files ?? []);
     const file = files.find((f) => /\.(hwp|docx|odt)$/i.test(f.name));
-    if (file) renderFile(file);
+    if (file) void loadDocumentFile(file, null, worker, containerEl);
   });
 }
 
@@ -652,6 +686,9 @@ export function initZoomControls(container: HTMLDivElement) {
 // 현재 문서 파일명 (열린 파일 기준, 없으면 제목 없음.odt)
 let currentFileName: string | null = null;
 let currentFileHandle: FileSystemFileHandle | null = null;
+
+let recentWorker: Worker | null = null;
+let recentContainer: HTMLDivElement | null = null;
 
 function updateDocumentTitle() {
   document.title = `Doc3 - ${getCurrentFileName()}`;
@@ -918,32 +955,64 @@ export function syncTablePropertiesRibbon(container?: HTMLDivElement) {
   activeBtn?.classList.add('active');
 }
 
-export function refreshRecentFiles() {
-  const list = document.getElementById('recent-files-list') as HTMLDivElement | null;
-  if (!list) return;
-  const files = getRecentFiles();
-  list.innerHTML = '';
-  if (files.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'recent-files-empty';
-    empty.textContent = '항목 없음';
-    list.appendChild(empty);
-    return;
+async function openRecentFileByName(name: string) {
+  const worker = recentWorker;
+  const containerEl = recentContainer;
+  if (!worker || !containerEl) return;
+  const status = document.getElementById('hwp-status') as HTMLSpanElement | null;
+  try {
+    const handle = await getRecentHandle(name);
+    if (handle) {
+      const ok = await verifyReadPermission(handle);
+      if (ok) {
+        const file = await handle.getFile();
+        await loadDocumentFile(file, handle, worker, containerEl);
+        return;
+      }
+    }
+  } catch {
+    /* 권한/핸들 실패 시 폴백 */
   }
-  files.forEach((name) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'recent-files-item';
-    btn.textContent = name;
-    btn.title = `${name}\n(클릭하면 파일 열기)`;
-    btn.addEventListener('click', () => {
-      (document.getElementById('file-input') as HTMLInputElement | null)?.click();
+  // 핸들이 없거나 권한이 없으면 파일 대화상자 폴백
+  if (status) status.textContent = `저장된 접근 권한이 없어 파일을 선택해 주세요: ${name}`;
+  (document.getElementById('file-input') as HTMLInputElement | null)?.click();
+}
+
+function ensureRecentFilesNav(select: HTMLSelectElement) {
+  if (select.dataset.navInit === '1') return;
+  select.dataset.navInit = '1';
+  select.addEventListener('change', () => {
+    const name = select.value;
+    if (!name) return;
+    void openRecentFileByName(name).finally(() => {
+      select.value = '';
     });
-    list.appendChild(btn);
   });
 }
 
-export function initRecentFiles() {
+export function refreshRecentFiles() {
+  const select = document.getElementById('recent-files-select') as HTMLSelectElement | null;
+  if (!select) return;
+  ensureRecentFilesNav(select);
+  const files = getRecentEntries();
+  select.innerHTML = '';
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = files.length === 0 ? '최근 사용한 파일 없음' : '최근 사용한 파일';
+  select.appendChild(placeholder);
+  files.forEach((name) => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    opt.title = name;
+    select.appendChild(opt);
+  });
+  select.disabled = files.length === 0;
+}
+
+export function initRecentFiles(worker?: Worker, containerEl?: HTMLDivElement) {
+  if (worker) recentWorker = worker;
+  if (containerEl) recentContainer = containerEl;
   refreshRecentFiles();
 }
 
@@ -1185,6 +1254,8 @@ async function runSave(worker: Worker, saveAs: boolean) {
   const result = await saveFn(worker, filename, { saveAs, handle: currentFileHandle });
   currentFileHandle = result.handle ?? null;
   if (result.filename) setCurrentFileName(result.filename);
+  if (result.filename) await addRecentEntry(result.filename, currentFileHandle);
+  refreshRecentFiles();
 }
 
 export function initSave(worker: Worker) {

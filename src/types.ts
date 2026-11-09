@@ -115,4 +115,5 @@ export type WorkerMessage =
   | { type: 'EDIT_FIND'; payload: { query: string; from: { docIdx: number; charIndex: number; isInsideTable: boolean; rowIndex: number; cellIndex: number } | null; direction: 'forward' | 'backward' } }
   | { type: 'EDIT_REPLACE'; payload: { query: string; replacement: string; from: { docIdx: number; charIndex: number; isInsideTable: boolean; rowIndex: number; cellIndex: number } | null } }
   | { type: 'EDIT_REPLACE_ALL'; payload: { query: string; replacement: string } }
-  | { type: 'EDIT_APPLY_STYLE'; payload: { paragraphIndices: number[]; align?: TextAlign; lineSpacing?: number; fontFamily?: string; fontSize?: number; bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean; color?: string } };
+  | { type: 'EDIT_APPLY_STYLE'; payload: { paragraphIndices: number[]; align?: TextAlign; lineSpacing?: number; fontFamily?: string; fontSize?: number; bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean; color?: string } }
+  | { type: 'EDIT_INDENT'; payload: { paragraphIndices: number[]; leftIndent?: number; textIndent?: number } };

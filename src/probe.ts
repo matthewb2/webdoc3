@@ -58,7 +58,7 @@ export async function computeBreaks(items: ProbeItem[], onProgress?: (done: numb
       const blocks: HTMLDivElement[] = [];
       slice.forEach((it) => {
         const div = document.createElement('div');
-        div.style.cssText = `position:relative;width:${it.width}px;font:16px var(--doc-font, "바탕"), Arial, sans-serif;word-break:normal;overflow-wrap:anywhere;line-height:26px;letter-spacing:normal;`;
+        div.style.cssText = `position:relative;width:${it.width}px;font:16px var(--doc-font, "바탕"), Arial, sans-serif;word-break:normal;overflow-wrap:anywhere;line-height:1.6;letter-spacing:normal;`;
         it.runs.forEach((run) => {
           const fs = run.fontSize ?? 16;
           for (const ch of run.text) {
@@ -66,6 +66,7 @@ export async function computeBreaks(items: ProbeItem[], onProgress?: (done: numb
             if (fs !== 16) sp.style.fontSize = `${fs}px`;
             if (run.bold) sp.style.fontWeight = 'bold';
             if (run.fontFamily) sp.style.fontFamily = run.fontFamily;
+            sp.style.lineHeight = '1.6';
             sp.textContent = ch;
             div.appendChild(sp);
           }

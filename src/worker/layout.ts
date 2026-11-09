@@ -393,15 +393,9 @@ function buildParagraphFragment(
   }
 
   const spacingPct = spacing ?? defaultLineSpacing;
-  if (spacing) {
-    fragment.lineSpacing = spacing;
-  }
-  let maxLineHeight = 0;
-  lines.forEach((line) => {
-    const h = lineHeightOfLine(line, spacingPct);
-    if (h > maxLineHeight) maxLineHeight = h;
-  });
-  fragment.lineHeight = maxLineHeight;
+  fragment.lineSpacing = spacingPct;
+  // 줄마다 글자 크기가 다를 수 있으므로 fragment 전체 max를 렌더 기준으로 쓰지 않는다.
+  fragment.lineHeight = lines.length > 0 ? lineHeightOfLine(lines[0], spacingPct) : 0;
 
   return fragment;
 }

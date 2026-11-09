@@ -293,12 +293,19 @@ html {
         }
         p {
             font-family: var(--doc-font, '바탕'), 'Arial', sans-serif;
-            font-size: 16px;
-            line-height: 26px;
+            font-size: 0;
+            line-height: 0;
             margin: 0;
             padding: 0;
             word-break: normal;
             overflow-wrap: anywhere;
+        }
+        .page p > span,
+        .page td > span,
+        .page td p > span {
+            font-size: 16px;
+            line-height: 1.6;
+            vertical-align: baseline;
         }
         p::after {
             content: '';
