@@ -1,0 +1,85 @@
+/* preview.css - 미리보기 관련 스타일 */
+
+        .preview-toolbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 46px;
+            background: #ffffff;
+            border-bottom: 1px solid #d8dde3;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 0 16px;
+            z-index: 10;
+            box-sizing: border-box;
+            font-size: 13px;
+            color: #333;           
+                 font-family: var(--ui-font, '맑은 고딕'), sans-serif;
+       
+        }
+        .preview-viewport {
+            position: fixed;
+            top: 46px;
+            right: 0;
+            bottom: 28px;
+            left: 0;
+            width: auto;
+            height: auto;
+            margin: 0;
+            overflow: auto;
+            padding: 40px 0;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            background: #f0f3f6;
+        }
+        #preview-container {
+            display: inline-flex;
+            flex-direction: column;
+            gap: 30px;
+            width: 800px;
+            min-width: 800px;
+            padding: 0 20px;
+            box-sizing: content-box;
+            text-align: left;
+            margin: 0 auto;
+        }
+        #preview-container.two-pages-mode {
+            flex-direction: row;
+            flex-wrap: wrap;
+            justify-content: center;
+            width: 1630px;
+            min-width: 1630px;
+            margin: 0 auto;
+        }
+        #preview-container > * {
+            flex-shrink: 0;
+        }
+        #preview-container .page {
+            outline: none;
+            cursor: pointer;
+        }
+
+.preview-statusbar {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 28px;
+            background: #ffffff;
+            border-top: 1px solid #d8dde3;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 0 12px;
+            z-index: 10;
+            box-sizing: border-box;
+            font-size: 12px;
+            color: #555;
+                 font-family: var(--ui-font, '맑은 고딕'), sans-serif;
+       
+            
+        }
