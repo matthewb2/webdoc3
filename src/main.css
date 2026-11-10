@@ -329,12 +329,14 @@ html {
         .show-para-marks .page p::after,
         .show-para-marks#preview-container .page p::after,
         #preview-container.show-para-marks .page p::after {
-            content: '↵';
+            content: '\21B5';
             color: #8a94a0;
-            font-size: 0.85em;
+            font-size: 12px;
+            line-height: 1;
             margin-left: 1px;
             user-select: none;
             pointer-events: none;
+            vertical-align: bottom;
         }
 		p:has(span:empty)::after {
 			position: absolute;

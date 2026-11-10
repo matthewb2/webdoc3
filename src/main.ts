@@ -9,7 +9,7 @@ import { initEditorListeners, isComposingActive } from './listener/keyboard';
 import { initCellSelection, paintCellSelection } from './listener/mouse';
 import { initPreviewMode } from './preview';
 import { ruler } from './ruler';
-import { parseOdtToDocumentModel } from './odt/odtParser';
+import { parseHwpToDocumentModel } from './hwp/hwpParser';
 import logoUrl from './assets/logo.svg';
 
 // 타이틀바(탭) 로고
@@ -297,18 +297,19 @@ async function initWordProcessor() {
     return;
   }
 
-  // 기본 문서: dev 실행 시 public/테이블.odt
-  const defaultDocUrl = encodeURI('/There.odt');
+  // 기본 문서: 프로그램 시작 시 표준상가임대차계약서.hwp 로드 (?new=1 제외)
+  const defaultDocName = '표준상가임대차계약서.hwp';
+  const defaultDocUrl = encodeURI(`/${defaultDocName}`);
   fetch(defaultDocUrl)
     .then((res) => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.arrayBuffer();
     })
     .then(async (buffer) => {
-      const model = parseOdtToDocumentModel(new Uint8Array(buffer));
+      const model = parseHwpToDocumentModel(new Uint8Array(buffer));
       worker.postMessage({ type: 'BREAKS', payload: await computeBreaks(collectProbeItems(model)) });
       worker.postMessage({ type: 'INIT_DOC', payload: model });
-      setCurrentFileName('테이블.odt');
+      setCurrentFileName(defaultDocName);
       containerEl.style.display = 'inline-flex';
     })
     .catch(async (err: Error) => {

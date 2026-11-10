@@ -54,7 +54,14 @@ export function parseHwpToDocumentModel(data: Uint8Array): DocumentModel {
   doc.sections.forEach((section, sIndex) => {
     console.log(`[Debug] 섹션 ${sIndex} 처리 중, 단락 수:`, section.content.length);
     section.content.forEach((paragraph, pIndex) => {
+      const before = model.length;
       paragraphToModelItems(paragraph, doc.info, model, sIndex, pIndex);
+      const added = model.slice(before).map((it) => {
+        if (it.type === 'paragraph') return `p("${(it.children || []).map((r) => r.text || '').join('').slice(0, 20)}")`;
+        if (it.type === 'table') return `table(${it.rows?.length || 0}x${it.rows?.[0]?.cells?.length || 0})`;
+        return (it as any).type;
+      });
+      console.log(`[hwp-parse] S${sIndex} P${pIndex} -> added ${added.length}:`, added);
     });
   });
 
@@ -122,26 +129,43 @@ function paragraphToModelItems(
   // HWP 문단 모양의 줄 간격(퍼센트). 범위를 벗어난 값은 기본값을 사용한다.
   const lineSpacing = normalizeLineSpacing(paraShape?.lineSpacing);
 
+  // 같은 HWP 문단 내에서 표 컨트롤이 텍스트보다 앞에 나오고 뒤에 텍스트가 이어지는 경우,
+  // 시각적 읽기 순서상 텍스트(예: 제목)를 표보다 먼저 배치한다.
+  const orderedSegments = (() => {
+    const firstTable = segments.findIndex((s) => s.kind === 'table');
+    const firstText = segments.findIndex((s) => s.kind === 'text');
+    if (firstTable >= 0 && firstText > firstTable) {
+      const textSegs = segments.filter((s) => s.kind === 'text');
+      const otherSegs = segments.filter((s) => s.kind !== 'text');
+      console.log(`[hwp-parse] S${sIndex} P${pIndex} reorder segments: text-before-table`, {
+        before: segments.map((s) => s.kind),
+        after: [...textSegs, ...otherSegs].map((s) => s.kind),
+      });
+      return [...textSegs, ...otherSegs];
+    }
+    return segments;
+  })();
+
   // 수정: 내용이 없는 빈 문단(segments가 비어있는 경우) 처리
-  if (segments.length === 0) {
-    const node: ParagraphNode = { 
-      type: 'paragraph', 
+  if (orderedSegments.length === 0) {
+    const node: ParagraphNode = {
+      type: 'paragraph',
       children: [{ text: '' }] // 빈 텍스트 런을 넣어 주어야 레이아웃 엔진이 빈 줄 높이를 계산합니다.
     };
     if (paraAlign) node.align = paraAlign;
     if (lineSpacing) node.lineSpacing = lineSpacing;
     model.push(node);
   } else {
-    segments.forEach((segment, segIndex) => {
+    orderedSegments.forEach((segment, segIndex) => {
       if (segment.kind === 'text') {
         const runs = styledRuns(docInfo, segment.text, segment.shapeIndex);
         console.log(`[ParagraphStyleInfo] S${sIndex}-P${pIndex}-Seg${segIndex} 텍스트: "${segment.text.slice(0, 30)}..."`, {
           shapeIndex: segment.shapeIndex,
           runs
         });
-        const node: ParagraphNode = { 
-          type: 'paragraph', 
-          children: runs.length > 0 ? runs : [{ text: '' }] 
+        const node: ParagraphNode = {
+          type: 'paragraph',
+          children: runs.length > 0 ? runs : [{ text: '' }]
         };
         if (paraAlign) node.align = paraAlign;
         if (lineSpacing) node.lineSpacing = lineSpacing;
@@ -283,17 +307,35 @@ function styledRuns(docInfo: DocInfo, text: string, shapeIndex: number): TextRun
 }
 
 function tableToNode(table: TableControl, docInfo: DocInfo): TableNode {
-  console.log('[Debug] tableToNode 실행, 행 개수:', table.content?.length);
-  // 병합 가림 셀 판정용 점유 맵
+  const rowCount = Math.max(0, Number((table as any).rowCount) || (table.content?.length || 0));
+  const colCount = Math.max(0, Number((table as any).columnCount) || 0);
+  console.log('[Debug] tableToNode 실행, rows:', table.content?.length, 'rowCount:', rowCount, 'columnCount:', colCount);
+
+  // 병합 가림 셀 판정용 점유 맵 및 열 너비 수집
   const covered = new Set<string>();
-  table.content.forEach((cells) => {
-    cells.forEach((cell: any) => {
-      const attr = cell.attribute;
-      if (!attr) return;
-      const row = attr.row ?? 0;
-      const col = attr.column ?? 0;
+  const colWidthHu: number[] = colCount > 0 ? Array(colCount).fill(0) : [];
+  const byPos = new Map<string, any>();
+
+  (table.content || []).forEach((cells, rowIdx) => {
+    (cells || []).forEach((cell: any) => {
+      const attr = cell.attribute || cell.attr || {};
+      const row = Number.isFinite(attr.row) ? attr.row : rowIdx;
+      const col = Number.isFinite(attr.column) ? attr.column : 0;
       const rowSpan = Math.max(1, attr.rowSpan ?? 1);
       const colSpan = Math.max(1, attr.colSpan ?? 1);
+      const w = Number(attr.width) || 0;
+      byPos.set(`${row},${col}`, cell);
+
+      if (w > 0 && colCount > 0) {
+        if (colSpan === 1 && col >= 0 && col < colCount) {
+          if (!colWidthHu[col]) colWidthHu[col] = w;
+        } else if (colSpan > 1) {
+          const per = w / colSpan;
+          for (let c = col; c < col + colSpan && c < colCount; c++) {
+            if (c >= 0 && !colWidthHu[c]) colWidthHu[c] = per;
+          }
+        }
+      }
       for (let r = row; r < row + rowSpan; r++) {
         for (let c = col; c < col + colSpan; c++) {
           if (r === row && c === col) continue;
@@ -302,26 +344,52 @@ function tableToNode(table: TableControl, docInfo: DocInfo): TableNode {
       }
     });
   });
-  const rows: TableRowNode[] = table.content.map((cells) => {
-    const rowCells: TableCellNode[] = cells.map((cell: any) => {
-      const children: TextRun[] = [];
-      cell.items.forEach((paragraph: any) => {
-        children.push(...paragraphToRuns(paragraph, docInfo));
-      });
-      const node: TableCellNode = { type: 'table-cell', children };
-      const attr = cell.attribute;
-      if (attr && covered.has(`${attr.row ?? 0},${attr.column ?? 0}`)) {
-        node.merged = true;
-      } else if (attr) {
-        if ((attr.colSpan ?? 1) > 1) node.colSpan = attr.colSpan;
-        if ((attr.rowSpan ?? 1) > 1) node.rowSpan = attr.rowSpan;
-      }
-      return node;
-    });
-    return { type: 'table-row', cells: rowCells };
-  });
 
-  return { type: 'table', rows };
+  const effectiveColCount = colCount > 0 ? colCount : Math.max(1, ...Array.from(byPos.keys()).map((k) => parseInt(k.split(',')[1], 10) + 1), 1);
+  const effectiveRowCount = rowCount > 0 ? rowCount : (table.content?.length || 0);
+
+  const rows: TableRowNode[] = [];
+  for (let r = 0; r < effectiveRowCount; r++) {
+    const rowCells: TableCellNode[] = [];
+    for (let c = 0; c < effectiveColCount; c++) {
+      const key = `${r},${c}`;
+      const cell = byPos.get(key);
+      if (cell) {
+        const children: TextRun[] = [];
+        (cell.items || []).forEach((paragraph: any) => {
+          children.push(...paragraphToRuns(paragraph, docInfo));
+        });
+        if (children.length === 0) children.push({ text: '' });
+        const node: TableCellNode = { type: 'table-cell', children };
+        const attr = cell.attribute || cell.attr || {};
+        if (covered.has(key)) {
+          node.merged = true;
+        } else {
+          if ((attr.colSpan ?? 1) > 1) node.colSpan = attr.colSpan;
+          if ((attr.rowSpan ?? 1) > 1) node.rowSpan = attr.rowSpan;
+        }
+        rowCells.push(node);
+      } else if (covered.has(key)) {
+        rowCells.push({ type: 'table-cell', children: [], merged: true });
+      } else {
+        // missing cell placeholder
+        rowCells.push({ type: 'table-cell', children: [{ text: '' }] });
+      }
+    }
+    rows.push({ type: 'table-row', cells: rowCells });
+  }
+
+  const tableNode: TableNode = { type: 'table', rows };
+  if (effectiveColCount > 0) {
+    const px = (colWidthHu.length === effectiveColCount ? colWidthHu : Array(effectiveColCount).fill(0)).map((w) => (w > 0 ? Math.round(w * HWPUNIT_TO_PX * 100) / 100 : 0));
+    const known = px.filter((w) => w > 0);
+    if (known.length > 0) {
+      const avg = known.reduce((a, b) => a + b, 0) / known.length;
+      tableNode.colWidths = px.map((w) => (w > 0 ? w : avg));
+    }
+  }
+  console.log('[Debug] tableToNode grid=', `${effectiveRowCount}x${effectiveColCount}`, 'colWidths(px)=', tableNode.colWidths, 'total=', tableNode.colWidths?.reduce((a, b) => a + b, 0));
+  return tableNode;
 }
 
 function hwpCharToText(hwpChar: { type: number; value: number | string }): string {

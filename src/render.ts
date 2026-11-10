@@ -212,6 +212,9 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
       const pLineSpacing = item.lineSpacing ?? defaultLineSpacing();
       p.dataset.lineSpacing = String(pLineSpacing);
       p.style.lineHeight = '0';
+      const firstRun = (item.children || [])[0] as any;
+      const paraMarkSize = typeof firstRun?.fontSize === 'number' && isFinite(firstRun.fontSize) ? firstRun.fontSize : 16;
+      p.style.fontSize = `${paraMarkSize}px`;
       if (item.spaceBefore) p.style.paddingTop = `${item.spaceBefore}px`;
       if (item.spaceAfter) p.style.paddingBottom = `${item.spaceAfter}px`;
 
@@ -333,7 +336,12 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
               const p = document.createElement('p');
               p.style.margin = '0';
               p.contentEditable = 'true';
+              p.style.lineHeight = '0';
               const pChildren: Array<any> = paraItem.children || [];
+              const paraMarkSize = typeof (pChildren[0] as any)?.fontSize === 'number' && isFinite((pChildren[0] as any).fontSize)
+                ? (pChildren[0] as any).fontSize
+                : 16;
+              p.style.fontSize = `${paraMarkSize}px`;
               if (pChildren.length === 0) {
                 // 내용이 비어있어도 텍스트 노드(제로 폭 공백)를 반드시 생성하여 커서가 p가 아닌 텍스트 노드에 앵커되도록 함
                 const span = document.createElement('span');
@@ -353,6 +361,11 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
             const p = document.createElement('p');
             p.style.margin = '0';
             p.contentEditable = 'true';
+            p.style.lineHeight = '0';
+            const paraMarkSize = typeof (cellChildren[0] as any)?.fontSize === 'number' && isFinite((cellChildren[0] as any).fontSize)
+              ? (cellChildren[0] as any).fontSize
+              : 16;
+            p.style.fontSize = `${paraMarkSize}px`;
             if (cellChildren.length === 0) {
               const span = document.createElement('span');
               span.innerText = '\u200B';
