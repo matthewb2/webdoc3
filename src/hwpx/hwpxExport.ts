@@ -1,10 +1,13 @@
 // src/hwpx/hwpxExport.ts - 문서 모델(DocumentModel) → HWPX(XML) 저장
 import JSZip from 'jszip';
-import type { DocumentItem, DocumentModel, TableNode, TextRun } from '../types';
+import type { DocumentItem, DocumentModel, ParagraphNode, TableCellNode, TableNode, TextRun } from '../types';
 import { TEMPLATE_HEADER_XML } from './hwpxTemplate';
 
 const esc = (t: string) =>
   (t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// px -> HWPUNIT (parser: px = hwpunit * 1/100(pt) * 4/3(px/pt) => hwpunit = px * 75)
+const pxToHwpUnit = (px: number) => Math.max(0, Math.round((px || 0) * 75));
 
 const SECTION_NS =
   'xmlns:ha="http://www.hancom.co.kr/hwpml/2011/app" ' +
@@ -27,7 +30,7 @@ const SECTION_NS =
 const FIRST_SECPR = `<hp:secPr id="" textDirection="HORIZONTAL" spaceColumns="1134" tabStop="8000" tabStopVal="4000" tabStopUnit="HWPUNIT" outlineShapeIDRef="1" memoShapeIDRef="0" textVerticalWidthHead="0" masterPageCnt="0"><hp:grid lineGrid="0" charGrid="0" wonggojiFormat="0"/><hp:startNum pageStartsOn="BOTH" page="0" pic="0" tbl="0" equation="0"/><hp:visibility hideFirstHeader="0" hideFirstFooter="0" hideFirstMasterPage="0" border="SHOW_ALL" fill="SHOW_ALL" hideFirstPageNum="0" hideFirstEmptyLine="0" showLineNumber="0"/><hp:lineNumberShape restartType="0" countBy="0" distance="0" startNumber="0"/><hp:pagePr landscape="WIDELY" width="59528" height="84188" gutterType="LEFT_ONLY"><hp:margin header="4252" footer="4252" gutter="0" left="8504" right="8504" top="5668" bottom="4252"/></hp:pagePr><hp:footNotePr><hp:autoNumFormat type="DIGIT" userChar="" prefixChar="" suffixChar=")" supscript="0"/><hp:noteLine length="-1" type="SOLID" width="0.12 mm" color="#000000"/><hp:noteSpacing betweenNotes="283" belowLine="567" aboveLine="850"/><hp:numbering type="CONTINUOUS" newNum="1"/><hp:placement place="EACH_COLUMN" beneathText="0"/></hp:footNotePr><hp:endNotePr><hp:autoNumFormat type="DIGIT" userChar="" prefixChar="" suffixChar=")" supscript="0"/><hp:noteLine length="14692344" type="SOLID" width="0.12 mm" color="#000000"/><hp:noteSpacing betweenNotes="0" belowLine="567" aboveLine="850"/><hp:numbering type="CONTINUOUS" newNum="1"/><hp:placement place="END_OF_DOCUMENT" beneathText="0"/></hp:endNotePr><hp:pageBorderFill type="BOTH" borderFillIDRef="1" textBorder="PAPER" headerInside="0" footerInside="0" fillArea="PAPER"><hp:offset left="1417" right="1417" top="1417" bottom="1417"/></hp:pageBorderFill><hp:pageBorderFill type="EVEN" borderFillIDRef="1" textBorder="PAPER" headerInside="0" footerInside="0" fillArea="PAPER"><hp:offset left="1417" right="1417" top="1417" bottom="1417"/></hp:pageBorderFill><hp:pageBorderFill type="ODD" borderFillIDRef="1" textBorder="PAPER" headerInside="0" footerInside="0" fillArea="PAPER"><hp:offset left="1417" right="1417" top="1417" bottom="1417"/></hp:pageBorderFill></hp:secPr><hp:ctrl><hp:colPr id="" type="NEWSPAPER" layout="LEFT" colCount="1" sameSz="1" sameGap="0"/></hp:ctrl>`;
 
 function paragraphText(item: { children?: TextRun[] } | null | undefined): string {
-  return (item?.children || []).map((r) => r?.text || '').join('');
+  return (item?.children || []).map((r) => (r?.text || '').replace(/\u200B/g, '')).join('');
 }
 
 function makeParagraphXml(text: string, isFirst: boolean, vertpos: number): string {
@@ -37,35 +40,108 @@ function makeParagraphXml(text: string, isFirst: boolean, vertpos: number): stri
   return `<hp:p id="${id}" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0">${prefix}<hp:t>${esc(text)}</hp:t></hp:run>${lineseg}</hp:p>`;
 }
 
-function modelToParagraphTexts(model: DocumentModel): string[] {
-  const out: string[] = [];
-  (model || []).forEach((item: DocumentItem) => {
-    if (item.type === 'paragraph') {
-      out.push(paragraphText(item));
-    } else if (item.type === 'table') {
-      const table = item as TableNode;
-      (table.rows || []).forEach((row) => {
-        (row.cells || []).forEach((cell) => {
-          if ((cell as any).merged) return;
-          out.push(paragraphText(cell as any));
-        });
-      });
-    }
-  });
-  if (out.length === 0) out.push('');
-  return out;
+function makeParagraphNodeXml(item: ParagraphNode, isFirst: boolean, vertpos: number): string {
+  const text = paragraphText(item);
+  return makeParagraphXml(text, isFirst, vertpos);
+}
+
+function makeCellSubListXml(cell: TableCellNode): string {
+  const children = (cell.children || []) as any[];
+  let paras = '';
+  if (children.length > 0 && children[0] && children[0].type === 'paragraph') {
+    paras = children.map((p: any) => {
+      const t = paragraphText(p);
+      return `<hp:p id="0" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0"><hp:t>${esc(t)}</hp:t></hp:run><hp:linesegarray><hp:lineseg textpos="0" vertpos="0" vertsize="1000" textheight="1000" baseline="850" spacing="600" horzpos="0" horzsize="10000" flags="393216"/></hp:linesegarray></hp:p>`;
+    }).join('');
+  } else {
+    const t = paragraphText({ children: children as TextRun[] });
+    paras = `<hp:p id="0" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0"><hp:t>${esc(t)}</hp:t></hp:run><hp:linesegarray><hp:lineseg textpos="0" vertpos="0" vertsize="1000" textheight="1000" baseline="850" spacing="600" horzpos="0" horzsize="10000" flags="393216"/></hp:linesegarray></hp:p>`;
+  }
+  if (!paras) {
+    paras = `<hp:p id="0" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0"/><hp:linesegarray><hp:lineseg textpos="0" vertpos="0" vertsize="1000" textheight="1000" baseline="850" spacing="600" horzpos="0" horzsize="10000" flags="393216"/></hp:linesegarray></hp:p>`;
+  }
+  return `<hp:subList id="" textDirection="HORIZONTAL" lineWrap="BREAK" vertAlign="CENTER" linkListIDRef="0" linkListNextIDRef="0" textWidth="0" textHeight="0" hasTextRef="0" hasNumRef="0">${paras}</hp:subList>`;
+}
+
+function makeTableXml(table: TableNode): string {
+  const rows = table.rows || [];
+  const rowCnt = rows.length || 0;
+  const colCnt = rows[0]?.cells?.length || (table.colWidths?.length || 0) || 1;
+
+  let colWidthsPx = (table.colWidths || []).slice(0, colCnt);
+  if (colWidthsPx.length < colCnt) {
+    const fallback = colWidthsPx.length ? (colWidthsPx.reduce((a, b) => a + b, 0) / colWidthsPx.length) : (42520 / colCnt / 75);
+    while (colWidthsPx.length < colCnt) colWidthsPx.push(fallback);
+  }
+  const colW = colWidthsPx.map(pxToHwpUnit);
+  const totalW = colW.reduce((a, b) => a + b, 0) || 42520;
+  const rowH = Math.max(1500, Math.round(2500 / Math.max(1, rowCnt)));
+  const totalH = rowH * Math.max(1, rowCnt);
+
+  const trs = rows.map((row, r) => {
+    const cells = (row.cells || []) as TableCellNode[];
+    const tcs = cells.map((cell, c) => {
+      if (cell.merged) return '';
+      const colSpan = Math.max(1, cell.colSpan || 1);
+      const rowSpan = Math.max(1, cell.rowSpan || 1);
+      let w = 0;
+      for (let i = 0; i < colSpan; i++) w += colW[c + i] || 0;
+      const h = rowH * rowSpan;
+      const sub = makeCellSubListXml(cell);
+      return `<hp:tc name="" header="0" hasMargin="0" protect="0" editable="0" dirty="0" borderFillIDRef="3"><hp:subList>${sub.replace(/^<hp:subList[^>]*>/, '').replace(/<\/hp:subList>$/, '')}</hp:subList><hp:cellAddr colAddr="${c}" rowAddr="${r}"/><hp:cellSpan colSpan="${colSpan}" rowSpan="${rowSpan}"/><hp:cellSz width="${w}" height="${h}"/><hp:cellMargin left="510" right="510" top="141" bottom="141"/></hp:tc>`;
+    }).join('');
+    return `<hp:tr>${tcs}</hp:tr>`;
+  }).join('');
+
+  return `<hp:tbl id="0" zOrder="0" numberingType="TABLE" textWrap="TOP_AND_BOTTOM" textFlow="BOTH_SIDES" lock="0" dropcapstyle="None" pageBreak="CELL" repeatHeader="1" rowCnt="${rowCnt}" colCnt="${colCnt}" cellSpacing="0" borderFillIDRef="3" noAdjust="0">` +
+    `<hp:sz width="${totalW}" widthRelTo="ABSOLUTE" height="${totalH}" heightRelTo="ABSOLUTE" protect="0"/>` +
+    `<hp:pos treatAsChar="0" affectLSpacing="0" flowWithText="1" allowOverlap="0" holdAnchorAndSO="0" vertRelTo="PARA" horzRelTo="COLUMN" vertAlign="TOP" horzAlign="LEFT" vertOffset="0" horzOffset="0"/>` +
+    `<hp:outMargin left="283" right="283" top="283" bottom="283"/>` +
+    `<hp:inMargin left="510" right="510" top="141" bottom="141"/>` +
+    trs +
+    `</hp:tbl>`;
 }
 
 export function buildSectionXml(model: DocumentModel): string {
-  const texts = modelToParagraphTexts(model);
-  console.log('[hwpx-save] section paragraphs=', texts.length);
+  const items = (model || []) as DocumentItem[];
+  console.log('[hwpx-save] buildSectionXml items=', items.length, items.map((i) => i.type));
+
+  if (items.length === 0) {
+    const para = makeParagraphXml('', true, 0);
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><hs:sec ${SECTION_NS}>${para}</hs:sec>`;
+  }
+
   let vert = 0;
-  const paras = texts.map((t, i) => {
-    const xml = makeParagraphXml(t, i === 0, vert);
-    vert += 1600;
-    return xml;
+  const blocks: string[] = [];
+  let firstDone = false;
+
+  items.forEach((item) => {
+    if (item.type === 'paragraph') {
+      const isFirst = !firstDone;
+      const xml = makeParagraphNodeXml(item as ParagraphNode, isFirst, vert);
+      blocks.push(xml);
+      firstDone = true;
+      vert += 1600;
+    } else if (item.type === 'table') {
+      const isFirst = !firstDone;
+      const prefix = isFirst ? FIRST_SECPR : '';
+      const tbl = makeTableXml(item as TableNode);
+      const id = isFirst ? '2873897412' : '0';
+      const lineseg = `<hp:linesegarray><hp:lineseg textpos="0" vertpos="${vert}" vertsize="1000" textheight="1000" baseline="850" spacing="600" horzpos="0" horzsize="42520" flags="393216"/></hp:linesegarray>`;
+      // 표를 문단(run) 안에 배치 (HWPX 일반 구조)
+      const p = `<hp:p id="${id}" paraPrIDRef="0" styleIDRef="0" pageBreak="0" columnBreak="0" merged="0"><hp:run charPrIDRef="0">${prefix}${tbl}</hp:run>${lineseg}</hp:p>`;
+      blocks.push(p);
+      firstDone = true;
+      vert += 1600;
+      console.log('[hwpx-save] table serialized', { rowCnt: (item as TableNode).rows?.length, colCnt: (item as TableNode).rows?.[0]?.cells?.length });
+    }
   });
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><hs:sec ${SECTION_NS}>${paras.join('')}</hs:sec>`;
+
+  if (!firstDone && blocks.length === 0) {
+    blocks.push(makeParagraphXml('', true, 0));
+  }
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes" ?><hs:sec ${SECTION_NS}>${blocks.join('')}</hs:sec>`;
 }
 
 function buildContentHpf(): string {

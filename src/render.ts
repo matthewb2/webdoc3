@@ -276,14 +276,22 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
       table.style.borderCollapse = 'collapse';
       if (item.borderStyle === 'none') table.classList.add('tbl-border-none');
       else if (item.borderStyle === 'no-vertical') table.classList.add('tbl-border-no-vertical');
-      if (item.colWidths && item.colWidths.length > 0) {
-        const totalW = item.colWidths.reduce((a: number, b: number) => a + (b || 0), 0);
-        if (totalW > 0) table.style.width = `${totalW}px`;
-      }
-      if (item.backgroundColor) table.style.backgroundColor = item.backgroundColor;
-      if (item.background) table.style.backgroundColor = item.background;
 
       const rows: Array<any> = item.rows || [];
+      const contentWidth = pageLayout.contentWidth;
+      const colCount = (item.colWidths && item.colWidths.length) || (rows[0]?.cells?.length || 1);
+      let effectiveColWidths: number[] | null = null;
+      if (item.colWidths && item.colWidths.length > 0) {
+        const totalW = item.colWidths.reduce((a: number, b: number) => a + (b || 0), 0);
+        if (totalW > 0) {
+          // 편집 용지(본문 영역) 너비에 맞춰 열 너비를 비율 유지하며 확장
+          const scale = contentWidth / totalW;
+          effectiveColWidths = item.colWidths.map((v: number) => (v || 0) * scale);
+        }
+      }
+      table.style.width = `${contentWidth}px`;
+      if (item.backgroundColor) table.style.backgroundColor = item.backgroundColor;
+      if (item.background) table.style.backgroundColor = item.background;
 
       rows.forEach((row: any, ri: number) => {
         if (!row) return;
@@ -294,28 +302,26 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
 
         const cells: Array<any> = row.cells || [];
         const modelRow = row._rowIdx ?? ri;
+        const cellCount = colCount || cells.length || 1;
 
         cells.forEach((cell: any, ci: number) => {
           if (!cell || cell.merged) return;
           const td = document.createElement('td');
           td.dataset.r = String(modelRow);
           td.dataset.c = String(ci);
-          
-          // 셀 편집 활성화
+
           td.contentEditable = 'true';
           td.style.outline = 'none';
           td.style.backgroundColor = 'white';
 
-          const cellCount = cells.length || 1;
           const colSpan = Math.max(1, cell.colSpan ?? 1);
           const rowSpan = Math.max(1, cell.rowSpan ?? 1);
-          
-          const contentWidth = pageLayout.contentWidth;
+
           const baseCol = contentWidth / cellCount;
           let w = baseCol * colSpan;
-          if (item.colWidths && item.colWidths.length > 0) {
+          if (effectiveColWidths) {
             let sum = 0;
-            for (let i = 0; i < colSpan; i++) sum += item.colWidths[ci + i] ?? baseCol;
+            for (let i = 0; i < colSpan; i++) sum += effectiveColWidths[ci + i] ?? baseCol;
             w = sum;
           }
           td.style.width = `${w}px`;
