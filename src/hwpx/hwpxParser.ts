@@ -144,6 +144,15 @@ function parseFontSize(height: string | null): number | undefined {
   return Math.round(px * 100) / 100;
 }
 
+function normalizeFontFamily(face: string | undefined): string | undefined {
+  if (!face) return undefined;
+  const name = face.trim();
+  if (!name) return undefined;
+  // 휴먼명조 계열은 기본 글꼴(바탕)로 대체
+  if (/휴먼명조/i.test(name)) return '바탕';
+  return name;
+}
+
 function collectHeader(ctx: Ctx, headerDoc: Document | null) {
   if (!headerDoc) return;
   const root = headerDoc.documentElement;
@@ -166,8 +175,9 @@ function collectHeader(ctx: Ctx, headerDoc: Document | null) {
     const name = attr(ff, 'name') || attr(ff, 'fontName');
     const lang2 = (attr(ff, 'lang') || '').toUpperCase();
     if (id && name) {
-      if (!ctx.fontFaces.has(id)) ctx.fontFaces.set(id, name);
-      if (lang2) ctx.fontFaces.set(`${lang2}:${id}`, name);
+      const normalized = normalizeFontFamily(name) || name;
+      if (!ctx.fontFaces.has(id)) ctx.fontFaces.set(id, normalized);
+      if (lang2) ctx.fontFaces.set(`${lang2}:${id}`, normalized);
     }
   });
 
@@ -187,13 +197,15 @@ function collectHeader(ctx: Ctx, headerDoc: Document | null) {
       const fid = attr(fontRef, 'hangul') || attr(fontRef, 'HANGUL') || attr(fontRef, 'latin') || attr(fontRef, 'LATIN') || attr(fontRef, 'ko') || attr(fontRef, 'en');
       if (fid != null) {
         const face = ctx.fontFaces.get(`HANGUL:${fid}`) || ctx.fontFaces.get(`LATIN:${fid}`) || ctx.fontFaces.get(fid);
-        if (face) props.fontFamily = face;
+        const normalized = normalizeFontFamily(face);
+        if (normalized) props.fontFamily = normalized;
       }
     } else {
       const fid = attr(cp, 'fontRef');
       if (fid != null) {
         const face = ctx.fontFaces.get(fid);
-        if (face) props.fontFamily = face;
+        const normalized = normalizeFontFamily(face);
+        if (normalized) props.fontFamily = normalized;
       }
     }
 
@@ -524,11 +536,11 @@ function resolveSectionPaths(zip: JSZip): string[] {
     try {
       const doc = parseXml(hpf.asText(), 'content.hpf');
       const root = doc.documentElement;
-      const manifest = new Map<string, string>(); // id -> href
+      const manifest = new Map<string, { href: string; mediaType: string }>(); // id -> {href, mediaType}
       allDesc(root, 'item').forEach((it) => {
         const id = attr(it, 'id');
         const href = attr(it, 'href');
-        if (id && href) manifest.set(id, href);
+        if (id && href) manifest.set(id, { href, mediaType: (attr(it, 'media-type') || '').toLowerCase() });
       });
       console.log('[hwpx] manifest items:', Array.from(manifest.entries()));
       const spineRefs = allDesc(root, 'itemref');
@@ -536,8 +548,20 @@ function resolveSectionPaths(zip: JSZip): string[] {
       spineRefs.forEach((ir) => {
         const idref = attr(ir, 'idref');
         if (!idref) return;
-        const href = manifest.get(idref);
-        if (!href) return;
+        const meta = manifest.get(idref);
+        if (!meta) return;
+        const { href, mediaType } = meta;
+        // header 등 비본문 항목 제외, section 본문만 포함
+        const isSection =
+          /section/i.test(idref) ||
+          /section/i.test(href) ||
+          mediaType.includes('section') ||
+          mediaType.includes('xml+section');
+        const isHeader = /header/i.test(idref) || /header/i.test(href) || mediaType.includes('header');
+        if (!isSection || isHeader) {
+          console.log('[hwpx] skip spine item (not section):', idref, href, mediaType);
+          return;
+        }
         // href는 content.hpf 기준 상대경로(보통 Contents/)
         const p = href.startsWith('Contents/') ? href : `Contents/${href}`;
         if (!paths.includes(p)) paths.push(p);
@@ -593,8 +617,7 @@ export function parseHwpxToDocumentModel(data: Uint8Array): DocumentModel {
 
   // ZIP 내 파일 목록 디버그
   try {
-    const names: string[] = [];
-    (zip as any).forEach((relPath: string) => names.push(relPath));
+    const names = Object.keys((zip as any).files || {});
     console.log('[hwpx] zip entries:', names);
   } catch (e) {
     console.warn('[hwpx] zip entry listing failed', e);
@@ -648,6 +671,19 @@ export function parseHwpxToDocumentModel(data: Uint8Array): DocumentModel {
     }
     const elems = sectionBodyElements(doc);
     console.log('[hwpx] section body elements:', path, 'count=', elems.length, 'names=', elems.map((e) => e.localName));
+    // 구조 디버그: 상위 요소의 자식 구성 요약
+    elems.slice(0, 3).forEach((el, i) => {
+      const childNames = Array.from(el.childNodes).filter((n: any) => n.nodeType === 1).map((n: any) => (n as Element).localName);
+      const textLen = (el.textContent || '').trim().length;
+      console.log(`[hwpx] body[${i}] <${el.localName}> children=`, childNames.slice(0, 30), 'textLen=', textLen);
+      // p인 경우 run/중첩 구조 상세
+      if (el.localName === 'p') {
+        const runs = allDesc(el, 'run').length;
+        const tbls = allDesc(el, 'tbl').length;
+        const ps = allDesc(el, 'p').length;
+        console.log(`[hwpx] body[${i}] p stats: runs=${runs} nestedTbl=${tbls} nestedP=${ps}`);
+      }
+    });
     let paraCount = 0;
     let tableCount = 0;
     elems.forEach((el) => {
