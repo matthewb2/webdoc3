@@ -426,9 +426,10 @@ function parseParagraph(pEl: Element, ctx: Ctx): ParagraphNode {
   return node;
 }
 
-function parseCellParas(cell: Element, ctx: Ctx): TextRun[] {
+function parseCellParas(tc: Element, ctx: Ctx): TextRun[] {
+  // 셀 내부의 하위 문단(subList)에서 텍스트를 수집
+  const subList = firstDesc(tc, 'subList') || tc;
   const children: TextRun[] = [];
-  const subList = firstDesc(cell, 'subList') || cell;
   const paras: Element[] = [];
   const collect = (node: Element) => {
     for (let i = 0; i < node.childNodes.length; i++) {
@@ -442,31 +443,39 @@ function parseCellParas(cell: Element, ctx: Ctx): TextRun[] {
   collect(subList);
   paras.forEach((p) => {
     const runs = parseParagraph(p, ctx).children;
-    children.push(...runs);
+    if (runs && runs.length > 0) children.push(...runs);
   });
   return children.length > 0 ? children : [{ text: '' }];
 }
 
 function parseTable(tbl: Element, ctx: Ctx): TableNode {
-  const rows: TableRowNode[] = [];
-  const occupied: boolean[][] = [];
-
+  let colCnt = Math.max(1, parseInt(attr(tbl, 'colCnt') || attr(tbl, 'colCount') || '1', 10) || 1);
   const trEls = els(tbl, 'tr');
-  trEls.forEach((tr, ri) => {
-    const cells: TableCellNode[] = [];
-    if (!occupied[ri]) occupied[ri] = [];
-    let col = 0;
-    const cellEls = els(tr, 'tc');
+  let rowCnt = Math.max(trEls.length, parseInt(attr(tbl, 'rowCnt') || attr(tbl, 'rowCount') || '0', 10) || 0, 1);
 
-    cellEls.forEach((tc) => {
-      while (occupied[ri][col]) {
-        cells.push({ type: 'table-cell', children: [], merged: true });
-        col += 1;
-      }
-      // span: <hp:cellSpan colSpan="n" rowSpan="n"/> 또는 tc 속성
+  type CellSlot = TableCellNode | undefined;
+  const grid: CellSlot[][] = Array.from({ length: rowCnt }, () => Array.from({ length: colCnt }, () => undefined));
+  const colWidths: number[] = Array.from({ length: colCnt }, () => 0);
+
+  const ensureSize = (rows: number, cols: number) => {
+    if (cols > colCnt) {
+      for (const row of grid) while (row.length < cols) row.push(undefined);
+      while (colWidths.length < cols) colWidths.push(0);
+      colCnt = cols;
+    }
+    while (grid.length < rows) grid.push(Array.from({ length: colCnt }, () => undefined));
+    if (rows > rowCnt) rowCnt = rows;
+  };
+
+  trEls.forEach((tr, ri) => {
+    const rowIdx = Math.min(ri, rowCnt - 1);
+    els(tr, 'tc').forEach((tc) => {
+      const cellSpan = firstDesc(tc, 'cellSpan');
+      const cellAddr = firstDesc(tc, 'cellAddr');
+      const cellSz = firstDesc(tc, 'cellSz');
+
       let colSpan = 1;
       let rowSpan = 1;
-      const cellSpan = firstDesc(tc, 'cellSpan');
       if (cellSpan) {
         colSpan = parseInt(attr(cellSpan, 'colSpan') || '1', 10) || 1;
         rowSpan = parseInt(attr(cellSpan, 'rowSpan') || '1', 10) || 1;
@@ -474,29 +483,71 @@ function parseTable(tbl: Element, ctx: Ctx): TableNode {
         colSpan = parseInt(attr(tc, 'colSpan') || '1', 10) || 1;
         rowSpan = parseInt(attr(tc, 'rowSpan') || '1', 10) || 1;
       }
-      if (colSpan < 1) colSpan = 1;
-      if (rowSpan < 1) rowSpan = 1;
+      colSpan = Math.max(1, colSpan);
+      rowSpan = Math.max(1, rowSpan);
+
+      let r = rowIdx;
+      let c = -1;
+      if (cellAddr) {
+        const ra = parseInt(attr(cellAddr, 'rowAddr') || '', 10);
+        const ca = parseInt(attr(cellAddr, 'colAddr') || '', 10);
+        if (!isNaN(ra) && ra >= 0 && ra < rowCnt) r = ra;
+        if (!isNaN(ca) && ca >= 0 && ca < colCnt) c = ca;
+      }
+      if (c < 0) c = grid[r].findIndex((x) => x === undefined);
+      if (c < 0) return;
+
+      ensureSize(r + rowSpan, c + colSpan);
+      colSpan = Math.max(1, Math.min(colSpan, colCnt - c));
+      rowSpan = Math.max(1, Math.min(rowSpan, rowCnt - r));
+
+      let widthPx = 0;
+      if (cellSz) {
+        const w = parseInt(attr(cellSz, 'width') || '0', 10) || 0; // HWPUNIT
+        widthPx = w * HWPUNIT_TO_PT * PT_TO_PX;
+      }
 
       const children = parseCellParas(tc, ctx);
       const node: TableCellNode = { type: 'table-cell', children };
       if (colSpan > 1) node.colSpan = colSpan;
-      if (rowSpan > 1) {
-        node.rowSpan = rowSpan;
-        for (let rr = ri + 1; rr < ri + rowSpan; rr++) {
-          if (!occupied[rr]) occupied[rr] = [];
-          for (let cc = col; cc < col + colSpan; cc++) occupied[rr][cc] = true;
+      if (rowSpan > 1) node.rowSpan = rowSpan;
+
+      grid[r][c] = node;
+      for (let dr = 0; dr < rowSpan; dr++) {
+        for (let dc = 0; dc < colSpan; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          const rr = r + dr;
+          const cc = c + dc;
+          if (rr < rowCnt && cc < colCnt) {
+            grid[rr][cc] = { type: 'table-cell', children: [], merged: true };
+          }
         }
       }
-      cells.push(node);
-      col += colSpan;
+      if (widthPx > 0) {
+        const per = widthPx / colSpan;
+        for (let dc = 0; dc < colSpan; dc++) {
+          if (colWidths[c + dc] === 0) colWidths[c + dc] = per;
+        }
+      }
     });
-
-    rows.push({ type: 'table-row', cells });
   });
 
-  return { type: 'table', rows };
-}
+  for (let r = 0; r < rowCnt; r++) {
+    for (let c = 0; c < colCnt; c++) {
+      if (!grid[r][c]) grid[r][c] = { type: 'table-cell', children: [{ text: '' }], merged: true };
+    }
+  }
 
+  const rows: TableRowNode[] = grid.map((cells) => ({ type: 'table-row', cells: cells as TableCellNode[] }));
+  const table: TableNode = { type: 'table', rows };
+  if (colWidths.some((w) => w > 0)) {
+    const known = colWidths.filter((w) => w > 0);
+    const avg = known.length ? known.reduce((a, b) => a + b, 0) / known.length : 0;
+    table.colWidths = colWidths.map((w) => (w > 0 ? w : avg || 0));
+  }
+  console.log('[hwpx] table parsed', { rowCnt, colCnt, colWidths: table.colWidths, shape: rows.map(rw => rw.cells.map(c => c.merged ? 'm' : `c${c.colSpan || 1}x${c.rowSpan || 1}`)) });
+  return table;
+}
 function parseXml(text: string, label: string): Document {
   const doc = new DOMParser().parseFromString(text, 'application/xml');
   if (doc.getElementsByTagName('parsererror').length > 0) {
@@ -506,26 +557,42 @@ function parseXml(text: string, label: string): Document {
 }
 
 function sectionBodyElements(sectionDoc: Document): Element[] {
-  // <hs:sec><hs:subList>...</hs:subList></hs:sec> 또는 유사 구조
   const root = sectionDoc.documentElement;
-  let container: Element | null = null;
-  // sec 직속/하위의 subList
-  const subLists = allDesc(root, 'subList');
-  if (subLists.length > 0) container = subLists[0];
-  else container = root;
+
+  const isTopLevelBlock = (el: Element) => {
+    let p: Element | null = el.parentElement;
+    while (p && p !== root) {
+      const n = p.localName;
+      if (n === 'tc' || n === 'subList' || n === 'caption' || n === 'shapeComment') return false;
+      p = p.parentElement;
+    }
+    return true;
+  };
 
   const out: Element[] = [];
-  const pushFrom = (el: Element) => {
-    for (let i = 0; i < el.childNodes.length; i++) {
-      const c = el.childNodes[i];
+  const collect = (parent: Element) => {
+    for (let i = 0; i < parent.childNodes.length; i++) {
+      const c = parent.childNodes[i];
       if (c.nodeType !== 1) continue;
-      out.push(c as Element);
+      const el = c as Element;
+      const name = el.localName;
+      if (name === 'p' || name === 'tbl') {
+        if (isTopLevelBlock(el)) out.push(el);
+      } else {
+        collect(el);
+      }
     }
   };
-  pushFrom(container);
+
+  collect(root);
+  if (out.length === 0) {
+    const all = allDesc(root, 'p').concat(allDesc(root, 'tbl'))
+      .filter((el) => isTopLevelBlock(el))
+      .sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+    return all;
+  }
   return out;
 }
-
 function resolveSectionPaths(zip: JSZip): string[] {
   // content.hpf (OPF)에서 spine/manifest 기반 섹션 순서 추출, 실패 시 Contents/section*.xml 스캔
   const paths: string[] = [];
@@ -587,26 +654,19 @@ function resolveSectionPaths(zip: JSZip): string[] {
 function processBodyElement(el: Element, ctx: Ctx, model: DocumentModel) {
   const local = el.localName;
   if (local === 'p') {
-    model.push(parseParagraph(el, ctx));
-    // 문단(run) 안에 포함된 표도 추출
+    const para = parseParagraph(el, ctx);
     const tbls = allDesc(el, 'tbl');
+    const hasText = Array.isArray(para.children) && para.children.some((r: any) => typeof r.text === 'string' && r.text.replace(/\u200B/g, '').trim().length > 0);
+    if (hasText || tbls.length === 0) {
+      model.push(para);
+    }
     tbls.forEach((t) => model.push(parseTable(t, ctx)));
   } else if (local === 'tbl') {
     model.push(parseTable(el, ctx));
-  } else if (local === 'subList' || local === 'sec' || local === 'container' || local === 'switch') {
-    // 컨테이너는 내부 요소를 재귀 처리
+  } else {
     for (let i = 0; i < el.childNodes.length; i++) {
       const c = el.childNodes[i];
       if (c.nodeType === 1) processBodyElement(c as Element, ctx, model);
-    }
-  } else {
-    // 기타: 하위에서 p/tbl 탐색
-    const children = els(el, 'p').concat(els(el, 'tbl'));
-    if (children.length > 0) {
-      for (let i = 0; i < el.childNodes.length; i++) {
-        const c = el.childNodes[i];
-        if (c.nodeType === 1) processBodyElement(c as Element, ctx, model);
-      }
     }
   }
 }

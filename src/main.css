@@ -326,6 +326,7 @@ html {
         .page p::after {
             vertical-align: top;
         }
+        /* 표 밖 문단 문단부호 */
         .show-para-marks .page p::after,
         .show-para-marks#preview-container .page p::after,
         #preview-container.show-para-marks .page p::after {
@@ -336,7 +337,21 @@ html {
             margin-left: 1px;
             user-select: none;
             pointer-events: none;
-            vertical-align: bottom;
+            display: inline-block;
+            vertical-align: baseline;
+            position: relative;
+            top: 1.2em;
+        }
+        /* 표 안 문단 문단부호 (셀 내부 정렬에 맞춤) */
+        .show-para-marks .page td p::after,
+        .show-para-marks .page th p::after,
+        .show-para-marks#preview-container .page td p::after,
+        .show-para-marks#preview-container .page th p::after,
+        #preview-container.show-para-marks .page td p::after,
+        #preview-container.show-para-marks .page th p::after {
+            vertical-align: baseline;
+            position: relative;
+            top: 0.2em;
         }
 		p:has(span:empty)::after {
 			position: absolute;

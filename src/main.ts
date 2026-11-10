@@ -10,6 +10,7 @@ import { initCellSelection, paintCellSelection } from './listener/mouse';
 import { initPreviewMode } from './preview';
 import { ruler } from './ruler';
 import { parseHwpToDocumentModel } from './hwp/hwpParser';
+import { parseHwpxToDocumentModel } from './hwpx/hwpxParser';
 import logoUrl from './assets/logo.svg';
 
 // 타이틀바(탭) 로고
@@ -297,8 +298,8 @@ async function initWordProcessor() {
     return;
   }
 
-  // 기본 문서: 프로그램 시작 시 표준상가임대차계약서.hwp 로드 (?new=1 제외)
-  const defaultDocName = '표준상가임대차계약서.hwp';
+  // 기본 문서: 프로그램 시작 시 cellmerge.hwpx 로드 (?new=1 제외)
+  const defaultDocName = 'cellmerge.hwpx';
   const defaultDocUrl = encodeURI(`/${defaultDocName}`);
   fetch(defaultDocUrl)
     .then((res) => {
@@ -306,7 +307,15 @@ async function initWordProcessor() {
       return res.arrayBuffer();
     })
     .then(async (buffer) => {
-      const model = parseHwpToDocumentModel(new Uint8Array(buffer));
+      const bytes = new Uint8Array(buffer);
+      const lower = defaultDocName.toLowerCase();
+      const model = lower.endsWith('.hwpx')
+        ? parseHwpxToDocumentModel(bytes)
+        : lower.endsWith('.hwp')
+          ? parseHwpToDocumentModel(bytes)
+          : lower.endsWith('.docx')
+            ? (await import('./docx/docxParser')).parseDocxToDocumentModel(bytes)
+            : (await import('./odt/odtParser')).parseOdtToDocumentModel(bytes);
       worker.postMessage({ type: 'BREAKS', payload: await computeBreaks(collectProbeItems(model)) });
       worker.postMessage({ type: 'INIT_DOC', payload: model });
       setCurrentFileName(defaultDocName);
