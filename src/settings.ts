@@ -248,7 +248,7 @@ export function getRecentFiles(): string[] {
 }
 
 export function addRecentFile(name: string): string[] {
-  if (!name || !/\.(hwp|docx|odt)$/i.test(name)) return getRecentFiles();
+  if (!name || !/\.(hwp|hwpx|docx|odt)$/i.test(name)) return getRecentFiles();
   const cur = getRecentFiles().filter((n) => n !== name);
   cur.unshift(name);
   const next = cur.slice(0, 10);

@@ -6,11 +6,13 @@ import { setPageMargins } from '../worker/layoutConstants';
 import { parseHwpToDocumentModel } from '../hwp/hwpParser';
 import { parseDocxToDocumentModel } from '../docx/docxParser';
 import { parseOdtToDocumentModel } from '../odt/odtParser';
+import { parseHwpxToDocumentModel } from '../hwpx/hwpxParser';
 import { collectProbeItems, computeBreaks } from '../probe';
 import { getCachedPages, setRenderZoom, updateVisiblePages } from '../render';
 import { saveCurrentDocument } from '../odt/odtExport';
 import { saveCurrentDocumentDocx } from '../docx/docxExport';
 import { saveCurrentDocumentHwp } from '../hwp/hwpExport';
+import { saveCurrentHwpxDocument } from '../hwpx/hwpxExport';
 import { cellPosFromTd, clearCellSelection, getActiveTableDocIdx, getCellSelection } from './mouse';
 import type { CellSel } from './mouse';
 
@@ -376,20 +378,32 @@ async function loadDocumentFile(
 ) {
   const hwpStatus = document.getElementById('hwp-status') as HTMLSpanElement | null;
   const lower = file.name.toLowerCase();
-  const kind = /\.hwp$/i.test(lower) ? 'hwp' : /\.docx$/i.test(lower) ? 'docx' : /\.odt$/i.test(lower) ? 'odt' : null;
+  const kind = /\.hwpx$/i.test(lower)
+    ? 'hwpx'
+    : /\.hwp$/i.test(lower)
+      ? 'hwp'
+      : /\.docx$/i.test(lower)
+        ? 'docx'
+        : /\.odt$/i.test(lower)
+          ? 'odt'
+          : null;
   if (!kind) {
-    if (hwpStatus) hwpStatus.textContent = '.hwp, .docx, .odt 파일을 선택해 주세요';
+    if (hwpStatus) hwpStatus.textContent = '.hwp, .hwpx, .docx, .odt 파일을 선택해 주세요';
     return;
   }
   if (hwpStatus) hwpStatus.textContent = `파싱 중... (${file.name})`;
   try {
     const bytes = new Uint8Array(await file.arrayBuffer());
+    console.log('[open] file=', file.name, 'kind=', kind, 'bytes=', bytes.length);
     const model =
-      kind === 'hwp'
-        ? parseHwpToDocumentModel(bytes)
-        : kind === 'docx'
-          ? parseDocxToDocumentModel(bytes)
-          : parseOdtToDocumentModel(bytes);
+      kind === 'hwpx'
+        ? parseHwpxToDocumentModel(bytes)
+        : kind === 'hwp'
+          ? parseHwpToDocumentModel(bytes)
+          : kind === 'docx'
+            ? parseDocxToDocumentModel(bytes)
+            : parseOdtToDocumentModel(bytes);
+    console.log('[open] parsed model items=', model.length, model);
     worker.postMessage({ type: 'BREAKS', payload: await computeBreaks(collectProbeItems(model)) });
     worker.postMessage({ type: 'INIT_DOC', payload: model });
     containerEl.style.display = 'inline-flex';
@@ -400,6 +414,7 @@ async function loadDocumentFile(
     clearCellSelection(containerEl);
     if (hwpStatus) hwpStatus.textContent = `파싱 완료: ${file.name} (${model.length}개 항목)`;
   } catch (err) {
+    console.error('[open] parse/load failed', err);
     if ((err as any)?.name === 'AbortError') return;
     if (hwpStatus) hwpStatus.textContent = `파싱 실패: ${(err as Error).message}`;
   }
@@ -417,7 +432,16 @@ export function initFileOpen(worker: Worker, containerEl: HTMLDivElement) {
         const [handle] = await window.showOpenFilePicker({
           multiple: false,
           types: [
-            { description: '문서', accept: { 'application/x-hwp': ['.hwp'], 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'], 'application/vnd.oasis.opendocument.text': ['.odt'] } },
+            {
+              description: '문서',
+              accept: {
+                'application/x-hwp': ['.hwp'],
+                'application/hwp+zip': ['.hwpx'],
+                'application/vnd.hancom.hwpx': ['.hwpx'],
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+                'application/vnd.oasis.opendocument.text': ['.odt'],
+              },
+            },
           ],
         });
         if (handle) {
@@ -461,7 +485,7 @@ export function initFileOpen(worker: Worker, containerEl: HTMLDivElement) {
     dragDepth = 0;
     editorViewport.classList.remove('is-dragging');
     const files = Array.from(e.dataTransfer?.files ?? []);
-    const file = files.find((f) => /\.(hwp|docx|odt)$/i.test(f.name));
+    const file = files.find((f) => /\.(hwp|hwpx|docx|odt)$/i.test(f.name));
     if (file) void loadDocumentFile(file, null, worker, containerEl);
   });
 }
@@ -1242,6 +1266,7 @@ export function initFindReplace(worker: Worker, cursor?: CursorState, container?
 }
 
 function getSaveFn(lower: string) {
+  if (/\.hwpx$/i.test(lower)) return saveCurrentHwpxDocument;
   if (/\.docx$/i.test(lower)) return saveCurrentDocumentDocx;
   if (/\.odt$/i.test(lower)) return saveCurrentDocument;
   return saveCurrentDocumentHwp;
