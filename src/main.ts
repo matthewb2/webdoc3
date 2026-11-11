@@ -298,8 +298,8 @@ async function initWordProcessor() {
     return;
   }
 
-  // 기본 문서: 프로그램 시작 시 cellmerge.hwpx 로드 (?new=1 제외)
-  const defaultDocName = 'cellmerge.hwpx';
+  // 기본 문서: 프로그램 시작 시
+  const defaultDocName = '표준상가임대차계약서.hwp';
   const defaultDocUrl = encodeURI(`/${defaultDocName}`);
   fetch(defaultDocUrl)
     .then((res) => {

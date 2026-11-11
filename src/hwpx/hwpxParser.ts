@@ -57,7 +57,8 @@ interface CharPrDef extends TextProps {
 interface Ctx {
   paraPrs: Map<string, ParaPrDef>;
   charPrs: Map<string, CharPrDef>;
-  fontFaces: Map<string, string>; // id -> face name (대표: hangul/latin)
+  fontFaces: Map<string, string>;
+  borderFills: Map<string, boolean>;
 }
 
 function els(parent: Element, local: string): Element[] {
@@ -249,7 +250,23 @@ function collectHeader(ctx: Ctx, headerDoc: Document | null) {
       if (bg) props.backgroundColor = bg;
     }
 
-    ctx.charPrs.set(id, props);
+      ctx.charPrs.set(id, props);
+  });
+
+  // borderFill 정의 (테두리 유무 판정)
+  const borderFillEls = allDesc(root, 'borderFill');
+  borderFillEls.forEach((bf) => {
+    const id = attr(bf, 'id');
+    if (!id) return;
+    const edgeNames = ['leftBorder', 'rightBorder', 'topBorder', 'bottomBorder'];
+    let visible = false;
+    for (const en of edgeNames) {
+      const edge = firstDesc(bf, en);
+      if (!edge) continue;
+      const type = (attr(edge, 'type') || '').toUpperCase();
+      if (type && type !== 'NONE') { visible = true; break; }
+    }
+    ctx.borderFills.set(id, visible);
   });
 
   // paraPr 정의
@@ -456,6 +473,22 @@ function parseTable(tbl: Element, ctx: Ctx): TableNode {
   type CellSlot = TableCellNode | undefined;
   const grid: CellSlot[][] = Array.from({ length: rowCnt }, () => Array.from({ length: colCnt }, () => undefined));
   const colWidths: number[] = Array.from({ length: colCnt }, () => 0);
+  let anyVisibleBorder = false;
+  let allRefsResolvedNonVisible = true;
+  let sawRef = false;
+  const checkBorderId = (id: string | null) => {
+    if (!id) return;
+    sawRef = true;
+    if (!ctx.borderFills.has(id)) {
+      allRefsResolvedNonVisible = false; // 미해석 참조는 보수적으로 실선 유지
+      return;
+    }
+    if (ctx.borderFills.get(id) === true) {
+      anyVisibleBorder = true;
+      allRefsResolvedNonVisible = false;
+    }
+  };
+  checkBorderId(attr(tbl, 'borderFillIDRef'));
 
   const ensureSize = (rows: number, cols: number) => {
     if (cols > colCnt) {
@@ -473,6 +506,7 @@ function parseTable(tbl: Element, ctx: Ctx): TableNode {
       const cellSpan = firstDesc(tc, 'cellSpan');
       const cellAddr = firstDesc(tc, 'cellAddr');
       const cellSz = firstDesc(tc, 'cellSz');
+      checkBorderId(attr(tc, 'borderFillIDRef'));
 
       let colSpan = 1;
       let rowSpan = 1;
@@ -545,7 +579,10 @@ function parseTable(tbl: Element, ctx: Ctx): TableNode {
     const avg = known.length ? known.reduce((a, b) => a + b, 0) / known.length : 0;
     table.colWidths = colWidths.map((w) => (w > 0 ? w : avg || 0));
   }
-  console.log('[hwpx] table parsed', { rowCnt, colCnt, colWidths: table.colWidths, shape: rows.map(rw => rw.cells.map(c => c.merged ? 'm' : `c${c.colSpan || 1}x${c.rowSpan || 1}`)) });
+  if (sawRef && allRefsResolvedNonVisible && !anyVisibleBorder) {
+    table.borderStyle = 'none';
+  }
+  console.log('[hwpx] table parsed', { rowCnt, colCnt, colWidths: table.colWidths, borderStyle: table.borderStyle, shape: rows.map(rw => rw.cells.map(c => c.merged ? 'm' : `c${c.colSpan || 1}x${c.rowSpan || 1}`)) });
   return table;
 }
 function parseXml(text: string, label: string): Document {
@@ -687,6 +724,7 @@ export function parseHwpxToDocumentModel(data: Uint8Array): DocumentModel {
     paraPrs: new Map(),
     charPrs: new Map(),
     fontFaces: new Map(),
+    borderFills: new Map(),
   };
 
   // header.xml (스타일/글꼴 정의)

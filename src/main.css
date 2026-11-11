@@ -380,7 +380,7 @@ html {
             text-align: left;
         }
         table.tbl-border-none td, table.tbl-border-none th {
-            border: 1px dashed #b0b4b8 !important;
+            border: 1px dashed red !important;
         }
         table.tbl-border-no-vertical td, table.tbl-border-no-vertical th {
             border-left: none !important;

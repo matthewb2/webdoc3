@@ -274,15 +274,23 @@ function styledRuns(docInfo: DocInfo, text: string, shapeIndex: number): TextRun
   }
 
   // 1. HWP 규격에 따른 폰트 기본 크기 추출 (1pt = 100 HWPUNIT)
-  let rawBaseSize = charShape.fontBaseSize ?? 1000;
-  let basePt = rawBaseSize >= 100 ? rawBaseSize / 100 : rawBaseSize;
-
-  // 2. 예외적인 축소 케이스 방어 보정
-  if (basePt < 10 && rawBaseSize < 100) {
-    basePt = basePt * (100 / 30); 
+  // 1. HWP 규격: 글자 크기는 1/100 pt(HWPUNIT) 단위 (예: 1000 = 10pt)
+  const rawBaseSize = (charShape as any).fontBaseSize ?? (charShape as any).height ?? (charShape as any).baseSize ?? 1000;
+  let basePt: number;
+  if (rawBaseSize >= 100) {
+    basePt = rawBaseSize / 100;
+  } else if (rawBaseSize > 0) {
+    // 일부 파서/데이터에서 pt 단위로 들어오는 경우 보정
+    basePt = rawBaseSize;
+  } else {
+    basePt = 10;
   }
+  // 비정상 값 방어 (잘못된 배율 보정 제거)
+  if (!Number.isFinite(basePt) || basePt <= 0) basePt = 10;
+  if (basePt > 200) basePt = basePt / 100; // 단위 혼동 방어
+  basePt = Math.max(1, Math.min(200, basePt));
 
-  // 3. 폰트 높이(Font Size)는 장평과 무관하게 순수 pt를 px로 변환 (1pt = 4/3px)
+  // 2. pt -> px (1pt = 4/3px)
   run.fontSize = basePt * PT_TO_PX;
 
   console.log(`[CharShapeInfo] shapeIndex: ${shapeIndex}, rawBaseSize: ${rawBaseSize}, fontSizePt: ${basePt}, fontSizePx: ${run.fontSize}`);
@@ -388,8 +396,50 @@ function tableToNode(table: TableControl, docInfo: DocInfo): TableNode {
       tableNode.colWidths = px.map((w) => (w > 0 ? w : avg));
     }
   }
-  console.log('[Debug] tableToNode grid=', `${effectiveRowCount}x${effectiveColCount}`, 'colWidths(px)=', tableNode.colWidths, 'total=', tableNode.colWidths?.reduce((a, b) => a + b, 0));
+
+  // 테두리: borderFill을 해석할 수 있을 때만 "테두리 없음"을 확정 (미해석/불명은 기본 실선 유지)
+  try {
+    const tableBfId = (table as any).borderFillId ?? (table as any).record?.borderFillId ?? 0;
+    const tableBf = getBorderFill(docInfo, tableBfId);
+    let hasVisible = tableBf ? borderFillHasVisibleBorder(tableBf) : false;
+    let resolvedAny = !!tableBf;
+
+    if (!hasVisible) {
+      outer: for (const row of (table.content || [])) {
+        for (const cell of (row || [])) {
+          const cid = (cell as any).borderFillId ?? (cell as any).attribute?.borderFillId ?? 0;
+          const cbf = cid ? getBorderFill(docInfo, cid) : null;
+          if (cbf) {
+            resolvedAny = true;
+            if (borderFillHasVisibleBorder(cbf)) { hasVisible = true; break outer; }
+          }
+        }
+      }
+    }
+
+    // 해석된 borderFill들이 모두 비가시일 때만 테두리 없음으로 판정
+    if (resolvedAny && !hasVisible) tableNode.borderStyle = 'none';
+  } catch (e) {
+    console.warn('[hwp-parse] border style detect failed', e);
+  }
+
+  console.log('[Debug] tableToNode grid=', `${effectiveRowCount}x${effectiveColCount}`, 'colWidths(px)=', tableNode.colWidths, 'total=', tableNode.colWidths?.reduce((a, b) => a + b, 0), 'borderStyle=', tableNode.borderStyle);
   return tableNode;
+}
+
+function getBorderFill(docInfo: DocInfo, id: number): any | null {
+  const list = (docInfo as any).borderFills as any[] | undefined;
+  if (!Array.isArray(list) || !id || id <= 0) return null;
+  return list[id - 1] ?? list[id] ?? null;
+}
+
+function borderFillHasVisibleBorder(bf: any): boolean {
+  if (!bf) return false;
+  const borders = bf.borders;
+  if (Array.isArray(borders)) {
+    if (borders.some((b: any) => b && typeof b.width === 'number' && b.width > 0)) return true;
+  }
+  return false;
 }
 
 function hwpCharToText(hwpChar: { type: number; value: number | string }): string {
