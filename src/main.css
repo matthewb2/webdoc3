@@ -327,28 +327,23 @@ html {
             vertical-align: top;
         }
         /* 표 밖 문단 문단부호 */
-        .show-para-marks .page p::after,
-        .show-para-marks#preview-container .page p::after,
-        #preview-container.show-para-marks .page p::after {
+        /* 표 밖 문단 문단부호 (20포인트 등 대형 폰트 대응 수정본) */
+        .show-para-marks .page p::after{
             content: '\21B5';
             color: #8a94a0;
-            font-size: 12px;
+            font-size: 0.75em;          /* 부모 p 태그의 글자 크기에 비례하여 자동 조절됨 (20px일 때 부호도 자연스럽게 어우러짐) */
             line-height: 1;
-            margin-left: 1px;
+            margin-left: 2px;
             user-select: none;
             pointer-events: none;
             display: inline-block;
             vertical-align: baseline;
             position: relative;
-            top: 1.2em;
+            top: 0.8em;                 /* 자기 자신의 font-size 기준 상대 위치이므로 폰트 크기가 바뀌어도 위치가 틀어지지 않음 */
         }
         /* 표 안 문단 문단부호 (셀 내부 정렬에 맞춤) */
         .show-para-marks .page td p::after,
-        .show-para-marks .page th p::after,
-        .show-para-marks#preview-container .page td p::after,
-        .show-para-marks#preview-container .page th p::after,
-        #preview-container.show-para-marks .page td p::after,
-        #preview-container.show-para-marks .page th p::after {
+        .show-para-marks .page th p::after {
             vertical-align: baseline;
             position: relative;
             top: 0.2em;

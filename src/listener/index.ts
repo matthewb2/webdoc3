@@ -1180,7 +1180,8 @@ export function initViewOptions() {
   if (!checkbox) return;
   const apply = (on: boolean) => {
     document.getElementById('editor-container')?.classList.toggle('show-para-marks', on);
-    document.getElementById('preview-container')?.classList.toggle('show-para-marks', on);
+    // 미리보기에서는 문단부호를 표시하지 않음
+    document.getElementById('preview-container')?.classList.remove('show-para-marks');
   };
   const initial = !!loadSettings().showParaMarks;
   checkbox.checked = initial;
