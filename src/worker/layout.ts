@@ -146,6 +146,20 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
       }
       currentHeight += spaceAfter;
       }
+    } else if (item.type === 'shape') {
+      pendingCols = null;
+      const w = Math.max(20, Math.min(pageLayout.contentWidth, (item as any).width || 160));
+      const h = Math.max(10, (item as any).height || 100);
+      const blockH = h + 16;
+      if (currentHeight + blockH > getPageMaxHeight()) {
+        if (currentPage.length > 0) {
+          pages.push(currentPage);
+          currentPage = [];
+          currentHeight = 0;
+        }
+      }
+      currentPage.push({ ...(item as any), width: w, height: h, _docIdx: idx } as any);
+      currentHeight += blockH;
     } else if (item.type === 'table') {
       pendingCols = null;
       const tableProps = () => ({

@@ -33,13 +33,14 @@ export function collectProbeItems(model: DocumentModel): ProbeItem[] {
       const editorW = pageLayout.contentWidth;
       const width = columns > 1 ? (editorW - 20 * (columns - 1)) / columns : editorW;
       add(item.children || [], width);
-    } else {
+    } else if (item.type === 'table') {
       item.rows.forEach((row) => {
         const n = Math.max(1, row.cells.length);
         const cw = (pageLayout.tableGridWidth - CELL_PAD * n - (n - 1) * CELL_BD) / n;
         row.cells.forEach((cell) => add(cell.children || [], cw));
       });
     }
+    // shape: 텍스트 런 없음
   });
   return items;
 }

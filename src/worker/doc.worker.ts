@@ -121,6 +121,8 @@ self.addEventListener('message', (event: MessageEvent<any>) => {
     editTableColWidth(message.payload.tableDocIdx, message.payload.colIndex, message.payload.width);
   } else if (message.type === 'EDIT_INSERT_TABLE') {
     editInsertTable(message.payload.paragraphIndex, message.payload.charIndex, message.payload.rows, message.payload.cols);
+  } else if (message.type === 'EDIT_INSERT_SHAPE') {
+    editInsertShape(message.payload.paragraphIndex, message.payload.charIndex, message.payload.shape);
   } else if (message.type === 'EDIT_TABLE_BORDER') {
     const node = documentState[message.payload.tableDocIdx];
     if (node && node.type === 'table') {
@@ -650,6 +652,59 @@ function editInsertTable(docIdx: number, charIndex: number, rows: number, cols: 
     const insertAt = Math.min(Math.max(0, docIdx + 1), documentState.length);
     const emptyPara = { type: 'paragraph' as const, children: [seedRun()] };
     documentState.splice(insertAt, 0, table, emptyPara);
+  }
+  requestLayout();
+}
+
+function editInsertShape(docIdx: number, charIndex: number, shape: 'rect' | 'ellipse' | 'line' | 'arrow') {
+  const defaults: Record<string, { w: number; h: number }> = {
+    rect: { w: 180, h: 100 },
+    ellipse: { w: 160, h: 100 },
+    line: { w: 180, h: 2 },
+    arrow: { w: 180, h: 40 },
+  };
+  const d = defaults[shape] || { w: 160, h: 100 };
+  const shapeNode: any = {
+    type: 'shape',
+    shape,
+    width: d.w,
+    height: d.h,
+    fill: shape === 'line' || shape === 'arrow' ? 'none' : '#d9e8ff',
+    stroke: '#2b579a',
+    strokeWidth: 2,
+  };
+
+  const item = documentState[docIdx];
+  if (item?.type === 'paragraph') {
+    const { runIndex, localIndex } = locateRun(item.children, Math.max(0, charIndex));
+    const left: TextRun[] = [];
+    const right: TextRun[] = [];
+    item.children.forEach((run, i) => {
+      const t = run.text || '';
+      if (i < runIndex) left.push(run);
+      else if (i > runIndex) right.push(run);
+      else {
+        left.push({ ...run, text: t.slice(0, localIndex) });
+        right.push({ ...run, text: t.slice(localIndex) });
+      }
+    });
+    const paraProps = {
+      align: item.align,
+      columns: item.columns,
+      indent: item.indent,
+      leftIndent: item.leftIndent,
+      textIndent: item.textIndent,
+      lineSpacing: item.lineSpacing,
+      spaceBefore: item.spaceBefore,
+      spaceAfter: item.spaceAfter,
+    };
+    const leftPara = { type: 'paragraph' as const, children: left.length > 0 ? left : [seedRun()], ...paraProps };
+    const rightPara = { type: 'paragraph' as const, children: right.length > 0 ? right : [seedRun()], ...paraProps };
+    documentState.splice(docIdx, 1, leftPara, shapeNode, rightPara);
+  } else {
+    const insertAt = Math.min(Math.max(0, docIdx + 1), documentState.length);
+    const emptyPara = { type: 'paragraph' as const, children: [seedRun()] };
+    documentState.splice(insertAt, 0, shapeNode, emptyPara);
   }
   requestLayout();
 }

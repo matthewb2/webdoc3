@@ -267,6 +267,83 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
         pageEl.appendChild(p);
       }
     }
+    else if (item.type === 'shape') {
+      const wrap = document.createElement('div');
+      wrap.className = 'doc-shape';
+      wrap.dataset.pIdx = docIdx.toString();
+      wrap.contentEditable = 'false';
+      wrap.style.margin = '8px 0';
+      wrap.style.display = 'flex';
+      wrap.style.justifyContent = 'center';
+      const w = Math.max(20, (item as any).width || 160);
+      const h = Math.max(10, (item as any).height || 100);
+      const kind = (item as any).shape || 'rect';
+      const fill = (item as any).fill ?? '#d9e8ff';
+      const stroke = (item as any).stroke ?? '#2b579a';
+      const sw = Math.max(1, (item as any).strokeWidth ?? 2);
+      const svgNS = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(svgNS, 'svg');
+      svg.setAttribute('width', String(w));
+      svg.setAttribute('height', String(h));
+      svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+      svg.style.overflow = 'visible';
+      if (kind === 'rect') {
+        const r = document.createElementNS(svgNS, 'rect');
+        r.setAttribute('x', String(sw / 2));
+        r.setAttribute('y', String(sw / 2));
+        r.setAttribute('width', String(Math.max(1, w - sw)));
+        r.setAttribute('height', String(Math.max(1, h - sw)));
+        r.setAttribute('fill', fill);
+        r.setAttribute('stroke', stroke);
+        r.setAttribute('stroke-width', String(sw));
+        svg.appendChild(r);
+      } else if (kind === 'ellipse') {
+        const e = document.createElementNS(svgNS, 'ellipse');
+        e.setAttribute('cx', String(w / 2));
+        e.setAttribute('cy', String(h / 2));
+        e.setAttribute('rx', String(Math.max(1, w / 2 - sw / 2)));
+        e.setAttribute('ry', String(Math.max(1, h / 2 - sw / 2)));
+        e.setAttribute('fill', fill);
+        e.setAttribute('stroke', stroke);
+        e.setAttribute('stroke-width', String(sw));
+        svg.appendChild(e);
+      } else if (kind === 'line') {
+        const l = document.createElementNS(svgNS, 'line');
+        l.setAttribute('x1', String(sw));
+        l.setAttribute('y1', String(h / 2));
+        l.setAttribute('x2', String(w - sw));
+        l.setAttribute('y2', String(h / 2));
+        l.setAttribute('stroke', stroke);
+        l.setAttribute('stroke-width', String(sw));
+        svg.appendChild(l);
+      } else if (kind === 'arrow') {
+        const defs = document.createElementNS(svgNS, 'defs');
+        const marker = document.createElementNS(svgNS, 'marker');
+        marker.setAttribute('id', `arrowhead-${docIdx}-${Math.random().toString(36).slice(2, 7)}`);
+        marker.setAttribute('markerWidth', '10');
+        marker.setAttribute('markerHeight', '7');
+        marker.setAttribute('refX', '9');
+        marker.setAttribute('refY', '3.5');
+        marker.setAttribute('orient', 'auto');
+        const poly = document.createElementNS(svgNS, 'polygon');
+        poly.setAttribute('points', '0 0, 10 3.5, 0 7');
+        poly.setAttribute('fill', stroke);
+        marker.appendChild(poly);
+        defs.appendChild(marker);
+        svg.appendChild(defs);
+        const l = document.createElementNS(svgNS, 'line');
+        l.setAttribute('x1', String(sw));
+        l.setAttribute('y1', String(h / 2));
+        l.setAttribute('x2', String(Math.max(sw, w - 10)));
+        l.setAttribute('y2', String(h / 2));
+        l.setAttribute('stroke', stroke);
+        l.setAttribute('stroke-width', String(sw));
+        l.setAttribute('marker-end', `url(#${marker.getAttribute('id')})`);
+        svg.appendChild(l);
+      }
+      wrap.appendChild(svg);
+      pageEl.appendChild(wrap);
+    }
     else if (item.type === 'table') {
       const table = document.createElement('table');
       table.dataset.pIdx = docIdx.toString();

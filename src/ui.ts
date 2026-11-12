@@ -9,12 +9,12 @@ export function createAppUI(): void {
   frag.innerHTML = `
     <div class="toolbar" style="visibility:hidden">
         <div class="ribbon-tabs">
-            <button type="button" class="ribbon-tab active" data-tab-target="file"><i class="bi bi-file-earmark-text me-1"></i>파일</button>
-            <button type="button" class="ribbon-tab" data-tab-target="edit"><i class="bi bi-pencil-square me-1"></i>편집</button>
-            <button type="button" class="ribbon-tab" data-tab-target="view"><i class="bi bi-eye me-1"></i>보기</button>
-            <button type="button" class="ribbon-tab" data-tab-target="input"><i class="bi bi-plus-circle me-1"></i>입력</button>
-            <button type="button" class="ribbon-tab" data-tab-target="format"><i class="bi bi-file-richtext me-1"></i>서식</button>
-            <button type="button" class="ribbon-tab" data-tab-target="page"><i class="bi bi-layout-wtf me-1"></i>쪽</button>
+            <button type="button" class="ribbon-tab active" data-tab-target="file">파일</button>
+            <button type="button" class="ribbon-tab" data-tab-target="edit">편집</button>
+            <button type="button" class="ribbon-tab" data-tab-target="view">보기</button>
+            <button type="button" class="ribbon-tab" data-tab-target="input">입력</button>
+            <button type="button" class="ribbon-tab" data-tab-target="format">서식</button>
+            <button type="button" class="ribbon-tab" data-tab-target="page">쪽</button>
             <span class="ribbon-tabs-spacer"></span>
             <span id="hwp-status" class="status"></span>
         </div>
@@ -116,15 +116,28 @@ export function createAppUI(): void {
                 <div id="ribbon-group-table-props" class="ribbon-group" style="display:none">
                     <div class="ribbon-group-items">
                         <div class="ribbon-row">
-                            <button id="btn-table-border-default" class="toolbar-btn" type="button" title="모든 테두리 표시"><i class="bi bi-grid-3x3"></i> 기본</button>
-                            <button id="btn-table-border-none" class="toolbar-btn" type="button" title="테두리 없음"><i class="bi bi-square"></i> 테두리 없음</button>
-                            <button id="btn-table-border-no-v" class="toolbar-btn" type="button" title="세로줄 없음"><i class="bi bi-dash-lg"></i> 세로줄 없음</button>
+                            <button id="btn-table-border-default" class="toolbar-btn" type="button" title="모든 테두리 표시">기본</button>
+                            <button id="btn-table-border-none" class="toolbar-btn" type="button" title="테두리 없음">테두리 없음</button>
+                            <button id="btn-table-border-no-v" class="toolbar-btn" type="button" title="세로줄 없음">세로줄 없음</button>
                         </div>
                     </div>
                     <div class="ribbon-group-title">표 속성</div>
                 </div>
-            </div>
 
+                <div class="ribbon-group">
+                    <div class="ribbon-group-items">
+                        <div class="ribbon-row">
+                            <button id="btn-insert-shape-rect" class="toolbar-btn" type="button" title="사각형 삽입">□ 사각형</button>
+                            <button id="btn-insert-shape-ellipse" class="toolbar-btn" type="button" title="타원 삽입">○ 타원</button>
+                        </div>
+                        <div class="ribbon-row">
+                            <button id="btn-insert-shape-line" class="toolbar-btn" type="button" title="직선 삽입">／ 직선</button>
+                            <button id="btn-insert-shape-arrow" class="toolbar-btn" type="button" title="화살표 삽입">→ 화살표</button>
+                        </div>
+                    </div>
+                    <div class="ribbon-group-title">도형 개체</div>
+                </div>
+            </div>
             <div class="ribbon-panel" data-tab="format">
                 <div class="ribbon-group">
                     <div class="ribbon-group-items">

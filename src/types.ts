@@ -68,8 +68,21 @@ export interface TableNode {
   borderStyle?: TableBorderStyle;
 }
 
-// 문서 모델은 단락 또는 표의 배열입니다.
-export type DocumentItem = ParagraphNode | TableNode;
+export type ShapeKind = 'rect' | 'ellipse' | 'line' | 'arrow';
+
+export interface ShapeNode {
+  type: 'shape';
+  shape: ShapeKind;
+  width: number;
+  height: number;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  _docIdx?: number;
+}
+
+// 문서 모델은 단락, 표, 도형의 배열입니다.
+export type DocumentItem = ParagraphNode | TableNode | ShapeNode;
 export type DocumentModel = DocumentItem[];
 
 export interface CursorState {
@@ -108,6 +121,7 @@ export type WorkerMessage =
   | { type: 'EDIT_TABLE_ROW_HEIGHT'; payload: { tableDocIdx: number; rowIndex: number; height: number } }
   | { type: 'EDIT_TABLE_COL_WIDTH'; payload: { tableDocIdx: number; colIndex: number; width: number } }
   | { type: 'EDIT_INSERT_TABLE'; payload: { paragraphIndex: number; charIndex: number; rows: number; cols: number } }
+  | { type: 'EDIT_INSERT_SHAPE'; payload: { paragraphIndex: number; charIndex: number; shape: 'rect' | 'ellipse' | 'line' | 'arrow' } }
   | { type: 'EDIT_TABLE_BORDER'; payload: { tableDocIdx: number; borderStyle: TableBorderStyle } }
   | { type: 'EDIT_COLOR'; payload: { paragraphIndices: number[]; color?: string; backgroundColor?: string } }
   | { type: 'EDIT_FONT_RANGE'; payload: { paragraphIndex: number; fromCharIndex: number; endCharIndex: number; fontFamily?: string; fontSize?: number; bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean } }

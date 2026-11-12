@@ -7,7 +7,7 @@ import { defaultFontFamily, defaultUiFontFamily, initSettings, loadSettings } fr
 import { setPageMargins } from './worker/layoutConstants';
 import { collectProbeItems, computeBreaks } from './probe';
 import { appendStreamPages, findCursorPageIndices, getCachedPages, initRenderer, renderVirtualPages, updateVisiblePages } from './render';
-import { clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFindReplace, initFontCombos, initFileOpen, initLineSpacingCombo, initNewDocument, initPageMargins, initParagraphStyles, initRecentFiles, initRibbonTabs, initSave, initSaveAs, initSelectionListener, initStyleButtons, initTableInsert, initTableProperties, initViewOptions, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, setCurrentFileName, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncLineSpacingCombo, syncStyleButtons, syncTablePropertiesRibbon, takePendingSelection } from './listener';
+import { clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFindReplace, initFontCombos, initFileOpen, initLineSpacingCombo, initNewDocument, initPageMargins, initParagraphStyles, initRecentFiles, initRibbonTabs, initSave, initSaveAs, initSelectionListener, initShapeInsert, initStyleButtons, initTableInsert, initTableProperties, initViewOptions, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, setCurrentFileName, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncLineSpacingCombo, syncStyleButtons, syncTablePropertiesRibbon, takePendingSelection } from './listener';
 import { initEditorListeners, isComposingActive } from './listener/keyboard';
 import { initCellSelection, paintCellSelection } from './listener/mouse';
 import { initPreviewMode } from './preview';
@@ -546,6 +546,7 @@ initColorControls(containerEl, worker, savedCursor);
 initStyleButtons(containerEl, worker, savedCursor);
 initParagraphStyles(containerEl, worker, savedCursor);
 initTableInsert(containerEl, worker, savedCursor);
+initShapeInsert(worker, savedCursor);
 initCellSelection(containerEl, worker);
 initTableProperties(containerEl, worker);
 initZoomControls(containerEl);

@@ -895,6 +895,26 @@ export function initTableInsert(_container: HTMLDivElement, worker: Worker, curs
   });
 }
 
+export function initShapeInsert(worker: Worker, cursor: CursorState) {
+  const map: Array<[string, 'rect' | 'ellipse' | 'line' | 'arrow']> = [
+    ['btn-insert-shape-rect', 'rect'],
+    ['btn-insert-shape-ellipse', 'ellipse'],
+    ['btn-insert-shape-line', 'line'],
+    ['btn-insert-shape-arrow', 'arrow'],
+  ];
+  for (const [id, shape] of map) {
+    const btn = document.getElementById(id) as HTMLButtonElement | null;
+    if (!btn) continue;
+    btn.addEventListener('mousedown', (e) => e.preventDefault());
+    btn.addEventListener('click', () => {
+      worker.postMessage({
+        type: 'EDIT_INSERT_SHAPE',
+        payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex, shape },
+      });
+    });
+  }
+}
+
 export function initNewDocument(container: HTMLDivElement, worker: Worker, cursor: CursorState) {
   void container;
   void worker;
