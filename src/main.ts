@@ -1,3 +1,6 @@
+import './css/main.css';
+import './css/ribbon.css';
+import './css/preview.css';
 import type { CursorState, DocumentModel, FontMetrics, ParagraphNode, TableNode, TableRowNode } from './types';
 import type { PageModel } from './worker/doc.worker';
 import { defaultFontFamily, defaultUiFontFamily, initSettings, loadSettings } from './settings';
@@ -298,9 +301,9 @@ async function initWordProcessor() {
     return;
   }
 
-  // 기본 문서: 프로그램 시작 시
+  // 기본 문서: 프로그램 시작 시 로드 (dev/Electron file:// 공용 상대 경로)
   const defaultDocName = '표준상가임대차계약서.hwp';
-  const defaultDocUrl = encodeURI(`/${defaultDocName}`);
+  const defaultDocUrl = encodeURI(`./${defaultDocName}`);
   fetch(defaultDocUrl)
     .then((res) => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

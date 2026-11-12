@@ -11,8 +11,9 @@ The top most abstraction is DocumentModel
 
 ## Read
 odt,  hwpx, docx -> DocumentModel
+
 ## Write
-Form DocumentModel
+DocumentModel
 -> odt,  hwpx, docx
 -> hwpFile -> hwp
 
