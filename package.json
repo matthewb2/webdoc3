@@ -1,5 +1,5 @@
 {
-  "name": "webdoc3",
+  "name": "DOC3",
   "private": true,
   "description": "Web-based Word Processor supporting HWP, DOCX, and ODT",
   "author": "MK-SOLUTION",
@@ -15,8 +15,8 @@
     "dist": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win"
   },
   "build": {
-    "appId": "com.webdoc3.app",
-    "productName": "webdoc3",
+    "appId": "com.doc3.app",
+    "productName": "DOC3",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -29,7 +29,6 @@
       "package.json"
     ],
     "win": {
-      "icon": "build/icon.ico",
       "target": [
         "nsis"
       ]

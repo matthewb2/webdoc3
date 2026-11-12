@@ -9,12 +9,12 @@ export function createAppUI(): void {
   frag.innerHTML = `
     <div class="toolbar" style="visibility:hidden">
         <div class="ribbon-tabs">
-            <button type="button" class="ribbon-tab active" data-tab-target="file">파일</button>
-            <button type="button" class="ribbon-tab" data-tab-target="edit">편집</button>
-            <button type="button" class="ribbon-tab" data-tab-target="view">보기</button>
-            <button type="button" class="ribbon-tab" data-tab-target="input">입력</button>
-            <button type="button" class="ribbon-tab" data-tab-target="format">서식</button>
-            <button type="button" class="ribbon-tab" data-tab-target="page">쪽</button>
+            <button type="button" class="ribbon-tab active" data-tab-target="file"><i class="bi bi-file-earmark-text me-1"></i>파일</button>
+            <button type="button" class="ribbon-tab" data-tab-target="edit"><i class="bi bi-pencil-square me-1"></i>편집</button>
+            <button type="button" class="ribbon-tab" data-tab-target="view"><i class="bi bi-eye me-1"></i>보기</button>
+            <button type="button" class="ribbon-tab" data-tab-target="input"><i class="bi bi-plus-circle me-1"></i>입력</button>
+            <button type="button" class="ribbon-tab" data-tab-target="format"><i class="bi bi-file-richtext me-1"></i>서식</button>
+            <button type="button" class="ribbon-tab" data-tab-target="page"><i class="bi bi-layout-wtf me-1"></i>쪽</button>
             <span class="ribbon-tabs-spacer"></span>
             <span id="hwp-status" class="status"></span>
         </div>
@@ -23,13 +23,13 @@ export function createAppUI(): void {
                 <div class="ribbon-group">
                     <div class="ribbon-group-items">
                         <div class="ribbon-row">
-                            <button id="btn-new-file" class="toolbar-btn" type="button" title="새 문서 만들기">새 문서</button>
-                            <button id="btn-open-file" class="toolbar-btn" type="button">파일 열기</button>
-                            <button id="btn-save" class="toolbar-btn" type="button" title="현재 문서에 덮어쓰기 저장">저장</button>
-                            <button id="btn-save-as" class="toolbar-btn" type="button" title="다른 이름으로 저장">다른 이름으로 저장</button>
+                            <button id="btn-new-file" class="toolbar-btn" type="button" title="새 문서 만들기"><i class="bi bi-file-earmark-plus"></i> 새 문서</button>
+                            <button id="btn-open-file" class="toolbar-btn" type="button" title="파일 열기"><i class="bi bi-folder2-open"></i> 파일 열기</button>
+                            <button id="btn-save" class="toolbar-btn" type="button" title="현재 문서에 덮어쓰기 저장"><i class="bi bi-save"></i> 저장</button>
+                            <button id="btn-save-as" class="toolbar-btn" type="button" title="다른 이름으로 저장"><i class="bi bi-save2"></i> 다른 이름으로 저장</button>
                         </div>
                         <div class="ribbon-row">
-                            <label class="toolbar-label" for="recent-files-select">최근 파일</label>
+                            <label class="toolbar-label" for="recent-files-select"><i class="bi bi-clock-history"></i> 최근 파일</label>
                             <select id="recent-files-select" class="toolbar-select recent-files-select" title="최근 사용한 파일">
                                 <option value="">최근 사용한 파일</option>
                             </select>
@@ -43,15 +43,15 @@ export function createAppUI(): void {
                 <div class="ribbon-group">
                     <div class="ribbon-group-items">
                         <div class="ribbon-row">
-                            <label class="toolbar-label" for="find-text-input">찾기</label>
+                            <label class="toolbar-label" for="find-text-input"><i class="bi bi-search"></i> 찾기</label>
                             <input id="find-text-input" class="toolbar-select" type="text" placeholder="찾을 내용" style="width:140px" title="찾을 내용">
-                            <button id="btn-find-next" class="toolbar-btn" type="button" title="다음 찾기">다음 찾기</button>
+                            <button id="btn-find-next" class="toolbar-btn" type="button" title="다음 찾기"><i class="bi bi-arrow-down-right-circle"></i> 다음 찾기</button>
                         </div>
                         <div class="ribbon-row">
-                            <label class="toolbar-label" for="replace-text-input">바꾸기</label>
+                            <label class="toolbar-label" for="replace-text-input"><i class="bi bi-arrow-repeat"></i> 바꾸기</label>
                             <input id="replace-text-input" class="toolbar-select" type="text" placeholder="바꿀 내용" style="width:140px" title="바꿀 내용">
-                            <button id="btn-replace" class="toolbar-btn" type="button" title="바꾸기">바꾸기</button>
-                            <button id="btn-replace-all" class="toolbar-btn" type="button" title="모두 바꾸기">모두 바꾸기</button>
+                            <button id="btn-replace" class="toolbar-btn" type="button" title="바꾸기"><i class="bi bi-arrow-repeat"></i> 바꾸기</button>
+                            <button id="btn-replace-all" class="toolbar-btn" type="button" title="모두 바꾸기"><i class="bi bi-check2-all"></i> 모두 바꾸기</button>
                         </div>
                     </div>
                     <div class="ribbon-group-title">찾기 및 바꾸기</div>
@@ -62,7 +62,7 @@ export function createAppUI(): void {
                 <div class="ribbon-group">
                     <div class="ribbon-group-items">
                         <div class="ribbon-row">
-                            <button id="btn-preview" class="toolbar-btn" type="button" title="읽기 전용 미리보기">미리보기</button>
+                            <button id="btn-preview" class="toolbar-btn" type="button" title="읽기 전용 미리보기"><i class="bi bi-file-earmark-break"></i> 미리보기</button>
                         </div>
                     </div>
                     <div class="ribbon-group-title">문서 보기</div>
@@ -71,7 +71,7 @@ export function createAppUI(): void {
                     <div class="ribbon-group-items">
                         <div class="ribbon-row">
                             <label class="toolbar-label" for="show-para-marks-checkbox" title="문단 끝에 문단부호(¶) 표시">
-                                <input id="show-para-marks-checkbox" type="checkbox"> 문단부호
+                                <input id="show-para-marks-checkbox" type="checkbox"> <i class="bi bi-pilcrow"></i> 문단부호
                             </label>
                         </div>
                     </div>
@@ -83,7 +83,7 @@ export function createAppUI(): void {
                 <div class="ribbon-group">
                     <div class="ribbon-group-items">
                         <div class="ribbon-row">
-                            <label class="toolbar-label" for="table-rows-input">행</label>
+                            <label class="toolbar-label" for="table-rows-input"><i class="bi bi-distribute-vertical"></i> 행</label>
                             <select id="table-rows-input" class="toolbar-select" style="width:52px" title="행 수">
                               <option value="1">1</option>
                               <option value="2" selected>2</option>
@@ -94,7 +94,7 @@ export function createAppUI(): void {
                               <option value="8">8</option>
                               <option value="10">10</option>
                             </select>
-                            <label class="toolbar-label" for="table-cols-input">열</label>
+                            <label class="toolbar-label" for="table-cols-input"><i class="bi bi-distribute-horizontal"></i> 열</label>
                             <select id="table-cols-input" class="toolbar-select" style="width:52px" title="열 수">
                               <option value="1">1</option>
                               <option value="2">2</option>
@@ -107,7 +107,7 @@ export function createAppUI(): void {
                             </select>
                         </div>
                         <div class="ribbon-row">
-                            <button id="btn-insert-table" class="toolbar-btn" type="button" title="표 삽입">표 삽입</button>
+                            <button id="btn-insert-table" class="toolbar-btn" type="button" title="표 삽입"><i class="bi bi-table"></i> 표 삽입</button>
                         </div>
                     </div>
                     <div class="ribbon-group-title">표</div>
@@ -116,9 +116,9 @@ export function createAppUI(): void {
                 <div id="ribbon-group-table-props" class="ribbon-group" style="display:none">
                     <div class="ribbon-group-items">
                         <div class="ribbon-row">
-                            <button id="btn-table-border-default" class="toolbar-btn" type="button" title="모든 테두리 표시">기본</button>
-                            <button id="btn-table-border-none" class="toolbar-btn" type="button" title="테두리 없음">테두리 없음</button>
-                            <button id="btn-table-border-no-v" class="toolbar-btn" type="button" title="세로줄 없음">세로줄 없음</button>
+                            <button id="btn-table-border-default" class="toolbar-btn" type="button" title="모든 테두리 표시"><i class="bi bi-grid-3x3"></i> 기본</button>
+                            <button id="btn-table-border-none" class="toolbar-btn" type="button" title="테두리 없음"><i class="bi bi-square"></i> 테두리 없음</button>
+                            <button id="btn-table-border-no-v" class="toolbar-btn" type="button" title="세로줄 없음"><i class="bi bi-dash-lg"></i> 세로줄 없음</button>
                         </div>
                     </div>
                     <div class="ribbon-group-title">표 속성</div>
@@ -129,8 +129,8 @@ export function createAppUI(): void {
                 <div class="ribbon-group">
                     <div class="ribbon-group-items">
                         <div class="ribbon-row">
-                            <button id="btn-style-body" class="toolbar-btn" type="button" title="본문 스타일 적용">본문</button>
-                            <button id="btn-style-title" class="toolbar-btn" type="button" title="제목 스타일 적용">제목</button>
+                            <button id="btn-style-body" class="toolbar-btn" type="button" title="본문 스타일 적용"><i class="bi bi-text-paragraph"></i> 본문</button>
+                            <button id="btn-style-title" class="toolbar-btn" type="button" title="제목 스타일 적용"><i class="bi bi-type-h1"></i> 제목</button>
                         </div>
                     </div>
                     <div class="ribbon-group-title">스타일</div>
@@ -139,7 +139,7 @@ export function createAppUI(): void {
                 <div class="ribbon-group">
                     <div class="ribbon-group-items">
                         <div class="ribbon-row">
-                            <label class="toolbar-label" for="font-family-select">글꼴</label>
+                            <label class="toolbar-label" for="font-family-select"><i class="bi bi-fonts"></i> 글꼴</label>
                             <select id="font-family-select" class="toolbar-select" disabled>
                               <option>Arial</option>
                               <option>Verdana</option>
@@ -155,7 +155,7 @@ export function createAppUI(): void {
                               <option>나눔고딕</option>
                               <option>Noto Sans KR</option>
                             </select>
-                            <label class="toolbar-label" for="font-size-select">크기(pt)</label>
+                            <label class="toolbar-label" for="font-size-select"><i class="bi bi-aspect-ratio"></i> 크기(pt)</label>
                             <select id="font-size-select" class="toolbar-select" disabled>
                               <option value="8">8</option>
                               <option value="9">9</option>
@@ -177,10 +177,10 @@ export function createAppUI(): void {
                             </select>
                         </div>
                         <div class="ribbon-row">
-                            <button id="btn-style-normal" class="toolbar-btn" type="button" title="보통 (서식 지우기)">보통</button>
-                            <button id="btn-style-bold" class="toolbar-btn toolbar-btn-style" type="button" title="굵게"><b>B</b></button>
-                            <button id="btn-style-italic" class="toolbar-btn toolbar-btn-style" type="button" title="기울임"><i>I</i></button>
-                            <button id="btn-style-underline" class="toolbar-btn toolbar-btn-style" type="button" title="밑줄"><u>U</u></button>
+                            <button id="btn-style-normal" class="toolbar-btn" type="button" title="보통 (서식 지우기)"><i class="bi bi-eraser"></i> 보통</button>
+                            <button id="btn-style-bold" class="toolbar-btn toolbar-btn-style" type="button" title="굵게"><i class="bi bi-type-bold"></i></button>
+                            <button id="btn-style-italic" class="toolbar-btn toolbar-btn-style" type="button" title="기울임"><i class="bi bi-type-italic"></i></button>
+                            <button id="btn-style-underline" class="toolbar-btn toolbar-btn-style" type="button" title="밑줄"><i class="bi bi-type-underline"></i></button>
                         </div>
                     </div>
                     <div class="ribbon-group-title">글꼴</div>
@@ -189,13 +189,13 @@ export function createAppUI(): void {
                 <div class="ribbon-group">
                     <div class="ribbon-group-items">
                         <div class="ribbon-row">
-                            <label class="toolbar-label" for="column-count-select">다단</label>
+                            <label class="toolbar-label" for="column-count-select"><i class="bi bi-layout-three-columns"></i> 다단</label>
                             <select id="column-count-select" class="toolbar-select">
                               <option value="1">1단</option>
                               <option value="2">2단</option>
                               <option value="3">3단</option>
                             </select>
-                            <label class="toolbar-label" for="align-select">정렬</label>
+                            <label class="toolbar-label" for="align-select"><i class="bi bi-text-left"></i> 정렬</label>
                             <select id="align-select" class="toolbar-select">
                               <option value="left">왼쪽</option>
                               <option value="center">가운데</option>
@@ -204,7 +204,7 @@ export function createAppUI(): void {
                             </select>
                         </div>
                         <div class="ribbon-row">
-                            <label class="toolbar-label" for="line-spacing-select">줄간격</label>
+                            <label class="toolbar-label" for="line-spacing-select"><i class="bi bi-text-indent-left"></i> 줄간격</label>
                             <select id="line-spacing-select" class="toolbar-select">
                               <option value="100">100%</option>
                               <option value="120">120%</option>
@@ -220,11 +220,11 @@ export function createAppUI(): void {
                 <div class="ribbon-group">
                     <div class="ribbon-group-items">
                         <div class="ribbon-row">
-                            <label class="toolbar-label" for="text-color-input">글자색</label>
+                            <label class="toolbar-label" for="text-color-input"><i class="bi bi-palette"></i> 글자색</label>
                             <input id="text-color-input" class="toolbar-color" type="color" value="#000000" title="글자색 (두 번 클릭하면 기본값)">
                         </div>
                         <div class="ribbon-row">
-                            <label class="toolbar-label" for="bg-color-input">배경색</label>
+                            <label class="toolbar-label" for="bg-color-input"><i class="bi bi-paint-bucket"></i> 배경색</label>
                             <input id="bg-color-input" class="toolbar-color" type="color" value="#ffffff" title="배경색 (두 번 클릭하면 없음)">
                         </div>
                     </div>
@@ -236,7 +236,7 @@ export function createAppUI(): void {
                 <div class="ribbon-group">
                     <div class="ribbon-group-items">
                         <div class="ribbon-row">
-                            <span class="toolbar-label">용지</span>
+                            <span class="toolbar-label"><i class="bi bi-file-earmark"></i> 용지</span>
                             <span class="toolbar-label" title="현재 고정 설정">A4 (210 × 297mm)</span>
                         </div>
                     </div>
@@ -255,7 +255,7 @@ export function createAppUI(): void {
                             <input id="margin-left-input" class="toolbar-select" type="number" min="0" max="80" step="1" style="width:56px" title="왼쪽 여백(mm)">
                             <label class="toolbar-label" for="margin-right-input">오른쪽</label>
                             <input id="margin-right-input" class="toolbar-select" type="number" min="0" max="80" step="1" style="width:56px" title="오른쪽 여백(mm)">
-                            <button id="btn-apply-margins" class="toolbar-btn" type="button" title="페이지 여백 적용">적용</button>
+                            <button id="btn-apply-margins" class="toolbar-btn" type="button" title="페이지 여백 적용"><i class="bi bi-check2"></i> 적용</button>
                         </div>
                     </div>
                     <div class="ribbon-group-title">여백 (mm)</div>
@@ -283,12 +283,12 @@ export function createAppUI(): void {
     </div>
 
     <div class="preview-toolbar" style="display:none">
-        <span id="preview-mode-label" class="statusbar-info" title="페이지를 클릭하면 쪽맞춤으로 전환">미리보기 (읽기 전용)</span>
+        <span id="preview-mode-label" class="statusbar-info" title="페이지를 클릭하면 쪽맞춤으로 전환"><i class="bi bi-eye"></i> 미리보기 (읽기 전용)</span>
         <span class="statusbar-spacer"></span>
-        <button id="btn-preview-fit" class="toolbar-btn" type="button" title="화면에 페이지 폭 맞추기">쪽맞춤</button>
-        <button id="btn-preview-two-pages" class="toolbar-btn" type="button" title="두 페이지씩 나란히 보기">맞쪽보기</button>
-        <button id="btn-preview-edit" class="toolbar-btn" type="button">편집</button>
-        <button id="btn-preview-close" class="toolbar-btn" type="button">닫기</button>
+        <button id="btn-preview-fit" class="toolbar-btn" type="button" title="화면에 페이지 폭 맞추기"><i class="bi bi-arrows-fullscreen"></i> 쪽맞춤</button>
+        <button id="btn-preview-two-pages" class="toolbar-btn" type="button" title="두 페이지씩 나란히 보기"><i class="bi bi-book"></i> 맞쪽보기</button>
+        <button id="btn-preview-edit" class="toolbar-btn" type="button"><i class="bi bi-pencil"></i> 편집</button>
+        <button id="btn-preview-close" class="toolbar-btn" type="button"><i class="bi bi-x-lg"></i> 닫기</button>
     </div>
     <div class="preview-viewport" style="display:none">
         <div id="preview-container"></div>
@@ -296,21 +296,21 @@ export function createAppUI(): void {
     <div class="preview-statusbar" style="display:none">
         <span id="preview-cursor-page" class="statusbar-info">미리보기 모드</span>
         <span class="statusbar-spacer"></span>
-        <button id="btn-preview-zoom-out" class="statusbar-btn" type="button" title="축소">−</button>
+        <button id="btn-preview-zoom-out" class="statusbar-btn" type="button" title="축소"><i class="bi bi-dash"></i></button>
         <button id="preview-zoom-label" class="statusbar-zoom" type="button">100%</button>
-        <button id="btn-preview-zoom-in" class="statusbar-btn" type="button" title="확대">＋</button>
+        <button id="btn-preview-zoom-in" class="statusbar-btn" type="button" title="확대"><i class="bi bi-plus"></i></button>
     </div>
 
     <div id="cell-menu" class="context-menu" style="display:none">
-        <button id="cell-menu-merge" type="button">셀 합치기 (M)</button>
+        <button id="cell-menu-merge" type="button"><i class="bi bi-arrows-collapse"></i> 셀 합치기 (M)</button>
     </div>
 
     <div class="statusbar" style="visibility:hidden">
         <span id="cursor-page" class="statusbar-info" title="커서 위치 페이지">- / -</span>
         <span class="statusbar-spacer"></span>
-        <button id="btn-zoom-out" class="statusbar-btn" type="button" title="축소">−</button>
+        <button id="btn-zoom-out" class="statusbar-btn" type="button" title="축소"><i class="bi bi-dash"></i></button>
         <button id="zoom-label" class="statusbar-zoom" type="button">100%</button>
-        <button id="btn-zoom-in" class="statusbar-btn" type="button" title="확대">＋</button>
+        <button id="btn-zoom-in" class="statusbar-btn" type="button" title="확대"><i class="bi bi-plus"></i></button>
     </div>
   `;
 
