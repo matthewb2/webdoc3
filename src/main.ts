@@ -145,7 +145,10 @@ let savedCursor: CursorState = {
 // 1. 커서 위치 저장 보고화
 function saveCursorPosition() {
   const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0) return;
+  if (!selection || selection.rangeCount === 0) {
+    console.log('[shape-space-debug][save] no selection/range', { hasSelection: !!selection, rangeCount: selection?.rangeCount ?? 0 });
+    return;
+  }
   
   const range = selection.getRangeAt(0);
   const startContainer = range.startContainer;
@@ -153,10 +156,27 @@ function saveCursorPosition() {
     ? startContainer.parentElement
     : (startContainer as Element);
 
-  const currentParagraph = startEl?.closest('p');
-  const currentCell = startEl?.closest('td');
+  let currentParagraph = startEl?.closest('p') as HTMLParagraphElement | null;
+  const currentCell = startEl?.closest('td') as HTMLTableCellElement | null;
+  const shapeElAtStart = startEl?.closest('.doc-shape') as HTMLElement | null;
 
+  // 도형(비편집 블록) 등 문단/셀 밖에서 선택된 경우 인접 문단으로 보정
+  let adjustedToParagraph: 'prev' | 'next' | null = null;
+  if (!currentCell && !currentParagraph) {
+    const shapeEl = shapeElAtStart;
+    if (shapeEl) {
+      const prev = shapeEl.previousElementSibling as HTMLElement | null;
+      const next = shapeEl.nextElementSibling as HTMLElement | null;
+      const prevP = (prev?.closest?.('p') || prev?.querySelector?.('p') || null) as HTMLParagraphElement | null;
+      const nextP = (next?.closest?.('p') || next?.querySelector?.('p') || null) as HTMLParagraphElement | null;
+      if (prevP && prevP.dataset.pIdx) { currentParagraph = prevP; adjustedToParagraph = 'prev'; }
+      else if (nextP && nextP.dataset.pIdx) { currentParagraph = nextP; adjustedToParagraph = 'next'; }
+    }
+  }
+
+  let resolved: 'cell' | 'paragraph' | 'none' = 'none';
   if (currentCell) {
+    resolved = 'cell';
     const currentTR = currentCell.closest('tr');
     const currentTable = currentCell.closest('table');
     const currentPage = currentCell.closest('.page');
@@ -168,31 +188,57 @@ function saveCursorPosition() {
       savedCursor.rowIndex = Array.from(currentTable.querySelectorAll('tr')).indexOf(currentTR);
       savedCursor.cellIndex = Array.from(currentTR.querySelectorAll('td')).indexOf(currentCell);
       savedCursor.docIdx = parseInt((currentTable as HTMLElement).dataset.pIdx || '0', 10);
+    } else {
+      console.log('[shape-space-debug][save] cell context incomplete', { hasTR: !!currentTR, hasTable: !!currentTable, hasPage: !!currentPage });
     }
   } else if (currentParagraph && currentParagraph.dataset.pIdx) {
+    resolved = 'paragraph';
     savedCursor.isInsideTable = false;
     savedCursor.docIdx = parseInt(currentParagraph.dataset.pIdx, 10);
     savedCursor.charOffset = parseInt(currentParagraph.dataset.pOffset || '0', 10);
-    // 단락 시작부터 캐럿까지의 실제 텍스트 길이로 계산 (span 경계를 초월, ZWSP 제외)
-    const pre = document.createRange();
-    pre.selectNodeContents(currentParagraph);
-    try {
-      pre.setEnd(startContainer, range.startOffset);
-    } catch {
-      savedCursor.charIndex = savedCursor.charOffset;
-      return;
+    if (adjustedToParagraph) {
+      const raw = (currentParagraph.textContent || '').replace(/\u200B/g, '');
+      savedCursor.charIndex = savedCursor.charOffset + (adjustedToParagraph === 'prev' ? raw.length : 0);
+    } else {
+      const pre = document.createRange();
+      pre.selectNodeContents(currentParagraph);
+      try {
+        pre.setEnd(startContainer, range.startOffset);
+      } catch (err) {
+        savedCursor.charIndex = savedCursor.charOffset;
+        console.log('[shape-space-debug][save] setEnd failed, fallback to charOffset', { err: String(err), docIdx: savedCursor.docIdx, charIndex: savedCursor.charIndex });
+        return;
+      }
+      const raw = pre.toString();
+      let zwsp = 0;
+      for (const ch of raw) if (ch === '\u200B') zwsp++;
+      savedCursor.charIndex = (raw.length - zwsp) + savedCursor.charOffset;
     }
-    const raw = pre.toString();
-    let zwsp = 0;
-    for (const ch of raw) if (ch === '\u200B') zwsp++;
-    savedCursor.charIndex = (raw.length - zwsp) + savedCursor.charOffset;
+  } else {
+    console.log('[shape-space-debug][save] unresolved target (keeping stale cursor)', {
+      stale: { ...savedCursor },
+      startContainerType: startContainer.nodeType,
+      startElTag: (startEl as HTMLElement | null)?.tagName,
+      inShape: !!shapeElAtStart,
+    });
   }
 
   const currentPage = startEl?.closest('.page') as HTMLElement | null;
   if (currentPage?.dataset.pageNumber) {
     savedCursor.pageNumber = parseInt(currentPage.dataset.pageNumber, 10);
   }
-  console.log(`[save] docIdx=${savedCursor.docIdx} charIndex=${savedCursor.charIndex}`);
+  console.log('[shape-space-debug][save]', {
+    resolved,
+    adjustedToParagraph,
+    docIdx: savedCursor.docIdx,
+    charIndex: savedCursor.charIndex,
+    charOffset: savedCursor.charOffset,
+    isInsideTable: savedCursor.isInsideTable,
+    pageNumber: savedCursor.pageNumber,
+    rangeStartOffset: range.startOffset,
+    startInShape: !!shapeElAtStart,
+    paragraphPIdx: currentParagraph?.dataset?.pIdx ?? null,
+  });
 }
 
 // 2. 커서 위치 복원 고도화

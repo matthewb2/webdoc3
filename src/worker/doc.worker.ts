@@ -122,7 +122,15 @@ self.addEventListener('message', (event: MessageEvent<any>) => {
   } else if (message.type === 'EDIT_INSERT_TABLE') {
     editInsertTable(message.payload.paragraphIndex, message.payload.charIndex, message.payload.rows, message.payload.cols);
   } else if (message.type === 'EDIT_INSERT_SHAPE') {
+    console.log('[shape-space-debug][worker] EDIT_INSERT_SHAPE', message.payload, 'docLenBefore=', documentState.length, 'targetType=', documentState[message.payload?.paragraphIndex]?.type);
     editInsertShape(message.payload.paragraphIndex, message.payload.charIndex, message.payload.shape);
+    console.log('[shape-space-debug][worker] after EDIT_INSERT_SHAPE docLen=', documentState.length);
+  } else if (message.type === 'EDIT_SHAPE_PLACEMENT') {
+    const node = documentState[message.payload.docIdx];
+    if (node && (node as any).type === 'shape') {
+      (node as any).placement = message.payload.placement;
+      requestLayout();
+    }
   } else if (message.type === 'EDIT_TABLE_BORDER') {
     const node = documentState[message.payload.tableDocIdx];
     if (node && node.type === 'table') {
@@ -172,13 +180,17 @@ function locateRun(children: TextRun[], charIndex: number): { runIndex: number; 
 function editInsert(docIdx: number, charIndex: number, text: string) {
   console.log(`[edit] insert p=${docIdx} at=${charIndex} text=${JSON.stringify(text.slice(0, 30))}`);
   const item = documentState[docIdx];
-  if (item?.type !== 'paragraph') return;
+  if (item?.type !== 'paragraph') {
+    console.log('[shape-space-debug][worker:editInsert] rejected', { docIdx, charIndex, itemType: item?.type ?? null, itemExists: !!item, docLen: documentState.length, text });
+    return;
+  }
   if (item.children.length === 0) item.children.push(seedRun());
   const { runIndex, localIndex } = locateRun(item.children, Math.max(0, charIndex));
   const run = item.children[runIndex];
   if (isBareRun(run)) applyDefaultShape(run);
   const t = run.text || '';
   run.text = t.slice(0, localIndex) + text + t.slice(localIndex);
+  console.log('[shape-space-debug][worker:editInsert] applied', { docIdx, charIndex, runIndex, localIndex, insertedLen: text.length, runTextLenAfter: run.text.length });
   requestLayout();
 }
 

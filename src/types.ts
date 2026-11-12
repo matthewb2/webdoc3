@@ -69,6 +69,7 @@ export interface TableNode {
 }
 
 export type ShapeKind = 'rect' | 'ellipse' | 'line' | 'arrow';
+export type ShapePlacement = 'default' | 'front' | 'back';
 
 export interface ShapeNode {
   type: 'shape';
@@ -78,6 +79,8 @@ export interface ShapeNode {
   fill?: string;
   stroke?: string;
   strokeWidth?: number;
+  /** 본문과의 배치: 기본(본문 흐름), 글 앞에 배치, 글 뒤에 배치 */
+  placement?: ShapePlacement;
   _docIdx?: number;
 }
 
@@ -122,6 +125,7 @@ export type WorkerMessage =
   | { type: 'EDIT_TABLE_COL_WIDTH'; payload: { tableDocIdx: number; colIndex: number; width: number } }
   | { type: 'EDIT_INSERT_TABLE'; payload: { paragraphIndex: number; charIndex: number; rows: number; cols: number } }
   | { type: 'EDIT_INSERT_SHAPE'; payload: { paragraphIndex: number; charIndex: number; shape: 'rect' | 'ellipse' | 'line' | 'arrow' } }
+  | { type: 'EDIT_SHAPE_PLACEMENT'; payload: { docIdx: number; placement: 'default' | 'front' | 'back' } }
   | { type: 'EDIT_TABLE_BORDER'; payload: { tableDocIdx: number; borderStyle: TableBorderStyle } }
   | { type: 'EDIT_COLOR'; payload: { paragraphIndices: number[]; color?: string; backgroundColor?: string } }
   | { type: 'EDIT_FONT_RANGE'; payload: { paragraphIndex: number; fromCharIndex: number; endCharIndex: number; fontFamily?: string; fontSize?: number; bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean } }

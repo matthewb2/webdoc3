@@ -895,6 +895,24 @@ export function initTableInsert(_container: HTMLDivElement, worker: Worker, curs
   });
 }
 
+let selectedShapeDocIdx: number | null = null;
+
+export function getSelectedShapeDocIdx(): number | null {
+  return selectedShapeDocIdx;
+}
+export function setSelectedShapeDocIdx(idx: number | null) {
+  selectedShapeDocIdx = idx;
+  const container = document.getElementById('editor-container') as HTMLElement | null;
+  if (container) {
+    if (idx == null) delete (container as any).dataset.selectedShapeDocIdx;
+    else (container as any).dataset.selectedShapeDocIdx = String(idx);
+  }
+  document.querySelectorAll('.doc-shape.shape-selected').forEach((el) => el.classList.remove('shape-selected'));
+  if (idx != null) {
+    document.querySelectorAll(`.doc-shape[data-p-idx="${idx}"]`).forEach((el) => el.classList.add('shape-selected'));
+  }
+}
+
 export function initShapeInsert(worker: Worker, cursor: CursorState) {
   const map: Array<[string, 'rect' | 'ellipse' | 'line' | 'arrow']> = [
     ['btn-insert-shape-rect', 'rect'],
@@ -911,6 +929,41 @@ export function initShapeInsert(worker: Worker, cursor: CursorState) {
         type: 'EDIT_INSERT_SHAPE',
         payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex, shape },
       });
+    });
+  }
+
+  const container = document.getElementById('editor-container');
+  if (container) {
+    container.addEventListener('mousedown', (e) => {
+      const target = e.target as HTMLElement | null;
+      const shapeEl = target?.closest?.('.doc-shape') as HTMLElement | null;
+      if (shapeEl) {
+        const idx = parseInt(shapeEl.dataset.pIdx || '', 10);
+        console.log('[shape-space-debug][shape-mousedown]', { idx, pIdxAttr: shapeEl.dataset.pIdx, placement: shapeEl.dataset.placement });
+        if (Number.isFinite(idx)) {
+          setSelectedShapeDocIdx(idx);
+          const sel = document.getElementById('shape-placement-select') as HTMLSelectElement | null;
+          if (sel) sel.value = shapeEl.dataset.placement || 'default';
+        }
+        // 도형 선택 시 브라우저의 비정상 caret 이동/선택을 막되 에디터 포커스는 유지
+        e.preventDefault();
+        e.stopPropagation();
+        container.focus();
+      } else {
+        if (selectedShapeDocIdx != null) console.log('[shape-space-debug][shape-mousedown] clear selection (non-shape click)');
+        setSelectedShapeDocIdx(null);
+      }
+    });
+  }
+
+  const placementSelect = document.getElementById('shape-placement-select') as HTMLSelectElement | null;
+  if (placementSelect) {
+    placementSelect.addEventListener('mousedown', (e) => e.stopPropagation());
+    placementSelect.addEventListener('change', () => {
+      const idx = getSelectedShapeDocIdx();
+      if (idx == null) return;
+      const placement = (placementSelect.value as 'default' | 'front' | 'back') || 'default';
+      worker.postMessage({ type: 'EDIT_SHAPE_PLACEMENT', payload: { docIdx: idx, placement } });
     });
   }
 }

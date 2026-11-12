@@ -268,13 +268,28 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
       }
     }
     else if (item.type === 'shape') {
+      const placement = (item as any).placement || 'default';
       const wrap = document.createElement('div');
       wrap.className = 'doc-shape';
       wrap.dataset.pIdx = docIdx.toString();
+      wrap.dataset.placement = placement;
+      const selected = (rendererContainer as any)?.dataset?.selectedShapeDocIdx;
+      if (selected && selected === String(docIdx)) wrap.classList.add('shape-selected');
       wrap.contentEditable = 'false';
+      wrap.setAttribute('contenteditable', 'false');
+      (wrap.style as any).userSelect = 'none';
+      (wrap.style as any).webkitUserSelect = 'none';
       wrap.style.margin = '8px 0';
       wrap.style.display = 'flex';
       wrap.style.justifyContent = 'center';
+      wrap.style.position = 'relative';
+      if (placement === 'front') {
+        wrap.style.zIndex = '2';
+      } else if (placement === 'back') {
+        wrap.style.zIndex = '0';
+      } else {
+        wrap.style.zIndex = '1';
+      }
       const w = Math.max(20, (item as any).width || 160);
       const h = Math.max(10, (item as any).height || 100);
       const kind = (item as any).shape || 'rect';

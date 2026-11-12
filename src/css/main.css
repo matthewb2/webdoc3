@@ -381,3 +381,18 @@ html {
             border-left: none !important;
             border-right: none !important;
         }
+
+        /* 도형 개체 */
+        .page .doc-shape {
+            cursor: pointer;
+        }
+        .page .doc-shape.shape-selected svg {
+            outline: 2px dashed #2563eb;
+            outline-offset: 2px;
+        }
+        .page p, .page table {
+            position: relative;
+            z-index: 1;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }

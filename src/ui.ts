@@ -137,6 +137,20 @@ export function createAppUI(): void {
                     </div>
                     <div class="ribbon-group-title">도형 개체</div>
                 </div>
+
+                <div class="ribbon-group" id="ribbon-group-shape-props">
+                    <div class="ribbon-group-items">
+                        <div class="ribbon-row">
+                            <label class="toolbar-label" for="shape-placement-select">본문과의 배치</label>
+                            <select id="shape-placement-select" class="toolbar-select" title="선택한 도형의 본문 배치">
+                              <option value="default">기본</option>
+                              <option value="front">글 앞에 배치</option>
+                              <option value="back">글 뒤에 배치</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="ribbon-group-title">개체 속성</div>
+                </div>
             </div>
             <div class="ribbon-panel" data-tab="format">
                 <div class="ribbon-group">
