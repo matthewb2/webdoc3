@@ -257,6 +257,15 @@ function restoreCursorPosition() {
   let targetTextNode: Node | null = null;
   let targetOffset = 0;
 
+  const rawOffsetForModelIndex = (text: string, modelIndex: number): number => {
+    let seen = 0;
+    for (let i = 0; i < text.length; i++) {
+      if (seen === modelIndex) return i;
+      if (text.charCodeAt(i) !== 0x200b) seen++;
+    }
+    return text.length;
+  };
+
   const placeInElement = (root: Element, modelIndex: number) => {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
     let tn = walker.nextNode();
@@ -266,13 +275,13 @@ function restoreCursorPosition() {
     while (tn) {
       const t = tn.textContent || '';
       let zw = 0;
-      for (const ch of t) if (ch === '\u200B') zw++;
+      for (let i = 0; i < t.length; i++) if (t.charCodeAt(i) === 0x200b) zw++;
       const modelLen = t.length - zw;
       lastText = tn;
       lastLen = t.length;
       if (remaining <= modelLen) {
         targetTextNode = tn;
-        targetOffset = Math.min(remaining, t.length);
+        targetOffset = rawOffsetForModelIndex(t, remaining);
         return;
       }
       remaining -= modelLen;
@@ -292,11 +301,13 @@ function restoreCursorPosition() {
     let lastLen = 0;
     while (tn) {
       const t = tn.textContent || '';
-      const modelLen = t.length - Array.from(t).filter((ch) => ch.charCodeAt(0) === 0x200b).length;
+      let zw = 0;
+      for (let i = 0; i < t.length; i++) if (t.charCodeAt(i) === 0x200b) zw++;
+      const modelLen = t.length - zw;
       lastText = tn;
       lastLen = t.length;
       if (remaining <= modelLen) {
-        return { node: tn, offset: Math.min(remaining, t.length) };
+        return { node: tn, offset: rawOffsetForModelIndex(t, remaining) };
       }
       remaining -= modelLen;
       tn = walker.nextNode();
