@@ -1,4 +1,4 @@
-import './css/main.css';
+﻿import './css/main.css';
 import './css/ribbon.css';
 import './css/preview.css';
 import type { CursorState, DocumentModel, FontMetrics, ParagraphNode, TableNode, TableRowNode } from './types';
@@ -14,7 +14,11 @@ import { initPreviewMode } from './preview';
 import { ruler } from './ruler';
 import { parseHwpToDocumentModel } from './hwp/hwpParser';
 import { parseHwpxToDocumentModel } from './hwpx/hwpxParser';
+import { createAppUI, showAppUI } from './ui';
 import logoUrl from './assets/logo.svg';
+
+// UI 요소를 TS에서 동적으로 생성 (프로그램 시작 시 버튼/탭바가 포함된 상태로 생성)
+createAppUI();
 
 // 타이틀바(탭) 로고
 (function applyFavicon(): void {
@@ -34,6 +38,75 @@ const worker = new Worker(new URL('./worker/doc.worker.ts', import.meta.url), {
 
 // 최외곽 스크롤 뷰포트 내부에서 에디터 컨테이너 참조하도록 유지
 const containerEl = document.getElementById('editor-container') as HTMLDivElement;
+
+// [추가] 초기 편집용지 완성 전까지 스피너 표시 및 컨테이너 숨김 처리
+let isInitialReady = false;
+
+function showStartupSpinner(): void {
+  if (containerEl) {
+    containerEl.style.display = 'none';
+  }
+  if (document.getElementById('startup-spinner-overlay')) return;
+
+  const style = document.createElement('style');
+  style.id = 'startup-spinner-style';
+  style.textContent = `
+    @keyframes doc3-spin {
+      to { transform: rotate(360deg); }
+    }
+    #startup-spinner-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      background: rgba(243, 244, 246, 0.85);
+      z-index: 9999;
+      pointer-events: all;
+    }
+    #startup-spinner-overlay .spinner-ring {
+      width: 36px;
+      height: 36px;
+      border: 3px solid #d1d5db;
+      border-top-color: #2563eb;
+      border-radius: 50%;
+      animation: doc3-spin 0.75s linear infinite;
+    }
+    #startup-spinner-overlay .spinner-label {
+      font-family: var(--ui-font, sans-serif);
+      font-size: 13px;
+      color: #4b5563;
+    }
+  `;
+  document.head.appendChild(style);
+
+  const overlay = document.createElement('div');
+  overlay.id = 'startup-spinner-overlay';
+  overlay.innerHTML = `
+    <div class="spinner-ring"></div>
+    <div class="spinner-label">문서를 불러오는 중입니다...</div>
+  `;
+
+  const host = document.querySelector('.editor-viewport') || document.body;
+  host.appendChild(overlay);
+}
+
+function hideStartupSpinner(): void {
+  if (isInitialReady) return;
+  isInitialReady = true;
+
+  if (containerEl) {
+    containerEl.style.display = 'inline-flex';
+  }
+  document.getElementById('startup-spinner-overlay')?.remove();
+  document.getElementById('startup-spinner-style')?.remove();
+  showAppUI();
+}
+
+// 앱 시작 즉시 스피너 호출
+showStartupSpinner();
 
 // [핵심] 브라우저 환경에서 폰트 너비를 측정하는 함수
 function generateFontMetrics(fontStyle: string): FontMetrics {
@@ -57,8 +130,6 @@ function generateFontMetrics(fontStyle: string): FontMetrics {
 
   return metrics;
 }
-
-// src/main.ts 중반부 메시지 리스너 확인
 
 // [수정] 단락과 표 내부 셀을 모두 추적할 수 있도록 확장된 커서 상태 구조
 let savedCursor: CursorState = {
@@ -102,7 +173,7 @@ function saveCursorPosition() {
     savedCursor.isInsideTable = false;
     savedCursor.docIdx = parseInt(currentParagraph.dataset.pIdx, 10);
     savedCursor.charOffset = parseInt(currentParagraph.dataset.pOffset || '0', 10);
-    // 단락 시작부터 캐럿까지의 실제 텍스트 길이로 계산 (span 경계를 초월, ''런 ZWSP 제외)
+    // 단락 시작부터 캐럿까지의 실제 텍스트 길이로 계산 (span 경계를 초월, ZWSP 제외)
     const pre = document.createRange();
     pre.selectNodeContents(currentParagraph);
     try {
@@ -275,7 +346,7 @@ function restoreCursorPosition() {
       selection.removeAllRanges();
       selection.addRange(range);
     } catch (e) {
-      console.warn("커서 범위 설정 보정 활성화");
+      console.warn("cursor restore failed");
     }
   }
 }
@@ -297,7 +368,6 @@ async function initWordProcessor() {
     worker.postMessage({ type: 'BREAKS', payload: await computeBreaks(collectProbeItems(model)) });
     worker.postMessage({ type: 'INIT_DOC', payload: model });
     setCurrentFileName('제목 없음.odt');
-    containerEl.style.display = 'inline-flex';
     return;
   }
 
@@ -322,7 +392,6 @@ async function initWordProcessor() {
       worker.postMessage({ type: 'BREAKS', payload: await computeBreaks(collectProbeItems(model)) });
       worker.postMessage({ type: 'INIT_DOC', payload: model });
       setCurrentFileName(defaultDocName);
-      containerEl.style.display = 'inline-flex';
     })
     .catch(async (err: Error) => {
       console.warn(`기본 문서 로드 실패, 더미 표시: ${err.message}`);
@@ -332,8 +401,8 @@ async function initWordProcessor() {
     });
 }
 
-// 🧪 [시나리오] 3페이지 이상의 분량을 유도하는 대형 표 데이터 (기본 문서 로드 실패 시 폴백)
-// 🧪 표 분할 정밀 검증용: 짧은 행 + 장문 행(줄 단위 분할) + 거대 행(여러 페이지) + 짧은 행
+// [시나리오] 3페이지 이상의 분량을 유도하는 대형 표 데이터 (기본 문서 로드 실패 시 폴백)
+// 표 분할 정밀 검증용: 짧은 행 + 장문 행(줄 단위 분할) + 거대 행(여러 페이지) + 짧은 행
 function buildTableTest(): { title: ParagraphNode; table: TableNode; trailing: ParagraphNode } {
   const sent = (n: number) => `표 분할 검증 문장 ${n}번입니다. 행 높이에 따라 페이지 나눔이 달라집니다.`;
   const longCell = (count: number) => {
@@ -360,9 +429,9 @@ function buildTableTest(): { title: ParagraphNode; table: TableNode; trailing: P
   rows.push(drow('항목 11', '내용 11번 행입니다.', '일반'));
   rows.push(drow('항목 12', '내용 12번 행입니다.', '일반'));
   return {
-    title: { type: 'paragraph', align: 'center', children: [{ text: '표 분할 테스트' }] },
+    title: { type: 'paragraph', align: 'center', children: [{ text: 'cell split test' }] },
     table: { type: 'table', rows },
-    trailing: { type: 'paragraph', children: [{ text: '표 이후 문단입니다. 표 분할이 끝나고 남은 공간에 배치됩니다.' }] },
+    trailing: { type: 'paragraph', children: [{ text: 'after split paragraph' }] },
   };
 }
 
@@ -417,6 +486,9 @@ initFileOpen(worker, containerEl);
 let pendingPages: PageModel[] | null = null;
 
 function applyReadyPages(pages: PageModel[]) {
+  // [수정] 첫 편집용지 DOM이 생성되는 시점에 스피너를 제거하고 컨테이너를 표시
+  hideStartupSpinner();
+
   // 리마운트로 인한 스크롤 점프 방지: 렌더 전 위치를 복원한 뒤 커서 복원
   const viewport = document.querySelector('.editor-viewport') as HTMLDivElement | null;
   const prevTop = viewport ? viewport.scrollTop : 0;

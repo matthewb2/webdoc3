@@ -4,11 +4,12 @@
     "module": "CommonJS",
     "moduleResolution": "Node",
     "ignoreDeprecations": "6.0",
+    "rootDir": ".",
     "outDir": ".",
     "strict": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "files": ["main.ts"]
+  "files": ["main.cts"]
 }
