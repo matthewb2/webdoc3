@@ -32,6 +32,12 @@
       "target": [
         "nsis"
       ]
+    },
+    "nsis": {
+      "installerIcon": null,
+      "uninstallerIcon": null,
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
     }
   },
   "devDependencies": {
