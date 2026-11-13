@@ -1,12 +1,12 @@
-// src/listener/keyboard.ts - keyboard/input handling (English/basic input; serialized + batched inserts to keep cursor stable)
+// src/listener/keyboard.ts - synchronous model/cursor updates, asynchronous layout/render (engine-scheduled)
 import type { CursorState, TextRun } from '../types';
 import { breakKeyForRuns, computeBreaks } from '../probe';
 import { getCachedPages } from '../render';
 import { cachedParagraphInfo, clearPendingSelection, setAwaitingRender, snapshotSelection, selectedParagraphIndices, selectionRangeInParagraph } from './index';
 import { clearCellSelection, selectCellFromInputMode, extendCellSelection } from './mouse';
 
-// Recompute paragraph breaks from cached fragments so caret/layout stay consistent after edits.
-async function refreshParaBreaks(worker: Worker, docIdx: number) {
+// Recompute paragraph breaks from cached fragments before structural/model edits that depend on break state.
+function refreshParaBreaks(worker: Worker, docIdx: number) {
   const frags: Array<any> = [];
   getCachedPages().forEach((page) => page.forEach((item: any) => {
     if (item.type === 'paragraph' && item._docIdx === docIdx) frags.push(item);
@@ -16,50 +16,14 @@ async function refreshParaBreaks(worker: Worker, docIdx: number) {
   if (frags.some((f) => f.align)) return;
   const runs: TextRun[] = frags.flatMap((f) => f.children || []);
   if (!runs.some((r) => r.text)) return;
-  worker.postMessage({ type: 'BREAKS', payload: await computeBreaks([{ key: breakKeyForRuns(runs, 600), runs, width: 600 }]) });
-}
-
-// Serialize non-insert edits and insert flushes so async handlers cannot interleave and desync cursor.
-let editQueue: Promise<void> = Promise.resolve();
-function enqueueEdit(task: () => Promise<void>) {
-  editQueue = editQueue.then(task, task);
-  return editQueue;
-}
-
-// Batch consecutive text inserts to reduce worker/layout round-trips during key repeat.
-let pendingInsert: { docIdx: number; charIndex: number; text: string } | null = null;
-let insertFlushTimer: number | null = null;
-const INSERT_BATCH_DELAY_MS = 20;
-
-function clearInsertFlushTimer() {
-  if (insertFlushTimer !== null) {
-    window.clearTimeout(insertFlushTimer);
-    insertFlushTimer = null;
-  }
-}
-
-function scheduleInsertFlush(worker: Worker) {
-  clearInsertFlushTimer();
-  insertFlushTimer = window.setTimeout(() => {
-    insertFlushTimer = null;
-    void flushPendingInsert(worker);
-  }, INSERT_BATCH_DELAY_MS);
-}
-
-async function flushPendingInsert(worker: Worker) {
-  if (!pendingInsert) return;
-  const batch = pendingInsert;
-  pendingInsert = null;
-  await enqueueEdit(async () => {
-    await refreshParaBreaks(worker, batch.docIdx);
-    clearPendingSelection();
-    markEditPending();
-    worker.postMessage({ type: 'EDIT_INSERT', payload: { paragraphIndex: batch.docIdx, charIndex: batch.charIndex, text: batch.text } });
+  // Fire-and-forget; breaks message updates engine state synchronously when processed.
+  void computeBreaks([{ key: breakKeyForRuns(runs, 600), runs, width: 600 }]).then((payload) => {
+    worker.postMessage({ type: 'BREAKS', payload });
   });
 }
 
 export function hasPendingInputState() {
-  return pendingInsert !== null || insertFlushTimer !== null;
+  return false;
 }
 
 export function isComposingActive() {
@@ -74,7 +38,7 @@ export function initEditorListeners(
   container: HTMLDivElement,
   worker: Worker,
   cursor: CursorState,
-  _saveCursorPosition: () => void,
+  saveCursorPosition: () => void,
   _onCompositionEnd: () => void,
   _onCompositionEditPosted: () => void,
 ) {
@@ -164,131 +128,112 @@ export function initEditorListeners(
 
     if (isDeleteAction) {
       e.preventDefault();
-      // Flush any buffered inserts before deleting so model/cursor positions are consistent.
-      clearInsertFlushTimer();
-      void flushPendingInsert(worker).then(() => {
-        // After flushing optimistic inserts, cursor state is authoritative (DOM may not have rendered yet).
-        void enqueueEdit(async () => {
-          // 1) Range delete
-          if (hasRangeSelection && snap) {
-            const paraIndices = selectedParagraphIndices(container, cursor.docIdx, snap);
-            for (const docIdx of paraIndices) {
-              const r = selectionRangeInParagraph(container, docIdx, snap);
-              if (r) {
-                await refreshParaBreaks(worker, docIdx);
-                worker.postMessage({
-                  type: 'EDIT_DELETE_RANGE',
-                  payload: { paragraphIndex: docIdx, fromCharIndex: r.from, endCharIndex: r.to },
-                });
-              }
-            }
-            clearPendingSelection();
-            markEditPending();
-            clearCellSelection(container);
+      saveCursorPosition();
 
-            const loStart = (snap.anchor.docIdx < snap.focus.docIdx ||
-              (snap.anchor.docIdx === snap.focus.docIdx && snap.anchor.charIndex <= snap.focus.charIndex))
-              ? snap.anchor : snap.focus;
-            cursor.docIdx = loStart.docIdx;
-            cursor.charIndex = loStart.charIndex;
-            cursor.charOffset = 0;
-            return;
+      // 1) Range delete
+      if (hasRangeSelection && snap) {
+        const paraIndices = selectedParagraphIndices(container, cursor.docIdx, snap);
+        for (const docIdx of paraIndices) {
+          const r = selectionRangeInParagraph(container, docIdx, snap);
+          if (r) {
+            refreshParaBreaks(worker, docIdx);
+            worker.postMessage({
+              type: 'EDIT_DELETE_RANGE',
+              payload: { paragraphIndex: docIdx, fromCharIndex: r.from, endCharIndex: r.to },
+            });
           }
+        }
+        clearPendingSelection();
+        markEditPending();
+        clearCellSelection(container);
 
-          // 2) Backspace
-          if (e.inputType === 'deleteContentBackward') {
-            if (cursor.charIndex <= 0) {
-              if (cursor.docIdx <= 0 || cursor.isInsideTable) return;
-              const prev = cachedParagraphInfo(cursor.docIdx - 1);
-              const cur = cachedParagraphInfo(cursor.docIdx);
-              if (!prev.isParagraph && cur.length > 0) return;
-              await refreshParaBreaks(worker, cursor.docIdx);
-              clearPendingSelection();
-              markEditPending();
-              clearCellSelection(container);
-              worker.postMessage({ type: 'EDIT_DELETE', payload: { paragraphIndex: cursor.docIdx, charIndex: 0 } });
-              cursor.docIdx -= 1;
-              cursor.charIndex = prev.isParagraph ? prev.length : 0;
-              cursor.charOffset = 0;
-              return;
-            }
-            await refreshParaBreaks(worker, cursor.docIdx);
-            clearPendingSelection();
-            markEditPending();
-            worker.postMessage({ type: 'EDIT_DELETE', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
-            cursor.charIndex = Math.max(0, cursor.charIndex - 1);
-            return;
-          }
+        const loStart = (snap.anchor.docIdx < snap.focus.docIdx ||
+          (snap.anchor.docIdx === snap.focus.docIdx && snap.anchor.charIndex <= snap.focus.charIndex))
+          ? snap.anchor : snap.focus;
+        cursor.docIdx = loStart.docIdx;
+        cursor.charIndex = loStart.charIndex;
+        cursor.charOffset = 0;
+        return;
+      }
 
-          // 3) Forward delete
-          if (cursor.isInsideTable) return;
+      // 2) Backspace
+      if (e.inputType === 'deleteContentBackward') {
+        if (cursor.charIndex <= 0) {
+          if (cursor.docIdx <= 0 || cursor.isInsideTable) return;
+          const prev = cachedParagraphInfo(cursor.docIdx - 1);
           const cur = cachedParagraphInfo(cursor.docIdx);
-          if (cur.isParagraph && cur.length === 0) {
-            const next = cachedParagraphInfo(cursor.docIdx + 1);
-            const nextIsTable = next.exists && !next.isParagraph;
-            if (nextIsTable || !next.exists) {
-              const prev = cachedParagraphInfo(cursor.docIdx - 1);
-              await refreshParaBreaks(worker, cursor.docIdx);
-              clearPendingSelection();
-              markEditPending();
-              clearCellSelection(container);
-              worker.postMessage({ type: 'EDIT_DELETE_FWD', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
-              if (prev.isParagraph) {
-                cursor.docIdx -= 1;
-                cursor.charIndex = prev.length;
-                cursor.charOffset = 0;
-              }
-              return;
-            }
-          }
-          await refreshParaBreaks(worker, cursor.docIdx);
+          if (!prev.isParagraph && cur.length > 0) return;
+          refreshParaBreaks(worker, cursor.docIdx);
           clearPendingSelection();
           markEditPending();
-          if (cursor.charIndex >= cur.length && cachedParagraphInfo(cursor.docIdx + 1).isParagraph) {
-            clearCellSelection(container);
-          }
+          clearCellSelection(container);
+          worker.postMessage({ type: 'EDIT_DELETE', payload: { paragraphIndex: cursor.docIdx, charIndex: 0 } });
+          cursor.docIdx -= 1;
+          cursor.charIndex = prev.isParagraph ? prev.length : 0;
+          cursor.charOffset = 0;
+          return;
+        }
+        refreshParaBreaks(worker, cursor.docIdx);
+        clearPendingSelection();
+        markEditPending();
+        worker.postMessage({ type: 'EDIT_DELETE', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
+        cursor.charIndex = Math.max(0, cursor.charIndex - 1);
+        return;
+      }
+
+      // 3) Forward delete
+      if (cursor.isInsideTable) return;
+      const cur = cachedParagraphInfo(cursor.docIdx);
+      if (cur.isParagraph && cur.length === 0) {
+        const next = cachedParagraphInfo(cursor.docIdx + 1);
+        const nextIsTable = next.exists && !next.isParagraph;
+        if (nextIsTable || !next.exists) {
+          const prev = cachedParagraphInfo(cursor.docIdx - 1);
+          refreshParaBreaks(worker, cursor.docIdx);
+          clearPendingSelection();
+          markEditPending();
+          clearCellSelection(container);
           worker.postMessage({ type: 'EDIT_DELETE_FWD', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
-        });
-      });
+          if (prev.isParagraph) {
+            cursor.docIdx -= 1;
+            cursor.charIndex = prev.length;
+            cursor.charOffset = 0;
+          }
+          return;
+        }
+      }
+      refreshParaBreaks(worker, cursor.docIdx);
+      clearPendingSelection();
+      markEditPending();
+      if (cursor.charIndex >= cur.length && cachedParagraphInfo(cursor.docIdx + 1).isParagraph) {
+        clearCellSelection(container);
+      }
+      worker.postMessage({ type: 'EDIT_DELETE_FWD', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
       return;
     }
 
     if (e.inputType === 'insertParagraph') {
       e.preventDefault();
-      clearInsertFlushTimer();
-      void flushPendingInsert(worker).then(() => {
-        // After flushing optimistic inserts, cursor state is authoritative (DOM may not have rendered yet).
-        void enqueueEdit(async () => {
-          clearCellSelection(container);
-          await refreshParaBreaks(worker, cursor.docIdx);
-          clearPendingSelection();
-          markEditPending();
-          worker.postMessage({ type: 'EDIT_SPLIT', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
-          cursor.docIdx += 1;
-          cursor.charIndex = 0;
-          cursor.charOffset = 0;
-        });
-      });
+      // Use current cursor state (kept in sync by edits/selection changes) to avoid stale DOM reads during rapid Enter.
+      clearCellSelection(container);
+      clearPendingSelection();
+      markEditPending();
+      // Synchronous model update; layout/render scheduled asynchronously by engine (rAF).
+      worker.postMessage({ type: 'EDIT_SPLIT', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
+      cursor.docIdx += 1;
+      cursor.charIndex = 0;
+      cursor.charOffset = 0;
       return;
     }
 
     if (e.data != null && e.data !== '') {
       e.preventDefault();
-      // Prevent selectionchange/saveCursorPosition from reading stale DOM and clobbering optimistic cursor.
-      markEditPending();
       const text = e.data;
-      // If paragraph/context changed, flush previous batch first.
-      if (pendingInsert && (pendingInsert.docIdx !== cursor.docIdx || cursor.isInsideTable)) {
-        clearInsertFlushTimer();
-        void flushPendingInsert(worker);
-      }
-      if (!pendingInsert) {
-        pendingInsert = { docIdx: cursor.docIdx, charIndex: cursor.charIndex, text: '' };
-      }
-      // Optimistic local cursor advance for immediate caret progression; batch sent to worker.
-      pendingInsert.text += text;
+      // Synchronous model update (engine processes message immediately) + immediate cursor advance.
+      worker.postMessage({ type: 'EDIT_INSERT', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex, text } });
       cursor.charIndex += text.length;
-      scheduleInsertFlush(worker);
+      clearPendingSelection();
+      markEditPending();
       return;
     }
   });

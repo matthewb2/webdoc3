@@ -894,18 +894,23 @@ export function createDocEngine(): DocEngine {
   }
 
   let layoutToken: { cancelled: boolean } = { cancelled: true };
+  let layoutRaf = 0;
 
   function requestLayout() {
     layoutToken.cancelled = true;
     const token = { cancelled: false };
     layoutToken = token;
-    runLayoutEngineAsync(documentState, (message: any) => emit(message), token);
+    if (layoutRaf) return;
+    layoutRaf = window.requestAnimationFrame(() => {
+      layoutRaf = 0;
+      runLayoutEngineAsync(documentState, (message: any) => emit(message), token);
+    });
   }
 
   return {
     postMessage(message: any) {
-      // process on main thread; keep async-compatible behavior
-      Promise.resolve().then(() => handleMessage(message));
+      // Synchronous model/state updates on main thread; layout is scheduled asynchronously.
+      handleMessage(message);
     },
     addEventListener(type: 'message', listener: (event: MessageEvent<any>) => void) {
       if (type === 'message') listeners.add(listener);
