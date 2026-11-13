@@ -1,4 +1,4 @@
-import type { PageModel } from '../worker/doc.worker';
+import type { PageModel } from '../worker/layout';
 import type { CursorState, TableBorderStyle } from '../types';
 import { defaultAlign, defaultFontFamily, defaultFontSize, defaultLineSpacing, loadSettings, saveSettings } from '../settings';
 import { addRecentEntry, getRecentEntries, getRecentHandle, verifyReadPermission } from '../recentFileStore';

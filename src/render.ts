@@ -1,5 +1,5 @@
 // src/render.ts - 페이지 DOM 생성 + 가상화 뷰포트
-import type { PageModel } from './worker/doc.worker';
+import type { PageModel } from './worker/layout';
 import { defaultAlign, defaultIndent, defaultLineSpacing } from './settings';
 import { PAGE_GAP, PAGE_HEIGHT, PAGE_PITCH, PAGE_WIDTH, pageLayout } from './worker/layoutConstants';
 

@@ -2,19 +2,20 @@
 import './css/ribbon.css';
 import './css/preview.css';
 import type { CursorState, DocumentModel, FontMetrics, ParagraphNode, TableNode, TableRowNode } from './types';
-import type { PageModel } from './worker/doc.worker';
+import type { PageModel } from './worker/layout';
 import { defaultFontFamily, defaultUiFontFamily, initSettings, loadSettings } from './settings';
 import { setPageMargins } from './worker/layoutConstants';
 import { collectProbeItems, computeBreaks } from './probe';
 import { appendStreamPages, findCursorPageIndices, getCachedPages, initRenderer, renderVirtualPages, updateVisiblePages } from './render';
 import { clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFindReplace, initFontCombos, initFileOpen, initLineSpacingCombo, initNewDocument, initPageMargins, initParagraphStyles, initRecentFiles, initRibbonTabs, initSave, initSaveAs, initSelectionListener, initShapeInsert, initStyleButtons, initTableInsert, initTableProperties, initViewOptions, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, setCurrentFileName, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncLineSpacingCombo, syncStyleButtons, syncTablePropertiesRibbon, takePendingSelection } from './listener';
-import { initEditorListeners, isComposingActive } from './listener/keyboard';
+import { initEditorListeners, isComposingActive, hasPendingInputState } from './listener/keyboard';
 import { initCellSelection, paintCellSelection } from './listener/mouse';
 import { initPreviewMode } from './preview';
 import { ruler } from './ruler';
 import { parseHwpToDocumentModel } from './hwp/hwpParser';
 import { parseHwpxToDocumentModel } from './hwpx/hwpxParser';
 import { createAppUI, showAppUI } from './ui';
+import { createDocEngine } from './worker/docEngine';
 import logoUrl from './assets/logo.svg';
 
 // UI 요소를 TS에서 동적으로 생성 (프로그램 시작 시 버튼/탭바가 포함된 상태로 생성)
@@ -32,9 +33,8 @@ createAppUI();
   link.href = logoUrl;
 })();
 
-const worker = new Worker(new URL('./worker/doc.worker.ts', import.meta.url), {
-  type: 'module'
-});
+// Single-thread document engine (replaces Web Worker to avoid async cursor/message desync)
+const worker = createDocEngine() as unknown as Worker;
 
 // 최외곽 스크롤 뷰포트 내부에서 에디터 컨테이너 참조하도록 유지
 const containerEl = document.getElementById('editor-container') as HTMLDivElement;
@@ -543,25 +543,31 @@ initFileOpen(worker, containerEl);
 let pendingPages: PageModel[] | null = null;
 
 function applyReadyPages(pages: PageModel[]) {
-  // [수정] 첫 편집용지 DOM이 생성되는 시점에 스피너를 제거하고 컨테이너를 표시
   hideStartupSpinner();
 
-  // 리마운트로 인한 스크롤 점프 방지: 렌더 전 위치를 복원한 뒤 커서 복원
+  // Keep scroll position stable across re-render.
   const viewport = document.querySelector('.editor-viewport') as HTMLDivElement | null;
   const prevTop = viewport ? viewport.scrollTop : 0;
   renderVirtualPages(pages, true);
   refreshZoomLayout(containerEl);
   if (viewport) viewport.scrollTop = prevTop;
-  restoreCursorPosition();
-  syncFontCombos();
-  syncColumnCombo();
-  syncAlignCombo();
-  syncColorControls();
-  syncStyleButtons();
-  syncLineSpacingCombo();
-  updateCursorPage();
-  paintCellSelection(containerEl);
-  syncTablePropertiesRibbon(containerEl);
+
+  // During optimistic buffered typing, model/DOM may lag behind local cursor state.
+  // Restoring caret from model now can cause visible jumps; wait until input settles.
+  if (!hasPendingInputState()) {
+    restoreCursorPosition();
+    syncFontCombos();
+    syncColumnCombo();
+    syncAlignCombo();
+    syncColorControls();
+    syncStyleButtons();
+    syncLineSpacingCombo();
+    updateCursorPage();
+    paintCellSelection(containerEl);
+    syncTablePropertiesRibbon(containerEl);
+  } else {
+    paintCellSelection(containerEl);
+  }
 }
 
 // 상태바에 커서 위치 페이지 표시 (현재 / 전체)
@@ -581,7 +587,8 @@ function flushPendingRender() {
 }
 
 initWorkerListener(worker, (pages) => {
-  setAwaitingRender(false);
+  // Do not clear edit-await guard while optimistic/buffered typing is still in progress.
+  if (!hasPendingInputState()) setAwaitingRender(false);
   // 조합 중에는 렌더를 보류 (조합 노드가 날아가 자모가 깨짐)
   if (isComposingActive()) {
     pendingPages = pages;
@@ -593,7 +600,19 @@ initWorkerListener(worker, (pages) => {
   appendStreamPages(pages);
 });
 initViewportScrollListener(() => { updateVisiblePages(); paintCellSelection(containerEl); });
-initSelectionListener(() => { clearPendingSelection(); saveCursorPosition(); syncFontCombos(); syncColumnCombo(); syncAlignCombo(); syncColorControls(); syncStyleButtons(); syncLineSpacingCombo(); syncTablePropertiesRibbon(containerEl); updateCursorPage(); });
+initSelectionListener(() => {
+  clearPendingSelection();
+  // During optimistic typing/buffered inserts, DOM selection may lag or be stale; do not overwrite model cursor.
+  if (!hasPendingInputState()) saveCursorPosition();
+  syncFontCombos();
+  syncColumnCombo();
+  syncAlignCombo();
+  syncColorControls();
+  syncStyleButtons();
+  syncLineSpacingCombo();
+  syncTablePropertiesRibbon(containerEl);
+  updateCursorPage();
+});
 initEditorListeners(containerEl, worker, savedCursor, saveCursorPosition, flushPendingRender, () => { pendingPages = null; });
 initFontCombos(containerEl, worker, savedCursor);
 initColumnCombo(containerEl, worker, savedCursor);
