@@ -1,9 +1,9 @@
-// src/listener/keyboard.ts - synchronous model/cursor updates, asynchronous layout/render (engine-scheduled)
+// src/listener/keyinput.ts - synchronous model/cursor updates, asynchronous layout/render (engine-scheduled)
 import type { CursorState, TextRun } from '../types';
 import { breakKeyForRuns, computeBreaks } from '../probe';
 import { getCachedPages } from '../render';
-import { cachedParagraphInfo, clearPendingSelection, setAwaitingRender, snapshotSelection, selectedParagraphIndices, selectionRangeInParagraph } from './index';
-import { clearCellSelection, selectCellFromInputMode, extendCellSelection } from './mouse';
+import { cachedParagraphInfo, clearPendingSelection, setAwaitingRender, snapshotSelection, selectedParagraphIndices, selectionRangeInParagraph } from './listener';
+import { clearCellSelection, selectCellFromInputMode, extendCellSelection } from './table';
 
 // Recompute paragraph breaks from cached fragments before structural/model edits that depend on break state.
 function refreshParaBreaks(worker: Worker, docIdx: number) {

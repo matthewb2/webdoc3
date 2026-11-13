@@ -1,4 +1,4 @@
-// src/listener/mouse.ts - 표 셀 마우스 선택
+// src/listener/table.ts - 표 셀 마우스 선택
 export interface CellSel {
   tableDocIdx: number;
   r0: number;

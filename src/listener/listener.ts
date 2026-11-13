@@ -1,3 +1,4 @@
+/* src/listener/listener.ts */
 import type { PageModel } from '../worker/layout';
 import type { CursorState, TableBorderStyle } from '../types';
 import { defaultAlign, defaultFontFamily, defaultFontSize, defaultLineSpacing, loadSettings, saveSettings } from '../settings';
@@ -13,8 +14,8 @@ import { saveCurrentDocument } from '../odt/odtExport';
 import { saveCurrentDocumentDocx } from '../docx/docxExport';
 import { saveCurrentDocumentHwp } from '../hwp/hwpExport';
 import { saveCurrentHwpxDocument } from '../hwpx/hwpxExport';
-import { cellPosFromTd, clearCellSelection, getActiveTableDocIdx, getCellSelection } from './mouse';
-import type { CellSel } from './mouse';
+import { cellPosFromTd, clearCellSelection, getActiveTableDocIdx, getCellSelection } from './table';
+import type { CellSel } from './table';
 
 const FONT_FAMILIES = [
   'Arial', 'Verdana', 'Tahoma', 'Times New Roman', 'Georgia', 'Courier New', '맑은 고딕', '굴림', '돋움', '바탕',  '궁서', '나눔고딕', 'Noto Sans KR'
