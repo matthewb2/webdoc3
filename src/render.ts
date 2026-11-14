@@ -385,6 +385,8 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
         }
       }
       table.style.width = `${tableWidth}px`;
+      table.style.tableLayout = 'fixed';
+      console.log('[render-table]', { docIdx, colWidths: item.colWidths, effectiveColWidths, tableWidth, contentWidth });
       if (item.backgroundColor) table.style.backgroundColor = item.backgroundColor;
       if (item.background) table.style.backgroundColor = item.background;
 

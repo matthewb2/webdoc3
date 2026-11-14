@@ -91,7 +91,7 @@ export function createDocEngine(): DocEngine {
     } else if (message.type === 'EDIT_TABLE_ROW_HEIGHT') {
       editTableRowHeight(documentState, requestLayout, message.payload.tableDocIdx, message.payload.rowIndex, message.payload.height);
     } else if (message.type === 'EDIT_TABLE_COL_WIDTH') {
-      editTableColWidth(documentState, requestLayout, message.payload.tableDocIdx, message.payload.colIndex, message.payload.width);
+      editTableColWidth(documentState, requestLayout, message.payload.tableDocIdx, message.payload.colIndex, message.payload.width, message.payload.colWidths);
     } else if (message.type === 'EDIT_INSERT_TABLE') {
       editInsertTableOp(documentState, requestLayout, { locateRun: ops.locateRun, seedRun: ops.seedRun }, message.payload.paragraphIndex, message.payload.charIndex, message.payload.rows, message.payload.cols);
     } else if (message.type === 'EDIT_INSERT_SHAPE') {

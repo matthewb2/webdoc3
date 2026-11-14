@@ -1,4 +1,5 @@
-// src/listener/table.ts - 표 셀 마우스 선택
+// src/listener/table.ts - table cell mouse selection
+import { getCachedPages } from '../render';
 export interface CellSel {
   tableDocIdx: number;
   r0: number;
@@ -215,8 +216,11 @@ export function mergeSelectedCells(container: HTMLDivElement, worker: Worker): b
 
 export function initCellSelection(container: HTMLDivElement, worker: Worker) {
   let rowResize: { table: HTMLTableElement; tableDocIdx: number; rowIndex: number; tr: HTMLTableRowElement; startY: number; startH: number } | null = null;
-  let colResize: { table: HTMLTableElement; tableDocIdx: number; colIndex: number; startX: number; startW: number } | null = null;
-  let tableDrag: { table: HTMLTableElement; tableDocIdx: number; startX: number; startY: number; moved: boolean } | null = null;
+  
+  let colResize: { table: HTMLTableElement; tableDocIdx: number; colIndex: number; startX: number; startW: number; startColWidths: number[]; originalLayout: string } | null = null;
+  
+  
+  let tableDrag: { table: HTMLTableElement; tableDocIdx: number; startX: number; startY: number; moved: boolean; edge: 'left' | 'right' | 'top' | 'bottom' } | null = null;
 
   function rowResizeHit(e: MouseEvent): { table: HTMLTableElement; tableDocIdx: number; rowIndex: number; tr: HTMLTableRowElement } | null {
     const td = (e.target as Element)?.closest?.('td') as HTMLTableCellElement | null;
@@ -241,30 +245,36 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
     const rect = td.getBoundingClientRect();
     if (Math.abs(e.clientX - rect.right) > 5) return null;
     const tableDocIdx = parseInt(table.dataset.pIdx || '', 10);
-    const colIndex = parseInt(td.dataset.c || '', 10);
-    if (isNaN(tableDocIdx) || isNaN(colIndex)) return null;
+    const startCol = parseInt(td.dataset.c || '', 10);
+    if (isNaN(tableDocIdx) || isNaN(startCol)) return null;
+    const colSpan = Math.max(1, td.colSpan || 1);
+    // 병합 셀의 오른쪽 경계는 (시작 컬럼 + colSpan - 1) 컬럼 경계
+    const colIndex = startCol + colSpan - 1;
     return { table, tableDocIdx, colIndex, td };
   }
 
-  function tableBorderHit(e: MouseEvent): { table: HTMLTableElement; tableDocIdx: number } | null {
+  function tableBorderHit(e: MouseEvent): { table: HTMLTableElement; tableDocIdx: number; edge: 'left' | 'right' | 'top' | 'bottom' } | null {
     const table = (e.target as Element)?.closest?.('table') as HTMLTableElement | null;
     if (!table || !container.contains(table)) return null;
     const rect = table.getBoundingClientRect();
-    const edge = 6;
-    const nearEdge =
-      e.clientX <= rect.left + edge ||
-      e.clientX >= rect.right - edge ||
-      e.clientY <= rect.top + edge ||
-      e.clientY >= rect.bottom - edge;
-    if (!nearEdge) return null;
+    const margin = 6;
+    const edges: Array<'left' | 'right' | 'top' | 'bottom'> = [];
+    if (e.clientX <= rect.left + margin) edges.push('left');
+    if (e.clientX >= rect.right - margin) edges.push('right');
+    if (e.clientY <= rect.top + margin) edges.push('top');
+    if (e.clientY >= rect.bottom - margin) edges.push('bottom');
+    if (edges.length === 0) return null;
+    // 우선순위: 좌우(특히 오른쪽) 가장자리 드래그를 명확히 인식
+    const edge = edges.includes('right') ? 'right' : edges.includes('left') ? 'left' : edges[0];
     const tableDocIdx = parseInt(table.dataset.pIdx || '', 10);
     if (isNaN(tableDocIdx)) return null;
-    return { table, tableDocIdx };
+    console.log('[table-drag] border hit', { tableDocIdx, edge, x: e.clientX, y: e.clientY, rect: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom } });
+    return { table, tableDocIdx, edge };
   }
 
   const onRowResizeMove = (e: MouseEvent) => {
     if (!rowResize) return;
-    const h = Math.max(24, rowResize.startH + (e.clientY - rowResize.startY));
+    const h = Math.max(2, rowResize.startH + (e.clientY - rowResize.startY));
     rowResize.tr.style.height = `${h}px`;
     rowResize.tr.querySelectorAll('td').forEach((td) => {
       (td as HTMLElement).style.height = `${h}px`;
@@ -273,7 +283,7 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
   };
   const onRowResizeUp = (e: MouseEvent) => {
     if (!rowResize) return;
-    const h = Math.max(24, rowResize.startH + (e.clientY - rowResize.startY));
+    const h = Math.max(2, rowResize.startH + (e.clientY - rowResize.startY));
     const { tableDocIdx, rowIndex } = rowResize;
     worker.postMessage({ type: 'EDIT_TABLE_ROW_HEIGHT', payload: { tableDocIdx, rowIndex, height: h } });
     rowResize = null;
@@ -284,22 +294,55 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
 
   const onColResizeMove = (e: MouseEvent) => {
     if (!colResize) return;
-    const w = Math.max(24, colResize.startW + (e.clientX - colResize.startX));
-    colResize.table.querySelectorAll(`td[data-c="${colResize.colIndex}"]`).forEach((td) => {
-      (td as HTMLElement).style.width = `${w}px`;
+    const diff = e.clientX - colResize.startX;
+    const w = Math.max(24, colResize.startW + diff);
+    const widths = colResize.startColWidths.slice();
+    if (colResize.colIndex >= 0 && colResize.colIndex < widths.length) {
+      widths[colResize.colIndex] = w;
+    }
+    const tableW = widths.reduce((a, b) => a + b, 0);
+
+    colResize.table.style.tableLayout = 'fixed';
+    // 병합 셀 포함: 각 td 너비 = 차지하는 grid 컬럼 너비 합
+    colResize.table.querySelectorAll('td[data-c]').forEach((td) => {
+      const c = parseInt((td as HTMLElement).dataset.c || '0', 10);
+      const span = Math.max(1, (td as HTMLTableCellElement).colSpan || 1);
+      let tw = 0;
+      for (let i = 0; i < span; i++) tw += widths[c + i] ?? 24;
+      (td as HTMLElement).style.width = `${tw}px`;
     });
+    colResize.table.style.width = `${tableW}px`;
+
+    colResize.table.style.outline = '1px solid rgba(74,144,217,0.8)';
+    colResize.table.style.outlineOffset = '0px';
+    console.log('[table-col-resize] move', { colIndex: colResize.colIndex, width: w, tableW });
+
     e.preventDefault();
   };
+
+
   const onColResizeUp = (e: MouseEvent) => {
     if (!colResize) return;
-    const w = Math.max(24, colResize.startW + (e.clientX - colResize.startX));
-    const { tableDocIdx, colIndex } = colResize;
-    worker.postMessage({ type: 'EDIT_TABLE_COL_WIDTH', payload: { tableDocIdx, colIndex, width: w } });
+    const diff = e.clientX - colResize.startX;
+    const w = Math.max(24, colResize.startW + diff);
+    const widths = colResize.startColWidths.slice();
+    if (colResize.colIndex >= 0 && colResize.colIndex < widths.length) {
+      widths[colResize.colIndex] = w;
+    }
+    const { tableDocIdx, colIndex, table, originalLayout } = colResize;
+    console.log('[table-col-resize] up', { tableDocIdx, colIndex, width: w, colWidths: widths, tableWidth: widths.reduce((a, b) => a + b, 0) });
+    table.style.outline = '';
+    table.style.outlineOffset = '';
+    table.style.tableLayout = originalLayout;
+
+    worker.postMessage({ type: 'EDIT_TABLE_COL_WIDTH', payload: { tableDocIdx, colIndex, width: w, colWidths: widths } });
+
     colResize = null;
     document.removeEventListener('mousemove', onColResizeMove);
     document.removeEventListener('mouseup', onColResizeUp);
     container.style.cursor = '';
   };
+  
 
   const findDropTargetDocIdx = (_clientX: number, clientY: number, draggedDocIdx: number): number => {
     const els = Array.from(container.querySelectorAll<HTMLElement>('[data-p-idx]'))
@@ -326,26 +369,32 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
     const dy = e.clientY - tableDrag.startY;
     if (!tableDrag.moved && Math.abs(dx) + Math.abs(dy) > 3) {
       tableDrag.moved = true;
-      tableDrag.table.style.outline = '2px dashed #4a90d9';
-      tableDrag.table.style.outlineOffset = '2px';
+      tableDrag.table.style.outline = '2px solid #4a90d9';
+      tableDrag.table.style.outlineOffset = '0px';
+      tableDrag.table.style.boxShadow = '0 0 0 2px rgba(74,144,217,0.35)';
+      console.log('[table-drag] drag started', { tableDocIdx: tableDrag.tableDocIdx, edge: tableDrag.edge, dx, dy });
     }
     if (tableDrag.moved) container.style.cursor = 'move';
     e.preventDefault();
   };
   const onTableDragUp = (e: MouseEvent) => {
     if (!tableDrag) return;
-    const { table, tableDocIdx, moved } = tableDrag;
+    const { table, tableDocIdx, moved, edge } = tableDrag;
     table.style.outline = '';
     table.style.outlineOffset = '';
+    table.style.boxShadow = '';
     container.style.cursor = '';
     document.removeEventListener('mousemove', onTableDragMove);
     document.removeEventListener('mouseup', onTableDragUp);
     tableDrag = null;
     if (moved) {
       const targetDocIdx = findDropTargetDocIdx(e.clientX, e.clientY, tableDocIdx);
+      console.log('[table-drag] drop', { tableDocIdx, edge, targetDocIdx });
       if (targetDocIdx !== tableDocIdx) {
         worker.postMessage({ type: 'EDIT_MOVE_TABLE', payload: { tableDocIdx, targetDocIdx } });
       }
+    } else {
+      console.log('[table-drag] click without move', { tableDocIdx, edge });
     }
   };
 
@@ -355,7 +404,66 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
     if (cHit) {
       if (cellEdit) exitCellEditMode(container);
       clearCellSelection(container);
-      colResize = { table: cHit.table, tableDocIdx: cHit.tableDocIdx, colIndex: cHit.colIndex, startX: e.clientX, startW: cHit.td.getBoundingClientRect().width };
+
+      const originalLayout = cHit.table.style.tableLayout;
+
+      // 모델의 실제 컬럼 너비를 우선 사용 (colspan/병합 셀로 DOM td 개수가 컬럼 수와 다를 수 있음)
+      let startColWidths: number[] | null = null;
+      const pages = getCachedPages() as any[];
+      outerModel: for (const page of pages) {
+        const items = Array.isArray(page) ? page : (page as any).items;
+        if (!items) continue;
+        for (const item of items) {
+          if (item && item.type === 'table' && (item as any)._docIdx === cHit.tableDocIdx) {
+            if (Array.isArray(item.colWidths) && item.colWidths.length > 0) {
+              startColWidths = item.colWidths.map((v: number) => (typeof v === 'number' && isFinite(v) ? v : 0));
+            }
+            break outerModel;
+          }
+        }
+      }
+      if (!startColWidths || startColWidths.length === 0) {
+        // fallback: DOM 기준
+        const firstRow = cHit.table.querySelector('tr');
+        const colCount = firstRow ? firstRow.querySelectorAll('td').length : 0;
+        startColWidths = [];
+        for (let ci = 0; ci < colCount; ci++) {
+          const cell = cHit.table.querySelector(`td[data-c="${ci}"]`) as HTMLTableCellElement | null;
+          startColWidths.push(cell ? cell.getBoundingClientRect().width : cHit.td.getBoundingClientRect().width);
+        }
+      }
+      // 유효하지 않은 값 보정
+      startColWidths = startColWidths.map((w) => (w > 0 ? w : 24));
+
+      const boundaryCol = cHit.colIndex;
+      const startW = (boundaryCol >= 0 && boundaryCol < startColWidths.length)
+        ? startColWidths[boundaryCol]
+        : cHit.td.getBoundingClientRect().width / Math.max(1, cHit.td.colSpan || 1);
+
+      cHit.table.style.tableLayout = 'fixed';
+      // 병합 셀 포함: 각 td의 너비 = 차지하는 grid 컬럼 너비 합
+      const applyTableWidths = (widths: number[]) => {
+        cHit.table.querySelectorAll('td[data-c]').forEach((td) => {
+          const c = parseInt((td as HTMLElement).dataset.c || '0', 10);
+          const span = Math.max(1, (td as HTMLTableCellElement).colSpan || 1);
+          let w = 0;
+          for (let i = 0; i < span; i++) w += widths[c + i] ?? 24;
+          (td as HTMLElement).style.width = `${w}px`;
+        });
+        cHit.table.style.width = `${widths.reduce((a, b) => a + b, 0)}px`;
+      };
+      applyTableWidths(startColWidths);
+
+      colResize = {
+        table: cHit.table,
+        tableDocIdx: cHit.tableDocIdx,
+        colIndex: boundaryCol,
+        startX: e.clientX,
+        startW,
+        startColWidths,
+        originalLayout,
+      };
+      console.log('[table-col-resize] start', { tableDocIdx: cHit.tableDocIdx, colIndex: boundaryCol, startW, startColWidths, tableWidth: cHit.table.getBoundingClientRect().width });
       container.style.cursor = 'col-resize';
       document.addEventListener('mousemove', onColResizeMove);
       document.addEventListener('mouseup', onColResizeUp);
@@ -386,7 +494,12 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
       cellEdit = null;
       cellDragging = false;
       paintCellSelection(container);
-      tableDrag = { table: bHit.table, tableDocIdx: bHit.tableDocIdx, startX: e.clientX, startY: e.clientY, moved: false };
+      tableDrag = { table: bHit.table, tableDocIdx: bHit.tableDocIdx, startX: e.clientX, startY: e.clientY, moved: false, edge: bHit.edge };
+      // 테두리(특히 오른쪽 가장자리) 클릭 즉시 이동 가능 상태임을 시각적으로 표시
+      bHit.table.style.outline = '2px solid rgba(74,144,217,0.9)';
+      bHit.table.style.outlineOffset = '0px';
+      bHit.table.style.boxShadow = '0 0 0 1px rgba(74,144,217,0.25)';
+      console.log('[table-drag] mousedown on border', { tableDocIdx: bHit.tableDocIdx, edge: bHit.edge });
       document.addEventListener('mousemove', onTableDragMove);
       document.addEventListener('mouseup', onTableDragUp);
       e.preventDefault();

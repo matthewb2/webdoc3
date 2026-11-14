@@ -92,10 +92,33 @@ export function editTableColWidth(
   tableDocIdx: number,
   colIndex: number,
   width: number,
+  colWidths?: number[],
 ) {
   const table = documentState[tableDocIdx];
   if (!table || table.type !== 'table') return;
-  const n = Math.max(colIndex + 1, ...(table.rows.map((r) => r.cells.length)), table.colWidths?.length ?? 0);
+
+  const colCount = Math.max(
+    colIndex + 1,
+    ...(table.rows.map((r) => r.cells.length)),
+    table.colWidths?.length ?? 0,
+    colWidths?.length ?? 0,
+  );
+
+  if (Array.isArray(colWidths) && colWidths.length > 0) {
+    const widths = new Array(colCount).fill(0).map((_, i) => {
+      const v = colWidths[i];
+      return typeof v === 'number' && isFinite(v) ? Math.max(24, Math.min(2000, v)) : 0;
+    });
+    const fallback = 624 / Math.max(1, table.rows[0]?.cells.length ?? colCount);
+    for (let i = 0; i < widths.length; i++) {
+      if (!widths[i]) widths[i] = Math.max(24, table.colWidths?.[i] || fallback);
+    }
+    table.colWidths = widths;
+    requestLayout();
+    return;
+  }
+
+  const n = colCount;
   const base = 624 / Math.max(1, table.rows[0]?.cells.length ?? n);
   if (!table.colWidths) table.colWidths = new Array(n).fill(base);
   while (table.colWidths.length < n) table.colWidths.push(base);

@@ -430,7 +430,7 @@ async function initWordProcessor() {
   }
 
   // 기본 문서: 프로그램 시작 시 로드 (dev/Electron file:// 공용 상대 경로)
-  const defaultDocName = '표준상가임대차계약서.hwp';
+  const defaultDocName = 'cellmerge.hwpx';
   const defaultDocUrl = encodeURI(`./${defaultDocName}`);
   fetch(defaultDocUrl)
     .then((res) => {
@@ -529,6 +529,12 @@ function buildMockDocument(): DocumentModel {
 const viewportEl = document.querySelector('.editor-viewport') as HTMLDivElement | null;
 if (viewportEl) {
   ruler(worker);
+  viewportEl.addEventListener('mousedown', (e: MouseEvent) => {
+    const target = e.target as Element | null;
+    if (target && !target.closest('.page')) {
+      activateRibbonTab('file');
+    }
+  });
 } else {
   document.addEventListener('DOMContentLoaded', () => ruler(worker), { once: true });
 }
