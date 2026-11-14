@@ -550,10 +550,7 @@ function wrapGlyphs(glyphs: Glyph[], maxWidth: number): Glyph[][] {
         current = current.slice(breakAt + 1);
         currentWidth = 0;
         current.forEach((g) => {
-          if (g.ch === ' ' && currentWidth === 0) {
-            g.w = 0;
-            return;
-          }
+          // [수정] 줄바꿈 후 첫 글자가 공백이어도 너비를 강제로 0으로 만들지 않고 실제 폰트 폭을 유지합니다.
           const bw = fontMetrics[g.ch] !== undefined ? fontMetrics[g.ch] : fontMetrics['default_ko'];
           currentWidth += bw * ((g.run.fontSize ?? BASE_FONT_PX) / BASE_FONT_PX);
         });
@@ -563,12 +560,9 @@ function wrapGlyphs(glyphs: Glyph[], maxWidth: number): Glyph[][] {
         currentWidth = 0;
       }
     }
-    // 브라우저(white-space normal)와 동일하게 줄 맨 앞 공백은 너비 0으로 처리 (텍스트는 보존)
-    if (glyph.ch === ' ' && currentWidth === 0) {
-      glyph.w = 0;
-      current.push(glyph);
-      return;
-    }
+
+    // [수정] 기존의 줄 맨 앞 공백 너비 0 처리(`if (glyph.ch === ' ' && currentWidth === 0)`) 로직을 제거하여 
+    // 사용자가 입력한 공백이 레이아웃 폭과 렌더링에 정상적으로 반영되도록 수정합니다.
     current.push(glyph);
     currentWidth += charWidth;
   });
@@ -577,7 +571,7 @@ function wrapGlyphs(glyphs: Glyph[], maxWidth: number): Glyph[][] {
     lines.push(current);
   }
 
-  // 브라우저와 동일하게 줄 끝 공백 너비 제거 (텍스트는 보존)
+  // [수정] 줄 끝에 있는 공백만 너비를 제거하여 줄바꿈 정렬 시 우측 여백 충돌을 방지합니다.
   lines.forEach((line) => {
     for (let i = line.length - 1; i >= 0; i--) {
       if (line[i].ch === ' ') line[i].w = 0;

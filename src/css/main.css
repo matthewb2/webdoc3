@@ -393,6 +393,6 @@ html {
         .page p, .page table {
             position: relative;
             z-index: 1;
-            white-space: pre-wrap;
+            white-space: break-spaces;
             word-break: break-word;
         }

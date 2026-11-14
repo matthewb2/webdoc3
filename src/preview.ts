@@ -1,6 +1,6 @@
 // src/preview.ts - 읽기 전용 미리보기 모드 (쪽맞춤/맞쪽보기 및 상태바 페이지 번호 연동)
 import { getCachedPages, updateVisiblePages } from './render';
-import { getZoomLevel } from './listener';
+import { getZoomLevel } from './listener/listener';
 
 let previewMode = false;
 let twoPagesMode = false;

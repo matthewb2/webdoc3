@@ -15,6 +15,8 @@ import { saveCurrentDocumentDocx } from '../docx/docxExport';
 import { saveCurrentDocumentHwp } from '../hwp/hwpExport';
 import { saveCurrentHwpxDocument } from '../hwpx/hwpxExport';
 import { cellPosFromTd, clearCellSelection, getActiveTableDocIdx, getCellSelection } from './table';
+import { stashSelection, peekPendingSelection, selectionRangeInParagraph, selectedParagraphIndices } from './selection';
+export { type SelEnd, type SelSnapshot, snapshotSelection, stashSelection, peekPendingSelection, takePendingSelection, clearPendingSelection, selectionRangeInParagraph, selectedParagraphIndices, setAwaitingRender, initSelectionListener } from './selection';
 import type { CellSel } from './table';
 
 const FONT_FAMILIES = [
@@ -86,140 +88,7 @@ export function initFontCombos(container: HTMLDivElement, worker: Worker, cursor
   syncFontCombos();
 }
 
-export interface SelEnd {
-  docIdx: number;
-  charIndex: number;
-}
 
-export interface SelSnapshot {
-  anchor: SelEnd;
-  focus: SelEnd;
-}
-
-function modelTextLen(t: string): number {
-  let n = 0;
-  for (const ch of t) if (ch !== '​') n++;
-  return n;
-}
-
-function paraIndexOfNode(container: HTMLDivElement, node: Node): number | null {
-  const el = node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element | null);
-  const p = el?.closest?.('p');
-  if (!p || !container.contains(p)) return null;
-  const idx = parseInt((p as HTMLElement).dataset.pIdx || '', 10);
-  return isNaN(idx) ? null : idx;
-}
-
-function modelOffsetInPara(container: HTMLDivElement, docIdx: number, node: Node, offset: number): number | null {
-  const paras = Array.from(container.querySelectorAll(`p[data-p-idx="${docIdx}"]`));
-  let acc = 0;
-  for (const p of paras) {
-    const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
-    let tn = walker.nextNode();
-    while (tn) {
-      const t = tn.textContent || '';
-      if (tn === node) {
-        return acc + modelTextLen(t.slice(0, Math.min(offset, t.length)));
-      }
-      acc += modelTextLen(t);
-      tn = walker.nextNode();
-    }
-  }
-  return null;
-}
-
-// 렌더로 선택이 날아가기 전 선택 영역 양 끝을 모델 좌표로 보관 (표 안이면 null)
-export function snapshotSelection(container: HTMLDivElement): SelSnapshot | null {
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
-  const range = selection.getRangeAt(0);
-  const aIdx = paraIndexOfNode(container, range.startContainer);
-  const fIdx = paraIndexOfNode(container, range.endContainer);
-  if (aIdx === null || fIdx === null) return null;
-  const a = modelOffsetInPara(container, aIdx, range.startContainer, range.startOffset);
-  const f = modelOffsetInPara(container, fIdx, range.endContainer, range.endOffset);
-  if (a === null || f === null) return null;
-  return { anchor: { docIdx: aIdx, charIndex: a }, focus: { docIdx: fIdx, charIndex: f } };
-}
-
-let pendingSel: SelSnapshot | null = null;
-
-export function stashSelection(container: HTMLDivElement): void {
-  pendingSel = snapshotSelection(container);
-}
-
-export function peekPendingSelection(): SelSnapshot | null {
-  return pendingSel;
-}
-
-export function takePendingSelection(): SelSnapshot | null {
-  const s = pendingSel;
-  pendingSel = null;
-  return s;
-}
-
-export function clearPendingSelection(): void {
-  pendingSel = null;
-}
-
-// 현재 선택 영역을 문단별 모델 오프셋으로 변환 (없으면 null → 문단 전체 적용)
-export function selectionRangeInParagraph(
-  container: HTMLDivElement,
-  docIdx: number,
-  snapshot: SelSnapshot | null = null,
-): { from: number; to: number } | null {
-  if (snapshot) {
-    const aFirst =
-      snapshot.anchor.docIdx < snapshot.focus.docIdx ||
-      (snapshot.anchor.docIdx === snapshot.focus.docIdx &&
-        snapshot.anchor.charIndex <= snapshot.focus.charIndex);
-    const start = aFirst ? snapshot.anchor : snapshot.focus;
-    const end = aFirst ? snapshot.focus : snapshot.anchor;
-    if (docIdx < start.docIdx || docIdx > end.docIdx) return null;
-    const len = cachedParagraphInfo(docIdx).length;
-    const from = docIdx === start.docIdx ? start.charIndex : 0;
-    const to = docIdx === end.docIdx ? end.charIndex : len;
-    return to > from ? { from, to } : null;
-  }
-  const selection = window.getSelection();
-  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
-  const range = selection.getRangeAt(0);
-  const paras = Array.from(container.querySelectorAll(`p[data-p-idx="${docIdx}"]`));
-  if (paras.length === 0) return null;
-  const modelLen = (t: string): number => {
-    let n = 0;
-    for (const ch of t) if (ch !== '​') n++;
-    return n;
-  };
-  let from = -1;
-  let to = -1;
-  let acc = 0;
-  let found = false;
-  paras.forEach((p) => {
-    const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
-    let tn = walker.nextNode();
-    while (tn) {
-      const t = tn.textContent || '';
-      if (range.intersectsNode(tn)) {
-        let startInNode = 0;
-        let endInNode = t.length;
-        if (tn === range.startContainer) startInNode = Math.min(range.startOffset, t.length);
-        if (tn === range.endContainer) endInNode = Math.min(range.endOffset, t.length);
-        if (!found) {
-          from = acc + modelLen(t.slice(0, startInNode));
-          found = true;
-        }
-        to = acc + modelLen(t.slice(0, endInNode));
-      }
-      acc += modelLen(t);
-      tn = walker.nextNode();
-    }
-  });
-  if (!found || to <= from) return null;
-  return { from, to };
-}
-
-// 글꼴 스타일을 선택 영역(범위) 단위로 전송 (범위 없으면 문단 전체)
 export interface FontStyleAttrs {
   fontFamily?: string;
   fontSize?: number;
@@ -335,21 +204,6 @@ export function initViewportScrollListener(onScroll: () => void) {
 
 // 레이아웃 비행 중(in-flight) selectionchange는 DOM 재구성 부산물이므로 무시.
 // (가상화 리마운트/스트리밍이 캐럿을 날리면, 낡은 위치로 저장해 커서를 점프시킨다)
-let awaitingRender = false;
-
-export function setAwaitingRender(v: boolean) {
-  awaitingRender = v;
-}
-
-export function initSelectionListener(onSelectionChange: () => void) {
-  document.addEventListener('selectionchange', () => {
-    if (awaitingRender) return;
-    // 현재 포커스된 엘리먼트가 에디터 컨테이너 내부에 있는지 검증
-    if (document.activeElement?.closest('#editor-container')) {
-      onSelectionChange();
-    }
-  });
-}
 
 export function cachedParagraphInfo(docIdx: number): { isParagraph: boolean; exists: boolean; length: number } {
   let length = 0;
@@ -499,34 +353,6 @@ export function columnWidth(columns: number): number {
 }
 
 // 선택 영역에 걸친 단락들의 문서 인덱스 수집 (없으면 커서 단락)
-export function selectedParagraphIndices(
-  container: HTMLDivElement,
-  cursorDocIdx: number,
-  snapshot: SelSnapshot | null = null,
-): number[] {
-  if (snapshot) {
-    const lo = Math.min(snapshot.anchor.docIdx, snapshot.focus.docIdx);
-    const hi = Math.max(snapshot.anchor.docIdx, snapshot.focus.docIdx);
-    const out: number[] = [];
-    for (let i = lo; i <= hi; i++) out.push(i);
-    return out;
-  }
-  const selection = window.getSelection();
-  if (selection && selection.rangeCount > 0) {
-    const range = selection.getRangeAt(0);
-    const found: number[] = [];
-    container.querySelectorAll('p[data-p-idx]').forEach((p) => {
-      try {
-        if (range.intersectsNode(p)) {
-          const idx = parseInt((p as HTMLElement).dataset.pIdx || '', 10);
-          if (!isNaN(idx) && !found.includes(idx)) found.push(idx);
-        }
-      } catch { /* ignore */ }
-    });
-    if (found.length > 0) return found;
-  }
-  return [cursorDocIdx];
-}
 
 export function initColumnCombo(container: HTMLDivElement, worker: Worker, cursor: CursorState) {
   const select = document.getElementById('column-count-select') as HTMLSelectElement | null;

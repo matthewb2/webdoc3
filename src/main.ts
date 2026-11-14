@@ -7,9 +7,9 @@ import { defaultFontFamily, defaultUiFontFamily, initSettings, loadSettings } fr
 import { setPageMargins } from './worker/layoutConstants';
 import { collectProbeItems, computeBreaks } from './probe';
 import { appendStreamPages, findCursorPageIndices, getCachedPages, initRenderer, renderVirtualPages, updateVisiblePages } from './render';
-import { clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFindReplace, initFontCombos, initFileOpen, initLineSpacingCombo, initNewDocument, initPageMargins, initParagraphStyles, initRecentFiles, initRibbonTabs, initSave, initSaveAs, initSelectionListener, initShapeInsert, initStyleButtons, initTableInsert, initTableProperties, initViewOptions, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, setCurrentFileName, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncLineSpacingCombo, syncStyleButtons, syncTablePropertiesRibbon, takePendingSelection } from './listener';
-import { initEditorListeners, isComposingActive, hasPendingInputState } from './listener/keyboard';
-import { initCellSelection, paintCellSelection } from './listener/mouse';
+import { clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFindReplace, initFontCombos, initFileOpen, initLineSpacingCombo, initNewDocument, initPageMargins, initParagraphStyles, initRecentFiles, initRibbonTabs, initSave, initSaveAs, initSelectionListener, initShapeInsert, initStyleButtons, initTableInsert, initTableProperties, initViewOptions, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, setCurrentFileName, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncLineSpacingCombo, syncStyleButtons, syncTablePropertiesRibbon, takePendingSelection } from './listener/listener';
+import { initEditorListeners, isComposingActive, hasPendingInputState } from './listener/keyinput';
+import { initCellSelection, paintCellSelection } from './listener/table';
 import { initPreviewMode } from './preview';
 import { ruler } from './ruler';
 import { parseHwpToDocumentModel } from './hwp/hwpParser';
@@ -552,6 +552,14 @@ function applyReadyPages(pages: PageModel[]) {
   refreshZoomLayout(containerEl);
   if (viewport) viewport.scrollTop = prevTop;
 
+  try {
+    const p0 = (pages?.[0] || []).find((it: any) => it?.type === 'paragraph' && (it?._docIdx ?? 0) === 0) as any;
+    const modelText = p0 ? (p0.children || []).map((r: any) => r?.text || '').join('') : null;
+    const domP = containerEl.querySelector('p[data-p-idx="0"]') as HTMLElement | null;
+    const domText = domP ? (domP.textContent || '').replace(/\u200B/g, '') : null;
+    console.log('[ime-debug][applyReadyPages]', { modelText, domText, composing: isComposingActive(), hasPending: hasPendingInputState(), savedChar: savedCursor.charIndex });
+  } catch {}
+
   // During optimistic buffered typing, model/DOM may lag behind local cursor state.
   // Restoring caret from model now can cause visible jumps; wait until input settles.
   if (!hasPendingInputState()) {
@@ -587,9 +595,13 @@ function flushPendingRender() {
 }
 
 initWorkerListener(worker, (pages) => {
+  try {
+    const p0 = (pages?.[0] || []).find((it: any) => it?.type === 'paragraph' && (it?._docIdx ?? 0) === 0) as any;
+    const modelText = p0 ? (p0.children || []).map((r: any) => r?.text || '').join('') : null;
+    console.log('[ime-debug][RENDER_READY]', { modelText, composing: isComposingActive(), hasPending: hasPendingInputState(), pendingStash: !!pendingPages });
+  } catch {}
   // Do not clear edit-await guard while optimistic/buffered typing is still in progress.
   if (!hasPendingInputState()) setAwaitingRender(false);
-  // 조합 중에는 렌더를 보류 (조합 노드가 날아가 자모가 깨짐)
   if (isComposingActive()) {
     pendingPages = pages;
     return;

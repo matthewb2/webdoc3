@@ -897,12 +897,13 @@ export function createDocEngine(): DocEngine {
   let layoutRaf = 0;
 
   function requestLayout() {
+    // Invalidate any in-flight async layout work; the scheduled rAF will pick up the latest token/state.
     layoutToken.cancelled = true;
-    const token = { cancelled: false };
-    layoutToken = token;
+    layoutToken = { cancelled: false };
     if (layoutRaf) return;
     layoutRaf = window.requestAnimationFrame(() => {
       layoutRaf = 0;
+      const token = layoutToken;
       runLayoutEngineAsync(documentState, (message: any) => emit(message), token);
     });
   }

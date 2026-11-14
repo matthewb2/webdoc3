@@ -64,7 +64,7 @@ function cellParagraphHasText(p: HTMLElement): boolean {
 function resetCellParagraph(p: HTMLElement) {
   p.innerHTML = '';
   const span = document.createElement('span');
-  span.innerText = '\u200B';
+  span.textContent = '\u200B';
   p.appendChild(span);
 }
 
@@ -250,7 +250,7 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
       const children: Array<{ text: string; bold?: boolean }> = item.children || [];
       children.forEach((run) => {
         const span = document.createElement('span');
-        span.innerText = run.text === '' ? '\u200B' : run.text;
+        span.textContent = run.text === '' ? '\u200B' : run.text;
         applyRunStyle(span, run, runLineSpacing);
         p.appendChild(span);
       });
@@ -443,12 +443,12 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
               if (pChildren.length === 0) {
                 // 내용이 비어있어도 텍스트 노드(제로 폭 공백)를 반드시 생성하여 커서가 p가 아닌 텍스트 노드에 앵커되도록 함
                 const span = document.createElement('span');
-                span.innerText = '\u200B';
+                span.textContent = '\u200B';
                 p.appendChild(span);
               } else {
                 pChildren.forEach((run: any) => {
                   const span = document.createElement('span');
-                  span.innerText = run.text === '' ? '\u200B' : run.text;
+                  span.textContent = run.text === '' ? '\u200B' : run.text;
                   applyRunStyle(span, run, defaultLineSpacing());
                   p.appendChild(span);
                 });
@@ -466,12 +466,12 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
             p.style.fontSize = `${paraMarkSize}px`;
             if (cellChildren.length === 0) {
               const span = document.createElement('span');
-              span.innerText = '\u200B';
+              span.textContent = '\u200B';
               p.appendChild(span);
             } else {
               cellChildren.forEach((run: any) => {
                 const span = document.createElement('span');
-                span.innerText = run.text === '' ? '\u200B' : run.text;
+                span.textContent = run.text === '' ? '\u200B' : run.text;
                 applyRunStyle(span, run, defaultLineSpacing());
                 p.appendChild(span);
               });
