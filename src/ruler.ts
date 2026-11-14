@@ -1,6 +1,6 @@
 // 편집용지 눈금자: 줌 배율에 맞춰 눈금/마커를 다시 그리고,
 // 마커 드래그로 현재 커서가 위치한 문단의 들여쓰기를 조절한다.
-import { pageLayout } from './worker/layoutConstants';
+import { pageLayout } from './layout/layoutConstants';
 
 const TRACK_WIDTH = 794; // A4 페이지 너비
 const SCALE_STEP = 40;

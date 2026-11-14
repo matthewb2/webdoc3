@@ -1,9 +1,9 @@
 import type { DocumentModel } from '../types';
-import { clearBreaks, runLayoutEngineAsync, setBreaks, setDefaultLineSpacing, setFontMetrics } from './layout';
-import { setPageMargins } from './layoutConstants';
+import { clearBreaks, runLayoutEngineAsync, setBreaks, setDefaultLineSpacing, setFontMetrics } from '../layout/layout';
+import { setPageMargins } from '../layout/layoutConstants';
 import { editTableAlign, editTableBorder, editTableColWidth, editTableMerge, editTableRowHeight, editInsertTable as editInsertTableOp } from './tableOps';
 import { createDocOps } from './docOps';
-export type { PageModel } from './layout';
+export type { PageModel } from '../layout/layout';
 
 export interface DocEngine {
   postMessage(message: any): void;

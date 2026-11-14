@@ -2,9 +2,9 @@
 import './css/ribbon.css';
 import './css/preview.css';
 import type { CursorState, DocumentModel, FontMetrics, ParagraphNode, TableNode, TableRowNode } from './types';
-import type { PageModel } from './worker/layout';
+import type { PageModel } from './layout/layout';
 import { defaultFontFamily, defaultUiFontFamily, initSettings, loadSettings } from './settings';
-import { setPageMargins } from './worker/layoutConstants';
+import { setPageMargins } from './layout/layoutConstants';
 import { collectProbeItems, computeBreaks } from './probe';
 import { appendStreamPages, findCursorPageIndices, getCachedPages, initRenderer, renderVirtualPages, updateVisiblePages } from './render';
 import { clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFindReplace, initFontCombos, initFileOpen, initLineSpacingCombo, initNewDocument, initPageMargins, initParagraphStyles, initRecentFiles, initRibbonTabs, initSave, initSaveAs, initSelectionListener, initShapeInsert, initStyleButtons, initTableInsert, initTableProperties, initViewOptions, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, setCurrentFileName, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncLineSpacingCombo, syncStyleButtons, syncTablePropertiesRibbon, takePendingSelection } from './listener/listener';

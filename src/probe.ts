@@ -1,6 +1,6 @@
 // src/probe.ts - 브라우저 실측 줄바꿈 (숨김 probe로 런별 분절점을 재서 워커에 전달)
 import type { BreakMap, DocumentModel, TextRun } from './types';
-import { pageLayout } from './worker/layoutConstants';
+import { pageLayout } from './layout/layoutConstants';
 
 // 워커(layout.ts)의 기하 상수와 동일해야 함
 const CELL_PAD = 16;

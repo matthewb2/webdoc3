@@ -1,9 +1,9 @@
 /* src/listener/listener.ts */
-import type { PageModel } from '../worker/layout';
+import type { PageModel } from '../layout/layout';
 import type { CursorState, TableBorderStyle } from '../types';
 import { defaultAlign, defaultFontFamily, defaultFontSize, defaultLineSpacing, loadSettings, saveSettings } from '../settings';
 import { addRecentEntry, getRecentEntries, getRecentHandle, verifyReadPermission } from '../recentFileStore';
-import { setPageMargins } from '../worker/layoutConstants';
+import { setPageMargins } from '../layout/layoutConstants';
 import { parseHwpToDocumentModel } from '../hwp/hwpParser';
 import { parseDocxToDocumentModel } from '../docx/docxParser';
 import { parseOdtToDocumentModel } from '../odt/odtParser';

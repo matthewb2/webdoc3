@@ -18,14 +18,12 @@
     "appId": "com.doc3.app",
     "productName": "DOC3",
     "directories": {
-      "output": "release",
-      "buildResources": "build"
+      "output": "release"
     },
     "files": [
       "dist/**/*",
       "electron/main.cjs",
-      "build/icon.ico",
-      "build/icon-256.png",
+      "src/assets/icon.ico",
       "package.json"
     ],
     "win": {
