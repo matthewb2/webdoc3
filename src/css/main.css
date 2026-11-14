@@ -1,5 +1,6 @@
 @import "./ribbon.css";
 @import "./preview.css";
+@import "./ruler.css";
 
 html {
             height: 100%;
@@ -16,7 +17,7 @@ html {
         }
 
         :root {
-            --ribbon-height: 113px;
+            --ribbon-height: 85px;
             --ruler-height: 14px;
         }
 
@@ -35,127 +36,6 @@ html {
             box-sizing: border-box;
             display: block; 
             text-align: center;
-        }
-
-        .ruler-container {
-            visibility: hidden;
-            position: sticky;            
-            top: 0;
-            left: 0;
-            right: 0;
-            height: var(--ruler-height);
-            background: #f8fafc;
-            border-bottom: 1px solid #d8dde3;
-            z-index: 20;
-            display: block;
-            user-select: none;
-            overflow: visible;
-        }
-        .ruler-center {
-            width: 834px;
-            height: 100%;
-            margin: 0 auto;
-            display: flex;
-            justify-content: center;
-            overflow: visible;
-        }
-        .ruler-track {
-            position: relative;
-            flex: none;
-            height: 100%;
-            background: #ffffff;
-            overflow: visible;
-            box-sizing: border-box;
-            border: none;
-        }
-
-        .ruler-track::before,
-        .ruler-track::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            bottom: 0;
-            width: 1px;
-            background: #d8dde3;
-            pointer-events: none;
-        }
-
-        .ruler-track::before {
-            left: 0px;
-        }
-
-        .ruler-track::after {
-            right: 0px;
-        }
-        
-        .ruler-ticks {
-            position: absolute;
-            top: 0;
-            left: 85px; 
-            height: 100%;
-            pointer-events: none;
-        }
-        .ruler-tick {
-            position: absolute;
-            bottom: 0;
-            width: 1px;
-            background: #b0b4b8;
-        }
-        .ruler-tick-major {
-            height: 7px;
-            background: #5a6672;
-        }
-        .ruler-tick-sub {
-            height: 4px;
-        }
-        .ruler-number {
-            position: absolute;
-            top: 1px;
-            font-size: 8px;
-            color: #5a6672;
-            transform: translateX(-50%);
-            font-family: sans-serif;
-            line-height: 1;
-        }
-        .ruler-marker {
-            position: absolute;
-            top: 0;
-            width: 10px;
-            height: 14px;
-            cursor: ew-resize;
-            z-index: 2;
-            transform: translateX(-50%);
-            visibility: hidden;
-        }
-        .ruler-track.ruler-ready .ruler-marker {
-            visibility: visible;
-        }
-        .ruler-marker-first-line {
-            top: 0;
-            width: 0;
-            height: 0;
-            border-left: 5px solid transparent;
-            border-right: 5px solid transparent;
-            border-top: 7px solid #1b4f9c;
-        }
-        .ruler-marker-left-indent {
-            bottom: 0;
-            top: auto;
-            width: 0;
-            height: 0;
-            border-left: 5px solid transparent;
-            border-right: 5px solid transparent;
-            border-bottom: 7px solid #1b4f9c;
-        }
-        .ruler-guide-line {
-            position: fixed;
-            top: calc(var(--ribbon-height) + var(--ruler-height));
-            bottom: 28px;
-            width: 1px;
-            border-left: 1.5px dashed #4a90d9;
-            pointer-events: none;
-            display: none;
-            z-index: 999;
         }
 
         .editor-viewport.is-dragging::before {

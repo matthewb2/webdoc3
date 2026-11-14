@@ -1,13 +1,14 @@
 ﻿import './css/main.css';
 import './css/ribbon.css';
 import './css/preview.css';
+import './css/ruler.css';
 import type { CursorState, DocumentModel, FontMetrics, ParagraphNode, TableNode, TableRowNode } from './types';
 import type { PageModel } from './layout/layout';
 import { defaultFontFamily, defaultUiFontFamily, initSettings, loadSettings } from './settings';
 import { setPageMargins } from './layout/layoutConstants';
 import { collectProbeItems, computeBreaks } from './probe';
 import { appendStreamPages, findCursorPageIndices, getCachedPages, initRenderer, renderVirtualPages, updateVisiblePages } from './render';
-import { clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFindReplace, initFontCombos, initFileOpen, initLineSpacingCombo, initNewDocument, initPageMargins, initParagraphStyles, initRecentFiles, initRibbonTabs, initSave, initSaveAs, initSelectionListener, initShapeInsert, initStyleButtons, initTableInsert, initTableProperties, initViewOptions, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, setCurrentFileName, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncLineSpacingCombo, syncStyleButtons, syncTablePropertiesRibbon, takePendingSelection } from './listener/listener';
+import { activateRibbonTab, clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFindReplace, initFontCombos, initFileOpen, initLineSpacingCombo, initNewDocument, initPageMargins, initParagraphStyles, initRecentFiles, initRibbonTabs, initSave, initSaveAs, initSelectionListener, initShapeInsert, initStyleButtons, initTableInsert, initTableProperties, initViewOptions, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, setCurrentFileName, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncLineSpacingCombo, syncStyleButtons, syncTablePropertiesRibbon, takePendingSelection } from './listener/listener';
 import { initEditorListeners, isComposingActive, hasPendingInputState } from './listener/keyinput';
 import { initCellSelection, paintCellSelection } from './listener/table';
 import { initPreviewMode } from './preview';
@@ -616,13 +617,19 @@ initSelectionListener(() => {
   clearPendingSelection();
   // During optimistic typing/buffered inserts, DOM selection may lag or be stale; do not overwrite model cursor.
   if (!hasPendingInputState()) saveCursorPosition();
+  const selection = window.getSelection();
+  const node = selection?.anchorNode || null;
+  const el = node ? (node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element | null)) : null;
+  if (el?.closest('#editor-container') && el.closest('p, td')) {
+    activateRibbonTab('format');
+  }
   syncFontCombos();
   syncColumnCombo();
   syncAlignCombo();
   syncColorControls();
   syncStyleButtons();
   syncLineSpacingCombo();
-  syncTablePropertiesRibbon(containerEl);
+  syncTablePropertiesRibbon(containerEl); // 표 컨텍스트면 표 리본으로 전환됨
   updateCursorPage();
 });
 initEditorListeners(containerEl, worker, savedCursor, saveCursorPosition, flushPendingRender, () => { pendingPages = null; });

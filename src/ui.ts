@@ -8,15 +8,9 @@ export function createAppUI(): void {
   const frag = document.createElement('div');
   frag.innerHTML = `
     <div class="toolbar" style="visibility:hidden">
-        <div class="ribbon-tabs">
-            <button type="button" class="ribbon-tab active" data-tab-target="file">파일</button>
-            <button type="button" class="ribbon-tab" data-tab-target="edit">편집</button>
-            <button type="button" class="ribbon-tab" data-tab-target="view">보기</button>
-            <button type="button" class="ribbon-tab" data-tab-target="input">입력</button>
-            <button type="button" class="ribbon-tab" data-tab-target="format">서식</button>
-            <button type="button" class="ribbon-tab" data-tab-target="page">쪽</button>
-            <span class="ribbon-tabs-spacer"></span>
+        <div class="ribbon-statusbar">
             <span id="hwp-status" class="status"></span>
+            <button id="btn-toggle-ribbon" class="ribbon-toggle-btn" type="button" title="리본 메뉴 숨기기/표시" aria-expanded="true"><i class="bi bi-chevron-up"></i></button>
         </div>
         <div class="ribbon-body">
             <div class="ribbon-panel active" data-tab="file">
@@ -28,12 +22,7 @@ export function createAppUI(): void {
                             <button id="btn-save" class="toolbar-btn" type="button" title="현재 문서에 덮어쓰기 저장"><i class="bi bi-save"></i> 저장</button>
                             <button id="btn-save-as" class="toolbar-btn" type="button" title="다른 이름으로 저장"><i class="bi bi-save2"></i> 다른 이름으로 저장</button>
                         </div>
-                        <div class="ribbon-row">
-                            <label class="toolbar-label" for="recent-files-select"><i class="bi bi-clock-history"></i> 최근 파일</label>
-                            <select id="recent-files-select" class="toolbar-select recent-files-select" title="최근 사용한 파일">
-                                <option value="">최근 사용한 파일</option>
-                            </select>
-                        </div>
+
                     </div>
                     <div class="ribbon-group-title">파일</div>
                 </div>
@@ -113,17 +102,6 @@ export function createAppUI(): void {
                     <div class="ribbon-group-title">표</div>
                 </div>
 
-                <div id="ribbon-group-table-props" class="ribbon-group" style="display:none">
-                    <div class="ribbon-group-items">
-                        <div class="ribbon-row">
-                            <button id="btn-table-border-default" class="toolbar-btn" type="button" title="모든 테두리 표시">기본</button>
-                            <button id="btn-table-border-none" class="toolbar-btn" type="button" title="테두리 없음">테두리 없음</button>
-                            <button id="btn-table-border-no-v" class="toolbar-btn" type="button" title="세로줄 없음">세로줄 없음</button>
-                        </div>
-                    </div>
-                    <div class="ribbon-group-title">표 속성</div>
-                </div>
-
                 <div class="ribbon-group">
                     <div class="ribbon-group-items">
                         <div class="ribbon-row">
@@ -152,6 +130,30 @@ export function createAppUI(): void {
                     <div class="ribbon-group-title">개체 속성</div>
                 </div>
             </div>
+            <div class="ribbon-panel" data-tab="table">
+                <div class="ribbon-group">
+                    <div class="ribbon-group-items">
+                        <div class="ribbon-row">
+                            <span class="toolbar-label"><i class="bi bi-table"></i> 표 선택됨</span>
+                        </div>
+                        <div class="ribbon-row">
+                            <span class="toolbar-label">표 테두리를 드래그하여 위치를 이동할 수 있습니다.</span>
+                        </div>
+                    </div>
+                    <div class="ribbon-group-title">표</div>
+                </div>
+                <div id="ribbon-group-table-props" class="ribbon-group">
+                    <div class="ribbon-group-items">
+                        <div class="ribbon-row">
+                            <button id="btn-table-border-default" class="toolbar-btn" type="button" title="모든 테두리 표시">기본</button>
+                            <button id="btn-table-border-none" class="toolbar-btn" type="button" title="테두리 없음">테두리 없음</button>
+                            <button id="btn-table-border-no-v" class="toolbar-btn" type="button" title="세로줄 없음">세로줄 없음</button>
+                        </div>
+                    </div>
+                    <div class="ribbon-group-title">표 속성</div>
+                </div>
+            </div>
+
             <div class="ribbon-panel" data-tab="format">
                 <div class="ribbon-group">
                     <div class="ribbon-group-items">

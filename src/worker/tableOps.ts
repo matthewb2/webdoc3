@@ -173,3 +173,23 @@ export function editInsertTable(
   }
   requestLayout();
 }
+
+export function editMoveTable(
+  documentState: DocumentModel,
+  requestLayout: () => void,
+  tableDocIdx: number,
+  targetDocIdx: number,
+) {
+  if (tableDocIdx < 0 || tableDocIdx >= documentState.length) return;
+  const node = documentState[tableDocIdx];
+  if (!node || (node as any).type !== 'table') return;
+
+  let insertAt = Math.max(0, Math.min(targetDocIdx, documentState.length));
+  if (insertAt === tableDocIdx) return;
+
+  documentState.splice(tableDocIdx, 1);
+  if (insertAt > tableDocIdx) insertAt -= 1;
+  insertAt = Math.max(0, Math.min(insertAt, documentState.length));
+  documentState.splice(insertAt, 0, node);
+  requestLayout();
+}

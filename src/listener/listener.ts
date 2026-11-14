@@ -810,13 +810,154 @@ export function initNewDocument(container: HTMLDivElement, worker: Worker, curso
   });
 }
 
-function activateRibbonTab(tab: string) {
-  document.querySelectorAll<HTMLElement>('.ribbon-tab[data-tab-target]').forEach((el) => {
-    el.classList.toggle('active', el.dataset.tabTarget === tab);
-  });
+export function activateRibbonTab(tab: string) {
   document.querySelectorAll<HTMLElement>('.ribbon-panel[data-tab]').forEach((el) => {
     el.classList.toggle('active', el.dataset.tab === tab);
   });
+}
+
+import aboutLogoUrl from '../assets/logo.png';
+
+function showAboutDialog() {
+  const existing = document.getElementById('about-dialog-overlay');
+  if (existing) {
+    existing.remove();
+  }
+  const overlay = document.createElement('div');
+  overlay.id = 'about-dialog-overlay';
+  overlay.style.position = 'fixed';
+  overlay.style.inset = '0';
+  overlay.style.background = 'rgba(0,0,0,0.35)';
+  overlay.style.display = 'flex';
+  overlay.style.alignItems = 'center';
+  overlay.style.justifyContent = 'center';
+  overlay.style.zIndex = '10000';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,0.2);padding:24px 28px;min-width:320px;max-width:420px;text-align:center;font-family:var(--ui-font,sans-serif);">
+      <img src="${aboutLogoUrl}" alt="DOC3 로고" style="width:72px;height:72px;object-fit:contain;margin-bottom:12px;" />
+      <div style="font-size:20px;font-weight:700;color:#1b4f9c;margin-bottom:6px;">DOC3</div>
+      <div style="font-size:13px;color:#333;margin-bottom:4px;">버전 0.1.3</div>
+      <div style="font-size:12px;color:#555;line-height:1.5;margin-bottom:6px;">HWP, DOCX, ODT를 지원하는 웹 기반 워드 프로세서</div>
+      <div style="font-size:12px;color:#777;margin-bottom:16px;">© MK-SOLUTION</div>
+      <button id="about-dialog-close" type="button" style="height:32px;padding:0 16px;border:1px solid #ccd3da;border-radius:6px;background:#f7f9fa;cursor:pointer;">닫기</button>
+    </div>
+  `;
+  const close = () => overlay.remove();
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) close();
+  });
+  overlay.querySelector('#about-dialog-close')?.addEventListener('click', close);
+  document.body.appendChild(overlay);
+}
+
+function handleMenuCommand(command: string) {
+  if (command.startsWith('tab:')) {
+    activateRibbonTab(command.slice(4));
+    return;
+  }
+  if (command.startsWith('file:openRecent:')) {
+    const name = decodeURIComponent(command.slice('file:openRecent:'.length));
+    activateRibbonTab('file');
+    void openRecentFileByName(name);
+    return;
+  }
+
+  const category = command.split(':')[0];
+  if (['file', 'edit', 'view', 'input', 'format', 'page'].includes(category)) {
+    activateRibbonTab(category);
+  }
+
+  switch (command) {
+    case 'file:new':
+      (document.getElementById('btn-new-file') as HTMLButtonElement | null)?.click();
+      return;
+    case 'file:open':
+      (document.getElementById('btn-open-file') as HTMLButtonElement | null)?.click();
+      return;
+    case 'file:save':
+      (document.getElementById('btn-save') as HTMLButtonElement | null)?.click();
+      return;
+    case 'file:saveAs':
+      (document.getElementById('btn-save-as') as HTMLButtonElement | null)?.click();
+      return;
+    case 'edit:find': {
+      const input = document.getElementById('find-text-input') as HTMLInputElement | null;
+      input?.focus();
+      input?.select();
+      return;
+    }
+    case 'view:preview':
+      (document.getElementById('btn-preview') as HTMLButtonElement | null)?.click();
+      return;
+    case 'view:toggleParaMarks': {
+      const cb = document.getElementById('show-para-marks-checkbox') as HTMLInputElement | null;
+      if (cb) {
+        cb.checked = !cb.checked;
+        cb.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      return;
+    }
+    case 'view:showRibbon':
+      setRibbonCollapsed(false);
+      return;
+    case 'view:hideRibbon':
+      setRibbonCollapsed(true);
+      return;
+    case 'input:insertTable':
+      (document.getElementById('btn-insert-table') as HTMLButtonElement | null)?.click();
+      return;
+    case 'input:insertRect':
+      (document.getElementById('btn-insert-shape-rect') as HTMLButtonElement | null)?.click();
+      return;
+    case 'input:insertEllipse':
+      (document.getElementById('btn-insert-shape-ellipse') as HTMLButtonElement | null)?.click();
+      return;
+    case 'input:insertLine':
+      (document.getElementById('btn-insert-shape-line') as HTMLButtonElement | null)?.click();
+      return;
+    case 'input:insertArrow':
+      (document.getElementById('btn-insert-shape-arrow') as HTMLButtonElement | null)?.click();
+      return;
+    case 'format:styleBody':
+      (document.getElementById('btn-style-body') as HTMLButtonElement | null)?.click();
+      return;
+    case 'format:styleTitle':
+      (document.getElementById('btn-style-title') as HTMLButtonElement | null)?.click();
+      return;
+    case 'format:bold':
+      (document.getElementById('btn-style-bold') as HTMLButtonElement | null)?.click();
+      return;
+    case 'format:italic':
+      (document.getElementById('btn-style-italic') as HTMLButtonElement | null)?.click();
+      return;
+    case 'format:underline':
+      (document.getElementById('btn-style-underline') as HTMLButtonElement | null)?.click();
+      return;
+    case 'page:applyMargins':
+      (document.getElementById('btn-apply-margins') as HTMLButtonElement | null)?.click();
+      return;
+    case 'help:about':
+      showAboutDialog();
+      return;
+  }
+}
+
+function setRibbonCollapsed(collapsed: boolean) {
+  const toolbar = document.querySelector('.toolbar') as HTMLElement | null;
+  const btn = document.getElementById('btn-toggle-ribbon') as HTMLButtonElement | null;
+  if (!toolbar) return;
+  toolbar.classList.toggle('ribbon-collapsed', collapsed);
+  document.documentElement.style.setProperty('--ribbon-height', collapsed ? '20px' : '85px');
+  if (btn) {
+    btn.innerHTML = collapsed ? '<i class="bi bi-chevron-down"></i>' : '<i class="bi bi-chevron-up"></i>';
+    btn.title = collapsed ? '리본 메뉴 표시' : '리본 메뉴 숨기기';
+    btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  }
+  const api = (window as any).electronAPI;
+  if (api && typeof api.setRibbonCollapsed === 'function') {
+    api.setRibbonCollapsed(collapsed);
+  }
+  window.dispatchEvent(new CustomEvent('ribbon-visibility-change', { detail: { collapsed } }));
 }
 
 export function initRibbonTabs() {
@@ -826,14 +967,27 @@ export function initRibbonTabs() {
       if (tab) activateRibbonTab(tab);
     });
   });
+
+  const toggleBtn = document.getElementById('btn-toggle-ribbon') as HTMLButtonElement | null;
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      const toolbar = document.querySelector('.toolbar') as HTMLElement | null;
+      const collapsed = !(toolbar?.classList.contains('ribbon-collapsed'));
+      setRibbonCollapsed(collapsed);
+    });
+  }
+
+  const api = (window as any).electronAPI;
+  if (api && typeof api.onMenuCommand === 'function') {
+    api.onMenuCommand((command: string) => handleMenuCommand(command));
+  }
 }
 
 export function initTableProperties(container: HTMLDivElement, worker: Worker) {
-  const group = document.getElementById('ribbon-group-table-props') as HTMLDivElement | null;
   const btnDefault = document.getElementById('btn-table-border-default') as HTMLButtonElement | null;
   const btnNone = document.getElementById('btn-table-border-none') as HTMLButtonElement | null;
   const btnNoV = document.getElementById('btn-table-border-no-v') as HTMLButtonElement | null;
-  if (!group || !btnDefault || !btnNone || !btnNoV) return;
+  if (!btnDefault || !btnNone || !btnNoV) return;
 
   const apply = (borderStyle: TableBorderStyle) => {
     const tableDocIdx = getActiveTableDocIdx(container);
@@ -853,16 +1007,17 @@ export function initTableProperties(container: HTMLDivElement, worker: Worker) {
 }
 
 export function syncTablePropertiesRibbon(container?: HTMLDivElement) {
-  const group = document.getElementById('ribbon-group-table-props') as HTMLDivElement | null;
-  if (!group) return;
   const tableDocIdx = getActiveTableDocIdx(container);
-  group.style.display = tableDocIdx != null ? '' : 'none';
 
   const btnDefault = document.getElementById('btn-table-border-default') as HTMLButtonElement | null;
   const btnNone = document.getElementById('btn-table-border-none') as HTMLButtonElement | null;
   const btnNoV = document.getElementById('btn-table-border-no-v') as HTMLButtonElement | null;
   [btnDefault, btnNone, btnNoV].forEach((b) => b?.classList.remove('active'));
+
   if (tableDocIdx == null) return;
+
+  // 표 컨텍스트가 활성화되면 표 리본 탭으로 전환
+  activateRibbonTab('table');
 
   let borderStyle: TableBorderStyle = 'default';
   outer: for (const page of getCachedPages() as any[]) {
@@ -897,41 +1052,16 @@ async function openRecentFileByName(name: string) {
   } catch {
     /* 권한/핸들 실패 시 폴백 */
   }
-  // 핸들이 없거나 권한이 없으면 파일 대화상자 폴백
   if (status) status.textContent = `저장된 접근 권한이 없어 파일을 선택해 주세요: ${name}`;
   (document.getElementById('file-input') as HTMLInputElement | null)?.click();
 }
 
-function ensureRecentFilesNav(select: HTMLSelectElement) {
-  if (select.dataset.navInit === '1') return;
-  select.dataset.navInit = '1';
-  select.addEventListener('change', () => {
-    const name = select.value;
-    if (!name) return;
-    void openRecentFileByName(name).finally(() => {
-      select.value = '';
-    });
-  });
-}
-
 export function refreshRecentFiles() {
-  const select = document.getElementById('recent-files-select') as HTMLSelectElement | null;
-  if (!select) return;
-  ensureRecentFilesNav(select);
   const files = getRecentEntries();
-  select.innerHTML = '';
-  const placeholder = document.createElement('option');
-  placeholder.value = '';
-  placeholder.textContent = files.length === 0 ? '최근 사용한 파일 없음' : '최근 사용한 파일';
-  select.appendChild(placeholder);
-  files.forEach((name) => {
-    const opt = document.createElement('option');
-    opt.value = name;
-    opt.textContent = name;
-    opt.title = name;
-    select.appendChild(opt);
-  });
-  select.disabled = files.length === 0;
+  const api = (window as any).electronAPI;
+  if (api && typeof api.updateRecentFiles === 'function') {
+    api.updateRecentFiles(files);
+  }
 }
 
 export function initRecentFiles(worker?: Worker, containerEl?: HTMLDivElement) {

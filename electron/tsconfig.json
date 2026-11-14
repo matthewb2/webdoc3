@@ -11,5 +11,5 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "files": ["main.cts"]
+  "files": ["main.cts", "preload.cts"]
 }

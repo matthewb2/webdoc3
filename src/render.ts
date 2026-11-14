@@ -373,15 +373,18 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
       const contentWidth = pageLayout.contentWidth;
       const colCount = (item.colWidths && item.colWidths.length) || (rows[0]?.cells?.length || 1);
       let effectiveColWidths: number[] | null = null;
+      let tableWidth = contentWidth;
       if (item.colWidths && item.colWidths.length > 0) {
         const totalW = item.colWidths.reduce((a: number, b: number) => a + (b || 0), 0);
         if (totalW > 0) {
-          // 편집 용지(본문 영역) 너비에 맞춰 열 너비를 비율 유지하며 확장
-          const scale = contentWidth / totalW;
-          effectiveColWidths = item.colWidths.map((v: number) => (v || 0) * scale);
+          // 편집 용지 너비를 넘지 않는 범위에서 열 너비 합계를 사용 (본문 너비보다 작게 조절 가능)
+          const scale = totalW > contentWidth ? contentWidth / totalW : 1;
+          const widths = item.colWidths.map((v: number) => (v || 0) * scale);
+          effectiveColWidths = widths;
+          tableWidth = Math.min(contentWidth, widths.reduce((a: number, b: number) => a + b, 0));
         }
       }
-      table.style.width = `${contentWidth}px`;
+      table.style.width = `${tableWidth}px`;
       if (item.backgroundColor) table.style.backgroundColor = item.backgroundColor;
       if (item.background) table.style.backgroundColor = item.background;
 
@@ -409,12 +412,14 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
           const colSpan = Math.max(1, cell.colSpan ?? 1);
           const rowSpan = Math.max(1, cell.rowSpan ?? 1);
 
-          const baseCol = contentWidth / cellCount;
+          const baseCol = tableWidth / cellCount;
           let w = baseCol * colSpan;
           if (effectiveColWidths) {
             let sum = 0;
             for (let i = 0; i < colSpan; i++) sum += effectiveColWidths[ci + i] ?? baseCol;
             w = sum;
+          } else if (item.colWidths && item.colWidths.length > 0) {
+            // fallback
           }
           td.style.width = `${w}px`;
           

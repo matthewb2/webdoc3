@@ -1,7 +1,7 @@
 import type { DocumentModel } from '../types';
 import { clearBreaks, runLayoutEngineAsync, setBreaks, setDefaultLineSpacing, setFontMetrics } from '../layout/layout';
 import { setPageMargins } from '../layout/layoutConstants';
-import { editTableAlign, editTableBorder, editTableColWidth, editTableMerge, editTableRowHeight, editInsertTable as editInsertTableOp } from './tableOps';
+import { editTableAlign, editTableBorder, editTableColWidth, editTableMerge, editTableRowHeight, editInsertTable as editInsertTableOp, editMoveTable } from './tableOps';
 import { createDocOps } from './docOps';
 export type { PageModel } from '../layout/layout';
 
@@ -98,6 +98,8 @@ export function createDocEngine(): DocEngine {
       console.log('[shape-space-debug][worker] EDIT_INSERT_SHAPE', message.payload, 'docLenBefore=', documentState.length, 'targetType=', documentState[message.payload?.paragraphIndex]?.type);
       ops.editInsertShape(message.payload.paragraphIndex, message.payload.charIndex, message.payload.shape);
       console.log('[shape-space-debug][worker] after EDIT_INSERT_SHAPE docLen=', documentState.length);
+    } else if (message.type === 'EDIT_MOVE_TABLE') {
+      editMoveTable(documentState, requestLayout, message.payload.tableDocIdx, message.payload.targetDocIdx);
     } else if (message.type === 'EDIT_SHAPE_PLACEMENT') {
       const node = documentState[message.payload.docIdx];
       if (node && (node as any).type === 'shape') {
