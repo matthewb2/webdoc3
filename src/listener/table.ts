@@ -1,5 +1,5 @@
 // src/listener/table.ts - table cell mouse selection
-import { getCachedPages } from '../render';
+import { getCachedPages } from '../renderHtml';
 import { pageLayout } from '../layout/layoutConstants';
 export interface CellSel {
   tableDocIdx: number;

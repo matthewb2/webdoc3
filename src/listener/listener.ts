@@ -9,7 +9,7 @@ import { parseDocxToDocumentModel } from '../docx/docxParser';
 import { parseOdtToDocumentModel } from '../odt/odtParser';
 import { parseHwpxToDocumentModel } from '../hwpx/hwpxParser';
 import { collectProbeItems, computeBreaks } from '../probe';
-import { getCachedPages, setRenderZoom, updateVisiblePages } from '../render';
+import { getCachedPages, setRenderZoom, updateVisiblePages } from '../renderHtml';
 import { saveCurrentDocument } from '../odt/odtExport';
 import { saveCurrentDocumentDocx } from '../docx/docxExport';
 import { saveCurrentDocumentHwp } from '../hwp/hwpExport';

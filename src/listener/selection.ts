@@ -1,5 +1,5 @@
 // src/listener/selection.ts - text selection snapshots, pending selection, and selection listeners
-import { getCachedPages } from '../render';
+import { getCachedPages } from '../renderHtml';
 
 export interface SelEnd {
   docIdx: number;

@@ -1,8 +1,8 @@
-// src/listener/keyinput.ts - sync model/cursor updates, async layout/render (engine rAF), Korean IME
+// src/listener/keyinput.ts - sync model/cursor updates, async layout/renderHtml (engine rAF), Korean IME
 // Implements: Composition Lock, DOM-first commit on compositionend, 1-frame post-composition grace period.
 import type { CursorState, TextRun } from '../types';
 import { breakKeyForRuns, computeBreaks } from '../probe';
-import { getCachedPages } from '../render';
+import { getCachedPages } from '../renderHtml';
 import { cachedParagraphInfo } from './listener';
 import { clearPendingSelection, setAwaitingRender, snapshotSelection, selectedParagraphIndices, selectionRangeInParagraph } from './selection';
 import { clearCellSelection, selectCellFromInputMode, extendCellSelection } from './table';

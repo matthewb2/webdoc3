@@ -1,5 +1,5 @@
 // A4 규격(96 DPI) 레이아웃 공용 상수/상태.
-// 레이아웃(layout.ts), 줄바꿈 측정(probe.ts), DOM 렌더러(render.ts), ruler는
+// 레이아웃(layout.ts), 줄바꿈 측정(probe.ts), DOM 렌더러(renderHtml.ts), ruler는
 // 반드시 같은 값/상태를 사용해야 측정과 배치 불일치가 생기지 않는다.
 
 export const PAGE_WIDTH = 794;
