@@ -122,7 +122,7 @@ export type WorkerMessage =
   | { type: 'EDIT_TABLE_ALIGN'; payload: { tableDocIdx: number; rows: number[]; cols: number[]; align: TextAlign } }
   | { type: 'EDIT_TABLE_MERGE'; payload: { tableDocIdx: number; r0: number; r1: number; c0: number; c1: number } }
   | { type: 'EDIT_TABLE_ROW_HEIGHT'; payload: { tableDocIdx: number; rowIndex: number; height: number } }
-  | { type: 'EDIT_TABLE_COL_WIDTH'; payload: { tableDocIdx: number; colIndex: number; width: number } }
+  | { type: 'EDIT_TABLE_COL_WIDTH'; payload: { tableDocIdx: number; colIndex: number; width: number; colWidths?: number[] } }
   | { type: 'EDIT_INSERT_TABLE'; payload: { paragraphIndex: number; charIndex: number; rows: number; cols: number } }
   | { type: 'EDIT_INSERT_SHAPE'; payload: { paragraphIndex: number; charIndex: number; shape: 'rect' | 'ellipse' | 'line' | 'arrow' } }
   | { type: 'EDIT_SHAPE_PLACEMENT'; payload: { docIdx: number; placement: 'default' | 'front' | 'back' } }

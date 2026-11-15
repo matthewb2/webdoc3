@@ -1,5 +1,6 @@
 // src/listener/table.ts - table cell mouse selection
 import { getCachedPages } from '../render';
+import { pageLayout } from '../layout/layoutConstants';
 export interface CellSel {
   tableDocIdx: number;
   r0: number;
@@ -292,56 +293,105 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
     container.style.cursor = '';
   };
 
-  const onColResizeMove = (e: MouseEvent) => {
-    if (!colResize) return;
-    const diff = e.clientX - colResize.startX;
-    const w = Math.max(24, colResize.startW + diff);
-    const widths = colResize.startColWidths.slice();
-    if (colResize.colIndex >= 0 && colResize.colIndex < widths.length) {
-      widths[colResize.colIndex] = w;
-    }
-    const tableW = widths.reduce((a, b) => a + b, 0);
-
-    colResize.table.style.tableLayout = 'fixed';
-    // 병합 셀 포함: 각 td 너비 = 차지하는 grid 컬럼 너비 합
-    colResize.table.querySelectorAll('td[data-c]').forEach((td) => {
+  const applyColResizeWidths = (table: HTMLTableElement, widths: number[]) => {
+    table.style.tableLayout = 'fixed';
+    table.querySelectorAll('td[data-c]').forEach((td) => {
       const c = parseInt((td as HTMLElement).dataset.c || '0', 10);
       const span = Math.max(1, (td as HTMLTableCellElement).colSpan || 1);
       let tw = 0;
       for (let i = 0; i < span; i++) tw += widths[c + i] ?? 24;
       (td as HTMLElement).style.width = `${tw}px`;
     });
-    colResize.table.style.width = `${tableW}px`;
+    table.style.width = `${widths.reduce((a, b) => a + b, 0)}px`;
+  };
 
+  const calcResizedColWidths = (e: MouseEvent): { widths: number[]; leftW: number } | null => {
+    if (!colResize) return null;
+    const { colIndex, startX, startW, startColWidths } = colResize;
+    const widths = startColWidths.slice();
+    const diff = e.clientX - startX;
+    const rightIdx = colIndex + 1;
+    const isInternal = rightIdx < widths.length;
+
+    if (isInternal) {
+      // Internal border: keep total table width, adjust adjacent left/right columns only.
+      const rightW = startColWidths[rightIdx] ?? 24;
+      const pairTotal = startW + rightW;
+      const leftW = Math.max(24, Math.min(pairTotal - 24, startW + diff));
+      widths[colIndex] = leftW;
+      widths[rightIdx] = pairTotal - leftW;
+      return { widths, leftW };
+    }
+
+    // Outer edge: resize column and table width.
+    const leftW = Math.max(24, startW + diff);
+    if (colIndex >= 0 && colIndex < widths.length) widths[colIndex] = leftW;
+    return { widths, leftW };
+  };
+
+  const onColResizeMove = (e: MouseEvent) => {
+    if (!colResize) return;
+    const result = calcResizedColWidths(e);
+    if (!result) return;
+    const { widths, leftW } = result;
+    applyColResizeWidths(colResize.table, widths);
     colResize.table.style.outline = '1px solid rgba(74,144,217,0.8)';
     colResize.table.style.outlineOffset = '0px';
-    console.log('[table-col-resize] move', { colIndex: colResize.colIndex, width: w, tableW });
-
+    console.log('[table-col-resize] move', { colIndex: colResize.colIndex, rightIdx: colResize.colIndex + 1, width: leftW, tableW: widths.reduce((a, b) => a + b, 0), internal: colResize.colIndex + 1 < widths.length, widths: widths.map(v => Math.round(v * 100) / 100) });
     e.preventDefault();
   };
 
-
   const onColResizeUp = (e: MouseEvent) => {
     if (!colResize) return;
-    const diff = e.clientX - colResize.startX;
-    const w = Math.max(24, colResize.startW + diff);
-    const widths = colResize.startColWidths.slice();
-    if (colResize.colIndex >= 0 && colResize.colIndex < widths.length) {
-      widths[colResize.colIndex] = w;
-    }
+    const result = calcResizedColWidths(e);
+    if (!result) return;
+    const { widths, leftW } = result;
     const { tableDocIdx, colIndex, table, originalLayout } = colResize;
-    console.log('[table-col-resize] up', { tableDocIdx, colIndex, width: w, colWidths: widths, tableWidth: widths.reduce((a, b) => a + b, 0) });
     table.style.outline = '';
     table.style.outlineOffset = '';
     table.style.tableLayout = originalLayout;
 
-    worker.postMessage({ type: 'EDIT_TABLE_COL_WIDTH', payload: { tableDocIdx, colIndex, width: w, colWidths: widths } });
+    const scale = (table as any).__resizeDisplayScale || 1;
+    const origModel: number[] | null = (table as any).__resizeModelColWidths || null;
+    const isInternal = colIndex + 1 < widths.length;
+    let modelColWidths: number[];
+
+    if (origModel && scale > 0) {
+      // Preserve untouched grid columns exactly as in model; only adjust dragged boundary pair.
+      modelColWidths = origModel.slice();
+      while (modelColWidths.length < widths.length) modelColWidths.push(24);
+      const rightIdx = colIndex + 1;
+      if (isInternal) {
+        const leftM = Math.max(24, widths[colIndex] / scale);
+        const rightM = Math.max(24, widths[rightIdx] / scale);
+        // keep pair sum equal to original model pair sum to avoid drift on untouched/total
+        const origPair = (origModel[colIndex] ?? leftM) + (origModel[rightIdx] ?? rightM);
+        let lm = leftM;
+        let rm = origPair - lm;
+        if (rm < 24) { rm = 24; lm = Math.max(24, origPair - 24); }
+        if (lm < 24) { lm = 24; rm = Math.max(24, origPair - 24); }
+        modelColWidths[colIndex] = lm;
+        modelColWidths[rightIdx] = rm;
+      } else if (colIndex >= 0 && colIndex < modelColWidths.length) {
+        modelColWidths[colIndex] = Math.max(24, widths[colIndex] / scale);
+      }
+    } else {
+      modelColWidths = scale > 0 ? widths.map((w) => Math.max(24, w / scale)) : widths.slice();
+    }
+
+    const modelLeftW = modelColWidths[colIndex] ?? (scale > 0 ? Math.max(24, leftW / scale) : leftW);
+    console.log('[table-col-resize] up', { tableDocIdx, colIndex, rightIdx: colIndex + 1, width: modelLeftW, colWidths: modelColWidths, displayWidths: widths.map(v => Math.round(v * 100) / 100), tableWidth: widths.reduce((a, b) => a + b, 0), internal: isInternal, displayScale: scale });
+
+    worker.postMessage({ type: 'EDIT_TABLE_COL_WIDTH', payload: { tableDocIdx, colIndex, width: modelLeftW, colWidths: modelColWidths } });
+    delete (table as any).__resizeDisplayScale;
+    delete (table as any).__resizeModelColWidths;
 
     colResize = null;
     document.removeEventListener('mousemove', onColResizeMove);
     document.removeEventListener('mouseup', onColResizeUp);
     container.style.cursor = '';
   };
+
   
 
   const findDropTargetDocIdx = (_clientX: number, clientY: number, draggedDocIdx: number): number => {
@@ -398,134 +448,195 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
     }
   };
 
-  container.addEventListener('mousedown', (e: MouseEvent) => {
-    if (e.button !== 0) return;
-    const cHit = colResizeHit(e);
-    if (cHit) {
-      if (cellEdit) exitCellEditMode(container);
-      clearCellSelection(container);
+container.addEventListener('mousedown', (e: MouseEvent) => {
+  if (e.button !== 0) return;
 
-      const originalLayout = cHit.table.style.tableLayout;
+  // 1. 칼럼 리사이즈 처리
+  const cHit = colResizeHit(e);
+  if (cHit) {
+    if (cellEdit) exitCellEditMode(container);
+    clearCellSelection(container);
 
-      // 모델의 실제 컬럼 너비를 우선 사용 (colspan/병합 셀로 DOM td 개수가 컬럼 수와 다를 수 있음)
-      let startColWidths: number[] | null = null;
-      const pages = getCachedPages() as any[];
-      outerModel: for (const page of pages) {
-        const items = Array.isArray(page) ? page : (page as any).items;
-        if (!items) continue;
-        for (const item of items) {
-          if (item && item.type === 'table' && (item as any)._docIdx === cHit.tableDocIdx) {
-            if (Array.isArray(item.colWidths) && item.colWidths.length > 0) {
-              startColWidths = item.colWidths.map((v: number) => (typeof v === 'number' && isFinite(v) ? v : 0));
-            }
-            break outerModel;
+    const originalLayout = cHit.table.style.tableLayout;
+
+    // Extract grid column widths in DISPLAY space (matches rendered DOM), accounting for merged cells and render scaling.
+    let modelColWidths: number[] | null = null;
+    let startColWidths: number[] | null = null;
+    let gridColCount = 0;
+    let displayScale = 1;
+    const pages = getCachedPages() as any[];
+
+    outerModel: for (const page of pages) {
+      const items = Array.isArray(page) ? page : page?.items;
+      if (!items) continue;
+      for (const item of items) {
+        if (item?.type === 'table' && item._docIdx === cHit.tableDocIdx) {
+          const rows: any[] = item.rows || [];
+          gridColCount = Math.max(
+            Array.isArray(item.colWidths) ? item.colWidths.length : 0,
+            rows[0]?.cells?.length || 0,
+            ...rows.map((r: any) => (r?.cells?.length || 0)),
+          );
+          if (Array.isArray(item.colWidths) && item.colWidths.length > 0) {
+            modelColWidths = item.colWidths.map((v: any) => (typeof v === 'number' && isFinite(v) ? Math.max(0, v) : 0));
           }
+          break outerModel;
         }
       }
-      if (!startColWidths || startColWidths.length === 0) {
-        // fallback: DOM 기준
-        const firstRow = cHit.table.querySelector('tr');
-        const colCount = firstRow ? firstRow.querySelectorAll('td').length : 0;
-        startColWidths = [];
-        for (let ci = 0; ci < colCount; ci++) {
-          const cell = cHit.table.querySelector(`td[data-c="${ci}"]`) as HTMLTableCellElement | null;
-          startColWidths.push(cell ? cell.getBoundingClientRect().width : cHit.td.getBoundingClientRect().width);
+    }
+
+    if (!gridColCount) {
+      cHit.table.querySelectorAll('td[data-c]').forEach((td) => {
+        const c = parseInt((td as HTMLElement).dataset.c || '0', 10);
+        const span = Math.max(1, (td as HTMLTableCellElement).colSpan || 1);
+        if (!isNaN(c)) gridColCount = Math.max(gridColCount, c + span);
+      });
+    }
+
+    if (modelColWidths && modelColWidths.length > 0) {
+      if (gridColCount > modelColWidths.length) {
+        const fb = 24;
+        while (modelColWidths.length < gridColCount) modelColWidths.push(fb);
+      }
+      const totalModel = modelColWidths.reduce((a, b) => a + b, 0);
+      const contentWidth = pageLayout.contentWidth || 624;
+      displayScale = totalModel > contentWidth ? contentWidth / totalModel : 1;
+      startColWidths = modelColWidths.map((w) => Math.max(24, w * displayScale));
+    }
+
+    if (!startColWidths?.length) {
+      // DOM fallback in display pixels
+      const measured: number[] = Array.from({ length: Math.max(gridColCount, 1) }, () => 0);
+      const counts: number[] = Array.from({ length: Math.max(gridColCount, 1) }, () => 0);
+      cHit.table.querySelectorAll('td[data-c]').forEach((td) => {
+        const c = parseInt((td as HTMLElement).dataset.c || '0', 10);
+        const span = Math.max(1, (td as HTMLTableCellElement).colSpan || 1);
+        if (isNaN(c)) return;
+        const per = (td as HTMLElement).getBoundingClientRect().width / span;
+        for (let i = 0; i < span; i++) {
+          const gi = c + i;
+          if (gi >= measured.length) continue;
+          measured[gi] += per;
+          counts[gi] += 1;
         }
-      }
-      // 유효하지 않은 값 보정
-      startColWidths = startColWidths.map((w) => (w > 0 ? w : 24));
+      });
+      if (!gridColCount) gridColCount = measured.length;
+      startColWidths = Array.from({ length: gridColCount }, (_, i) => {
+        const avg = counts[i] > 0 ? measured[i] / counts[i] : 0;
+        return avg > 0 ? avg : 24;
+      });
+      displayScale = 1; // fallback values already in display pixels
+    }
 
-      const boundaryCol = cHit.colIndex;
-      const startW = (boundaryCol >= 0 && boundaryCol < startColWidths.length)
-        ? startColWidths[boundaryCol]
-        : cHit.td.getBoundingClientRect().width / Math.max(1, cHit.td.colSpan || 1);
+    if (gridColCount > startColWidths.length) {
+      while (startColWidths.length < gridColCount) startColWidths.push(24);
+    }
+    startColWidths = startColWidths.map((w) => (w > 0 ? w : 24));
 
-      cHit.table.style.tableLayout = 'fixed';
-      // 병합 셀 포함: 각 td의 너비 = 차지하는 grid 컬럼 너비 합
-      const applyTableWidths = (widths: number[]) => {
-        cHit.table.querySelectorAll('td[data-c]').forEach((td) => {
-          const c = parseInt((td as HTMLElement).dataset.c || '0', 10);
-          const span = Math.max(1, (td as HTMLTableCellElement).colSpan || 1);
-          let w = 0;
-          for (let i = 0; i < span; i++) w += widths[c + i] ?? 24;
-          (td as HTMLElement).style.width = `${w}px`;
-        });
-        cHit.table.style.width = `${widths.reduce((a, b) => a + b, 0)}px`;
-      };
-      applyTableWidths(startColWidths);
+    // Do not proportionally rescale all columns to match current rendered table width here.
+    // That would distort untouched columns (e.g. merged cells/columns unrelated to the dragged boundary).
+    // Keep model-derived display widths so only the dragged boundary pair changes.
 
-      colResize = {
-        table: cHit.table,
-        tableDocIdx: cHit.tableDocIdx,
-        colIndex: boundaryCol,
-        startX: e.clientX,
-        startW,
-        startColWidths,
-        originalLayout,
-      };
-      console.log('[table-col-resize] start', { tableDocIdx: cHit.tableDocIdx, colIndex: boundaryCol, startW, startColWidths, tableWidth: cHit.table.getBoundingClientRect().width });
-      container.style.cursor = 'col-resize';
-      document.addEventListener('mousemove', onColResizeMove);
-      document.addEventListener('mouseup', onColResizeUp);
-      e.preventDefault();
-      e.stopPropagation();
+    const boundaryCol = cHit.colIndex;
+    const startW = (boundaryCol >= 0 && boundaryCol < startColWidths.length)
+      ? startColWidths[boundaryCol]
+      : cHit.td.getBoundingClientRect().width / Math.max(1, cHit.td.colSpan || 1);
+
+    cHit.table.style.tableLayout = 'fixed';
+
+    // Apply table/cell widths from displayed grid column widths (merged cells use sum of spanned columns)
+    const applyTableWidths = (widths: number[]) => {
+      cHit.table.querySelectorAll('td[data-c]').forEach((td) => {
+        const c = parseInt((td as HTMLElement).dataset.c || '0', 10);
+        const span = Math.max(1, (td as HTMLTableCellElement).colSpan || 1);
+        let w = 0;
+        for (let i = 0; i < span; i++) w += widths[c + i] ?? 24;
+        (td as HTMLElement).style.width = `${w}px`;
+      });
+      cHit.table.style.width = `${widths.reduce((sum, w) => sum + w, 0)}px`;
+    };
+
+    applyTableWidths(startColWidths);
+
+    // Store info for converting drag result back to model widths while preserving untouched columns
+    (cHit.table as any).__resizeDisplayScale = displayScale;
+    (cHit.table as any).__resizeModelColWidths = modelColWidths ? modelColWidths.slice() : null;
+
+    colResize = {
+      table: cHit.table,
+      tableDocIdx: cHit.tableDocIdx,
+      colIndex: boundaryCol,
+      startX: e.clientX,
+      startW,
+      startColWidths,
+      originalLayout,
+    };
+
+    container.style.cursor = 'col-resize';
+    document.addEventListener('mousemove', onColResizeMove);
+    document.addEventListener('mouseup', onColResizeUp);
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+
+  // 2. 행 리사이즈 처리
+  const hit = rowResizeHit(e);
+  if (hit) {
+    if (cellEdit) exitCellEditMode(container);
+    clearCellSelection(container);
+    rowResize = { ...hit, startY: e.clientY, startH: hit.tr.getBoundingClientRect().height };
+    container.style.cursor = 'row-resize';
+    document.addEventListener('mousemove', onRowResizeMove);
+    document.addEventListener('mouseup', onRowResizeUp);
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+
+  // 3. 표 테두리(이동) 드래그 처리
+  const bHit = tableBorderHit(e);
+  if (bHit) {
+    if (cellEdit) exitCellEditMode(container);
+    clearCellSelection(container);
+    cellSel = { tableDocIdx: bHit.tableDocIdx, r0: 0, r1: 0, c0: 0, c1: 0 };
+    cellAnchor = null;
+    cellEdit = null;
+    cellDragging = false;
+    paintCellSelection(container);
+    tableDrag = { table: bHit.table, tableDocIdx: bHit.tableDocIdx, startX: e.clientX, startY: e.clientY, moved: false, edge: bHit.edge };
+    
+    bHit.table.style.outline = '2px solid rgba(74,144,217,0.9)';
+    bHit.table.style.outlineOffset = '0px';
+    bHit.table.style.boxShadow = '0 0 0 1px rgba(74,144,217,0.25)';
+    
+    document.addEventListener('mousemove', onTableDragMove);
+    document.addEventListener('mouseup', onTableDragUp);
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+
+  // 4. 셀 선택 및 편집 모드 처리
+  const td = (e.target as Element)?.closest?.('td');
+  if (cellEdit) {
+    if (td && container.contains(td) && sameCell(cellEdit, td as HTMLTableCellElement)) {
+      cellAnchor = cellEdit;
+      cellDragging = true;
       return;
     }
-    const hit = rowResizeHit(e);
-    if (hit) {
-      if (cellEdit) exitCellEditMode(container);
-      clearCellSelection(container);
-      rowResize = { ...hit, startY: e.clientY, startH: hit.tr.getBoundingClientRect().height };
-      container.style.cursor = 'row-resize';
-      document.addEventListener('mousemove', onRowResizeMove);
-      document.addEventListener('mouseup', onRowResizeUp);
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-
-    const bHit = tableBorderHit(e);
-    if (bHit) {
-      if (cellEdit) exitCellEditMode(container);
-      clearCellSelection(container);
-      // 표 컨텍스트 활성화 및 표 리본 전환
-      cellSel = { tableDocIdx: bHit.tableDocIdx, r0: 0, r1: 0, c0: 0, c1: 0 };
-      cellAnchor = null;
-      cellEdit = null;
-      cellDragging = false;
-      paintCellSelection(container);
-      tableDrag = { table: bHit.table, tableDocIdx: bHit.tableDocIdx, startX: e.clientX, startY: e.clientY, moved: false, edge: bHit.edge };
-      // 테두리(특히 오른쪽 가장자리) 클릭 즉시 이동 가능 상태임을 시각적으로 표시
-      bHit.table.style.outline = '2px solid rgba(74,144,217,0.9)';
-      bHit.table.style.outlineOffset = '0px';
-      bHit.table.style.boxShadow = '0 0 0 1px rgba(74,144,217,0.25)';
-      console.log('[table-drag] mousedown on border', { tableDocIdx: bHit.tableDocIdx, edge: bHit.edge });
-      document.addEventListener('mousemove', onTableDragMove);
-      document.addEventListener('mouseup', onTableDragUp);
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-
-    const td = (e.target as Element)?.closest?.('td');
-    if (cellEdit) {
-      if (td && container.contains(td) && sameCell(cellEdit, td as HTMLTableCellElement)) {
-        cellAnchor = cellEdit;
-        cellDragging = true;
-        return;
-      }
-      exitCellEditMode(container);
-    }
-    if (!td || !container.contains(td)) {
-      clearCellSelection(container);
-      return;
-    }
-    const pos = cellPosFromTd(td as HTMLTableCellElement);
-    if (!pos) return;
-    cellAnchor = pos;
-    cellDragging = true;
-    cellSel = { tableDocIdx: pos.tableDocIdx, r0: pos.r, r1: pos.r, c0: pos.c, c1: pos.c };
-  });
+    exitCellEditMode(container);
+  }
+  if (!td || !container.contains(td)) {
+    clearCellSelection(container);
+    return;
+  }
+  const pos = cellPosFromTd(td as HTMLTableCellElement);
+  if (!pos) return;
+  cellAnchor = pos;
+  cellDragging = true;
+  cellSel = { tableDocIdx: pos.tableDocIdx, r0: pos.r, r1: pos.r, c0: pos.c, c1: pos.c };
+});
 
   container.addEventListener('dblclick', (e: MouseEvent) => {
     const td = (e.target as Element)?.closest?.('td');
