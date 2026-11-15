@@ -235,10 +235,8 @@ html {
 		}
 
         table {
-            width: 100%;
             border-collapse: collapse;
             margin: 15px 0;
-            table-layout: fixed;
             border: none;
         }
         table td, table th {

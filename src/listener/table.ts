@@ -292,19 +292,35 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
     document.removeEventListener('mouseup', onRowResizeUp);
     container.style.cursor = '';
   };
-
+  //
   const applyColResizeWidths = (table: HTMLTableElement, widths: number[]) => {
-    table.style.tableLayout = 'fixed';
-    table.querySelectorAll('td[data-c]').forEach((td) => {
-      const c = parseInt((td as HTMLElement).dataset.c || '0', 10);
+  table.style.tableLayout = 'fixed';
+
+  // 1. colgroup 및 col 엘리먼트를 생성하거나 찾아서 각 열의 너비를 강제 고정
+  let colgroup = table.querySelector('colgroup');
+  if (!colgroup) {
+    colgroup = document.createElement('colgroup');
+    table.insertBefore(colgroup, table.firstChild);
+  }
+  colgroup.innerHTML = widths.map(w => `<col style="width: ${w}px;">`).join('');
+
+  // 2. 기존 셀 너비 설정 유지 또는 정돈
+  table.querySelectorAll('tr').forEach((tr) => {
+    let c = 0;
+    tr.querySelectorAll('td').forEach((td) => {
       const span = Math.max(1, (td as HTMLTableCellElement).colSpan || 1);
       let tw = 0;
-      for (let i = 0; i < span; i++) tw += widths[c + i] ?? 24;
+      for (let i = 0; i < span; i++) {
+        tw += widths[c + i] ?? 24;
+      }
+      // colgroup이 지배하므로 td에 직접 주는 폭은 보조 역할을 하게 됩니다.
       (td as HTMLElement).style.width = `${tw}px`;
+      c += span;
     });
-    table.style.width = `${widths.reduce((a, b) => a + b, 0)}px`;
-  };
+  });
 
+  table.style.width = `${widths.reduce((a, b) => a + b, 0)}px`;
+};
   const calcResizedColWidths = (e: MouseEvent): { widths: number[]; leftW: number } | null => {
     if (!colResize) return null;
     const { colIndex, startX, startW, startColWidths } = colResize;
@@ -313,6 +329,8 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
     const rightIdx = colIndex + 1;
     const isInternal = rightIdx < widths.length;
 
+    console.log(`[calcResizedColWidths] 시작 -> colIndex: ${colIndex}, diff: ${diff}, 기존 widths:`, startColWidths);
+
     if (isInternal) {
       // Internal border: keep total table width, adjust adjacent left/right columns only.
       const rightW = startColWidths[rightIdx] ?? 24;
@@ -320,15 +338,19 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
       const leftW = Math.max(24, Math.min(pairTotal - 24, startW + diff));
       widths[colIndex] = leftW;
       widths[rightIdx] = pairTotal - leftW;
+      
+      console.log(`[calcResizedColWidths] 내부 경계선 계산 결과 -> colIndex(${colIndex})=${leftW}, rightIdx(${rightIdx})=${widths[rightIdx]}, 변경된 widths:`, widths);
       return { widths, leftW };
     }
 
     // Outer edge: resize column and table width.
     const leftW = Math.max(24, startW + diff);
     if (colIndex >= 0 && colIndex < widths.length) widths[colIndex] = leftW;
+    
+    console.log(`[calcResizedColWidths] 바깥 테두리 계산 결과 -> widths:`, widths, `leftW: ${leftW}`);
     return { widths, leftW };
   };
-
+  
   const onColResizeMove = (e: MouseEvent) => {
     if (!colResize) return;
     const result = calcResizedColWidths(e);
@@ -341,7 +363,7 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
     e.preventDefault();
   };
 
-  const onColResizeUp = (e: MouseEvent) => {
+const onColResizeUp = (e: MouseEvent) => {
     if (!colResize) return;
     const result = calcResizedColWidths(e);
     if (!result) return;
@@ -351,38 +373,37 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
     table.style.outlineOffset = '';
     table.style.tableLayout = originalLayout;
 
-    const scale = (table as any).__resizeDisplayScale || 1;
-    const origModel: number[] | null = (table as any).__resizeModelColWidths || null;
-    const isInternal = colIndex + 1 < widths.length;
-    let modelColWidths: number[];
-
-    if (origModel && scale > 0) {
-      // Preserve untouched grid columns exactly as in model; only adjust dragged boundary pair.
-      modelColWidths = origModel.slice();
-      while (modelColWidths.length < widths.length) modelColWidths.push(24);
-      const rightIdx = colIndex + 1;
-      if (isInternal) {
-        const leftM = Math.max(24, widths[colIndex] / scale);
-        const rightM = Math.max(24, widths[rightIdx] / scale);
-        // keep pair sum equal to original model pair sum to avoid drift on untouched/total
-        const origPair = (origModel[colIndex] ?? leftM) + (origModel[rightIdx] ?? rightM);
-        let lm = leftM;
-        let rm = origPair - lm;
-        if (rm < 24) { rm = 24; lm = Math.max(24, origPair - 24); }
-        if (lm < 24) { lm = 24; rm = Math.max(24, origPair - 24); }
-        modelColWidths[colIndex] = lm;
-        modelColWidths[rightIdx] = rm;
-      } else if (colIndex >= 0 && colIndex < modelColWidths.length) {
-        modelColWidths[colIndex] = Math.max(24, widths[colIndex] / scale);
-      }
-    } else {
-      modelColWidths = scale > 0 ? widths.map((w) => Math.max(24, w / scale)) : widths.slice();
+    // 💡 1. 리사이즈 완료 시점에도 <colgroup>을 통해 각 열(<col>)의 폭을 강제 고정
+    let colgroup = table.querySelector('colgroup');
+    if (!colgroup) {
+      colgroup = document.createElement('colgroup');
+      table.insertBefore(colgroup, table.firstChild);
     }
+    colgroup.innerHTML = widths.map((w) => `<col style="width: ${w}px;">`).join('');
+
+    const scale = (table as any).__resizeDisplayScale || 1;
+
+    // 💡 2. 복잡하게 꼬이던 origModel 보정 로직 대신, 
+    // 사용자가 최종 드래그해서 맞춘 화면 폭(widths)을 scale로 나누어 정확한 모델 컬럼 폭으로 산출합니다.
+    let modelColWidths: number[] = widths.map((w) => Math.max(24, scale > 0 ? w / scale : w));
 
     const modelLeftW = modelColWidths[colIndex] ?? (scale > 0 ? Math.max(24, leftW / scale) : leftW);
-    console.log('[table-col-resize] up', { tableDocIdx, colIndex, rightIdx: colIndex + 1, width: modelLeftW, colWidths: modelColWidths, displayWidths: widths.map(v => Math.round(v * 100) / 100), tableWidth: widths.reduce((a, b) => a + b, 0), internal: isInternal, displayScale: scale });
+    
+    console.log('[table-col-resize] up (fixed)', { 
+      tableDocIdx, 
+      colIndex, 
+      width: modelLeftW, 
+      colWidths: modelColWidths, 
+      displayWidths: widths.map(v => Math.round(v * 100) / 100), 
+      tableWidth: widths.reduce((a, b) => a + b, 0) 
+    });
 
-    worker.postMessage({ type: 'EDIT_TABLE_COL_WIDTH', payload: { tableDocIdx, colIndex, width: modelLeftW, colWidths: modelColWidths } });
+    // 💡 3. 수정된 정확한 modelColWidths를 워커로 전송하여 레이아웃이 이전으로 돌아가지 않도록 고정합니다.
+    worker.postMessage({ 
+      type: 'EDIT_TABLE_COL_WIDTH', 
+      payload: { tableDocIdx, colIndex, width: modelLeftW, colWidths: modelColWidths } 
+    });
+
     delete (table as any).__resizeDisplayScale;
     delete (table as any).__resizeModelColWidths;
 
@@ -391,8 +412,6 @@ export function initCellSelection(container: HTMLDivElement, worker: Worker) {
     document.removeEventListener('mouseup', onColResizeUp);
     container.style.cursor = '';
   };
-
-  
 
   const findDropTargetDocIdx = (_clientX: number, clientY: number, draggedDocIdx: number): number => {
     const els = Array.from(container.querySelectorAll<HTMLElement>('[data-p-idx]'))
@@ -544,10 +563,13 @@ container.addEventListener('mousedown', (e: MouseEvent) => {
 
     cHit.table.style.tableLayout = 'fixed';
 
-    // Apply table/cell widths from displayed grid column widths (merged cells use sum of spanned columns)
+    /* Apply table/cell widths from displayed grid column widths (merge cells use sum of spanned columns)
+    *  
+    */
     const applyTableWidths = (widths: number[]) => {
       cHit.table.querySelectorAll('td[data-c]').forEach((td) => {
         const c = parseInt((td as HTMLElement).dataset.c || '0', 10);
+        //console.log("c: ",  c);
         const span = Math.max(1, (td as HTMLTableCellElement).colSpan || 1);
         let w = 0;
         for (let i = 0; i < span; i++) w += widths[c + i] ?? 24;
@@ -555,6 +577,7 @@ container.addEventListener('mousedown', (e: MouseEvent) => {
       });
       cHit.table.style.width = `${widths.reduce((sum, w) => sum + w, 0)}px`;
     };
+    
 
     applyTableWidths(startColWidths);
 
@@ -704,6 +727,7 @@ container.addEventListener('mousedown', (e: MouseEvent) => {
     window.getSelection()?.removeAllRanges();
     if (!isSingle) paintCellSelection(container);
   });
+  //
   document.addEventListener('mouseup', () => {
     if (!cellDragging) return;
     cellDragging = false;

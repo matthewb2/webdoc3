@@ -390,6 +390,18 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
       if (item.backgroundColor) table.style.backgroundColor = item.backgroundColor;
       if (item.background) table.style.backgroundColor = item.background;
 
+      // Use <colgroup>/<col> so merged cells and per-grid-column widths behave consistently after re-render.
+      if (colCount > 0) {
+        const colgroup = document.createElement('colgroup');
+        for (let ci = 0; ci < colCount; ci++) {
+          const col = document.createElement('col');
+          const w = effectiveColWidths ? (effectiveColWidths[ci] ?? (tableWidth / colCount)) : (tableWidth / colCount);
+          col.style.width = `${w}px`;
+          colgroup.appendChild(col);
+        }
+        table.appendChild(colgroup);
+      }
+
       rows.forEach((row: any, ri: number) => {
         if (!row) return;
         const tr = document.createElement('tr');
