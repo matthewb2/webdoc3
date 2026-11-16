@@ -11,8 +11,9 @@ let recentFileNames: string[] = [];
 let ribbonVisible = true;
 
 function sendMenuCommand(win: BrowserWindow | undefined, command: string): void {
-  if (!win) return;
-  win.webContents.send('menu:command', command);
+  const target = win ?? BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+  if (!target) return;
+  target.webContents.send('menu:command', command);
 }
 
 function createApplicationMenu(): void {
@@ -26,13 +27,13 @@ function createApplicationMenu(): void {
 
   const template: Electron.MenuItemConstructorOptions[] = [
     {
-      label: '파일',
+      label: '파일(&F)',
       submenu: [
         { label: '새 문서', accelerator: 'CmdOrCtrl+N', click: (_item, win) => sendMenuCommand(win as BrowserWindow | undefined, 'file:new') },
         { label: '파일 열기', accelerator: 'CmdOrCtrl+O', click: (_item, win) => sendMenuCommand(win as BrowserWindow | undefined, 'file:open') },
         { type: 'separator' },
         { label: '저장', accelerator: 'CmdOrCtrl+S', click: (_item, win) => sendMenuCommand(win as BrowserWindow | undefined, 'file:save') },
-        { label: '다른 이름으로 저장', accelerator: 'CmdOrCtrl+Shift+S', click: (_item, win) => sendMenuCommand(win as BrowserWindow | undefined, 'file:saveAs') },
+        { label: '다른 이름으로 저장(&A)', accelerator: 'CmdOrCtrl+Shift+S', click: (_item, win) => sendMenuCommand(win as BrowserWindow | undefined, 'file:saveAs') },
         { type: 'separator' },
         { label: '최근 파일', submenu: recentSubmenu },
         { type: 'separator' },
@@ -42,7 +43,7 @@ function createApplicationMenu(): void {
       ],
     },
     {
-      label: '편집',
+      label: '편집(&E)',
       submenu: [
         { role: 'undo', label: '실행 취소' },
         { role: 'redo', label: '다시 실행' },
@@ -56,9 +57,9 @@ function createApplicationMenu(): void {
       ],
     },
     {
-      label: '보기',
+      label: '보기(&V)',
       submenu: [
-        { label: '미리보기', click: (_item, win) => sendMenuCommand(win as BrowserWindow | undefined, 'view:preview') },
+        { label: '미리보기(&U)', click: (_item, win) => sendMenuCommand(win as BrowserWindow | undefined, 'view:preview') },
         { label: '문단부호 표시 전환', click: (_item, win) => sendMenuCommand(win as BrowserWindow | undefined, 'view:toggleParaMarks') },
         { type: 'separator' },
         {
@@ -84,7 +85,7 @@ function createApplicationMenu(): void {
       ],
     },
     {
-      label: '입력',
+      label: '입력(&I)',
       submenu: [
         { label: '표 삽입', click: (_item, win) => sendMenuCommand(win as BrowserWindow | undefined, 'input:insertTable') },
         { type: 'separator' },
@@ -98,20 +99,19 @@ function createApplicationMenu(): void {
       ],
     },
     {
-      label: '서식',
+      label: '서식(&O)',
       submenu: [
         { label: '본문 스타일', click: (_item, win) => sendMenuCommand(win as BrowserWindow | undefined, 'format:styleBody') },
         { label: '제목 스타일', click: (_item, win) => sendMenuCommand(win as BrowserWindow | undefined, 'format:styleTitle') },
         { type: 'separator' },
-        { label: '굵게', accelerator: 'CmdOrCtrl+B', click: (_item, win) => sendMenuCommand(win as BrowserWindow | undefined, 'format:bold') },
-        { label: '기울임', accelerator: 'CmdOrCtrl+I', click: (_item, win) => sendMenuCommand(win as BrowserWindow | undefined, 'format:italic') },
-        { label: '밑줄', accelerator: 'CmdOrCtrl+U', click: (_item, win) => sendMenuCommand(win as BrowserWindow | undefined, 'format:underline') },
+        { label: '글꼴', accelerator: 'CmdOrCtrl+L', click: (_item, win) => sendMenuCommand(win as BrowserWindow | undefined, 'format:bold') },
+        { label: '단락', accelerator: 'CmdOrCtrl+I', click: (_item, win) => sendMenuCommand(win as BrowserWindow | undefined, 'format:italic') },
         { type: 'separator' },
         { label: '서식 탭 표시', click: (_item, win) => sendMenuCommand(win as BrowserWindow | undefined, 'tab:format') },
       ],
     },
     {
-      label: '쪽',
+      label: '쪽(&R)',
       submenu: [
         { label: '여백 적용', click: (_item, win) => sendMenuCommand(win as BrowserWindow | undefined, 'page:applyMargins') },
         { type: 'separator' },
@@ -119,10 +119,10 @@ function createApplicationMenu(): void {
       ],
     },
     {
-      label: '도움말',
+      label: '도움말(&H)',
       submenu: [
         {
-          label: '정보',
+          label: '정보(&A)',
           click: (_item, win) => sendMenuCommand(win as BrowserWindow | undefined, 'help:about'),
         },
       ],
@@ -147,6 +147,7 @@ ipcMain.on('ribbon:set-collapsed', (_event, collapsed: boolean) => {
 
 function createWindow(): void {
   const iconPath = path.join(__dirname, '..', 'build', 'icon.ico');
+  const preloadPath = path.join(__dirname, 'preload.cjs');
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 900,
@@ -154,8 +155,24 @@ function createWindow(): void {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      preload: path.join(__dirname, 'preload.cjs'),
+      preload: preloadPath,
     },
+  });
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    return {
+      action: 'allow',
+      overrideBrowserWindowOptions: {
+        width: 1280,
+        height: 900,
+        icon: iconPath,
+        webPreferences: {
+          contextIsolation: true,
+          nodeIntegration: false,
+          preload: preloadPath,
+        },
+      },
+    };
   });
 
   const devUrl = process.env.VITE_DEV_SERVER_URL || process.env.ELECTRON_START_URL;
@@ -167,6 +184,24 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  const iconPath = path.join(__dirname, '..', 'build', 'icon.ico');
+  const preloadPath = path.join(__dirname, 'preload.cjs');
+  app.on('web-contents-created', (_event, contents) => {
+    contents.setWindowOpenHandler(() => ({
+      action: 'allow',
+      overrideBrowserWindowOptions: {
+        width: 1280,
+        height: 900,
+        icon: iconPath,
+        webPreferences: {
+          contextIsolation: true,
+          nodeIntegration: false,
+          preload: preloadPath,
+        },
+      },
+    }));
+  });
+
   createApplicationMenu();
   createWindow();
 
