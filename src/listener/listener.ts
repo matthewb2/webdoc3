@@ -835,10 +835,9 @@ function showAboutDialog() {
   overlay.innerHTML = `
     <div style="background:#fff;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,0.2);padding:24px 28px;min-width:320px;max-width:420px;text-align:center;font-family:var(--ui-font,sans-serif);">
       <img src="${aboutLogoUrl}" alt="DOC3 로고" style="width:72px;height:72px;object-fit:contain;margin-bottom:12px;" />
-      <div style="font-size:20px;font-weight:700;color:#1b4f9c;margin-bottom:6px;">DOC3</div>
-      <div style="font-size:13px;color:#333;margin-bottom:4px;">버전 0.1.3</div>
-      <div style="font-size:12px;color:#555;line-height:1.5;margin-bottom:6px;">HWP, DOCX, ODT를 지원하는 웹 기반 워드 프로세서</div>
-      <div style="font-size:12px;color:#777;margin-bottom:16px;">© MK-SOLUTION</div>
+      <div style="font-size:20px;font-weight:700;color:#1b4f9c;margin-bottom:10px;">DOC3</div>
+      <div style="font-size:13px;color:#333;margin-bottom:4px;">버전: 0.2.1</div>
+      <div style="font-size:13px;color:#333;margin-bottom:16px;">제공자: MK-SOLUTION</div>
       <button id="about-dialog-close" type="button" style="height:32px;padding:0 16px;border:1px solid #ccd3da;border-radius:6px;background:#f7f9fa;cursor:pointer;">닫기</button>
     </div>
   `;
@@ -849,7 +848,6 @@ function showAboutDialog() {
   overlay.querySelector('#about-dialog-close')?.addEventListener('click', close);
   document.body.appendChild(overlay);
 }
-
 function handleMenuCommand(command: string) {
   if (command.startsWith('tab:')) {
     activateRibbonTab(command.slice(4));
@@ -976,6 +974,26 @@ export function initRibbonTabs() {
       setRibbonCollapsed(collapsed);
     });
   }
+
+  document.getElementById('btn-about')?.addEventListener('click', () => {
+    showAboutDialog();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+      const key = e.key.toLowerCase();
+      if (key === 'f') {
+        e.preventDefault();
+        activateRibbonTab('file');
+        return;
+      }
+      if (key === 's') {
+        e.preventDefault();
+        (document.getElementById('btn-save') as HTMLButtonElement | null)?.click();
+        return;
+      }
+    }
+  });
 
   const api = (window as any).electronAPI;
   if (api && typeof api.onMenuCommand === 'function') {

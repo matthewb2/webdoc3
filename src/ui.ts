@@ -21,6 +21,7 @@ export function createAppUI(): void {
                             <button id="btn-open-file" class="toolbar-btn" type="button" title="파일 열기"><i class="bi bi-folder2-open"></i> 파일 열기</button>
                             <button id="btn-save" class="toolbar-btn" type="button" title="현재 문서에 덮어쓰기 저장"><i class="bi bi-save"></i> 저장</button>
                             <button id="btn-save-as" class="toolbar-btn" type="button" title="다른 이름으로 저장"><i class="bi bi-save2"></i> 다른 이름으로 저장</button>
+                            <button id="btn-about" class="toolbar-btn" type="button" title="정보"><i class="bi bi-info-circle"></i> 정보</button>
                         </div>
 
                     </div>
