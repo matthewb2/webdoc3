@@ -11,7 +11,16 @@ export interface DocEngine {
   removeEventListener(type: 'message', listener: (event: MessageEvent<any>) => void): void;
 }
 
-export function createDocEngine(): DocEngine {
+export interface DocEngineOptions {
+  /** 스케줄러: 레이아웃 실행을 지연/예약. 기본값은 rAF(브라우저) 또는 setTimeout(환경) */
+  schedule?: (cb: () => void) => any;
+  /** 예약 취소 */
+  cancelSchedule?: (handle: any) => void;
+  /** 레이아웃 실행기 주입(헤드리스/커스텀 렌더 파이프라인용). 기본값은 runLayoutEngineAsync */
+  runLayout?: (state: DocumentModel, emit: (message: any) => void, token: { cancelled: boolean }) => void | Promise<void>;
+}
+
+export function createDocEngine(options: DocEngineOptions = {}): DocEngine {
   const listeners = new Set<(event: MessageEvent<any>) => void>();
   const emit = (message: any) => {
     const event = { data: message } as MessageEvent<any>;
@@ -21,18 +30,32 @@ export function createDocEngine(): DocEngine {
   let documentState: DocumentModel = [];
   let defaultCharShape: { bold?: boolean; italic?: boolean; underline?: boolean; strike?: boolean; color?: string } = {};
 
+  const schedule = options.schedule ?? ((cb: () => void) => {
+    if (typeof requestAnimationFrame === 'function') return requestAnimationFrame(cb);
+    return setTimeout(cb, 0);
+  });
+  const cancelSchedule = options.cancelSchedule ?? ((handle: any) => {
+    if (typeof cancelAnimationFrame === 'function' && typeof handle === 'number' && typeof requestAnimationFrame === 'function') {
+      cancelAnimationFrame(handle);
+    } else {
+      clearTimeout(handle);
+    }
+  });
+  void cancelSchedule;
+  const runLayout = options.runLayout ?? runLayoutEngineAsync;
+
   let layoutToken: { cancelled: boolean } = { cancelled: true };
-  let layoutRaf = 0;
+  let layoutHandle: any = 0;
 
   function requestLayout() {
-    // Invalidate any in-flight async layout work; the scheduled rAF will pick up the latest token/state.
+    // Invalidate any in-flight async layout work; the scheduled run will pick up the latest token/state.
     layoutToken.cancelled = true;
     layoutToken = { cancelled: false };
-    if (layoutRaf) return;
-    layoutRaf = window.requestAnimationFrame(() => {
-      layoutRaf = 0;
+    if (layoutHandle) return;
+    layoutHandle = schedule(() => {
+      layoutHandle = 0;
       const token = layoutToken;
-      runLayoutEngineAsync(documentState, (message: any) => emit(message), token);
+      void runLayout(documentState, (message: any) => emit(message), token);
     });
   }
 
