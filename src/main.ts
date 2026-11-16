@@ -13,8 +13,8 @@ import { initEditorListeners, isComposingActive, hasPendingInputState } from './
 import { initCellSelection, paintCellSelection } from './listener/table';
 import { initPreviewMode } from './preview';
 import { ruler } from './ruler';
-import { parseHwpToDocumentModel } from './hwp/hwpParser';
-import { parseHwpxToDocumentModel } from './hwpx/hwpxParser';
+import { parseHwpToDocumentModel } from './fmt/hwp/hwpParser';
+import { parseHwpxToDocumentModel } from './fmt/hwpx/hwpxParser';
 import { createAppUI, showAppUI } from './ui';
 import { createDocEngine } from './worker/docEngine';
 import logoUrl from './assets/logo.svg';
@@ -445,8 +445,8 @@ async function initWordProcessor() {
         : lower.endsWith('.hwp')
           ? parseHwpToDocumentModel(bytes)
           : lower.endsWith('.docx')
-            ? (await import('./docx/docxParser')).parseDocxToDocumentModel(bytes)
-            : (await import('./odt/odtParser')).parseOdtToDocumentModel(bytes);
+            ? (await import('./fmt/docx/docxParser')).parseDocxToDocumentModel(bytes)
+            : (await import('./fmt/odt/odtParser')).parseOdtToDocumentModel(bytes);
       worker.postMessage({ type: 'BREAKS', payload: await computeBreaks(collectProbeItems(model)) });
       worker.postMessage({ type: 'INIT_DOC', payload: model });
       setCurrentFileName(defaultDocName);

@@ -1,5 +1,5 @@
 // src/hwp/hwpExport.ts - 문서 모델(DocumentModel) → HWP 저장·다운로드
-import type { DocumentModel } from '../types';
+import type { DocumentModel } from '../../types';
 import { HwpWriter } from './hwpWriter';
 
 function requestDocSnapshot(worker: Worker): Promise<DocumentModel> {

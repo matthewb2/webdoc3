@@ -13,7 +13,7 @@ import {
   UnderlineType,
   WidthType,
 } from 'docx';
-import type { DocumentModel, TableNode, TextRun as ModelRun } from '../types';
+import type { DocumentModel, TableNode, TextRun as ModelRun } from '../../types';
 
 const PX_TO_TWIP = 1440 / 96;
 const PX_TO_HALFPT = 1.5;

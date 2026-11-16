@@ -7,7 +7,7 @@ import type {
   TableNode,
   TableRowNode,
   TextRun,
-} from '../types';
+} from '../../types';
 
 const PT_TO_PX = 4 / 3;
 // HWPX/HWPUNIT: 100 = 1pt (일반적인 charPr height/paraPr 단위)

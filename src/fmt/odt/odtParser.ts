@@ -7,7 +7,7 @@ import type {
   TableNode,
   TableRowNode,
   TextRun,
-} from '../types';
+} from '../../types';
 
 const PT_TO_PX = 4 / 3;
 

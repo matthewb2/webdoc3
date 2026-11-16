@@ -1,6 +1,6 @@
 import { BlankFileMaker } from '@hwplib-js';
 import type { HWPFile } from '@hwplib-js';
-import type { DocumentModel, ParagraphNode, TableNode } from '../types';
+import type { DocumentModel, ParagraphNode, TableNode } from '../../types';
 
 // Control type IDs (from hwplib-js ControlType).
 const CTRL_SECTION_DEFINE = 0x73656364; // 'secd'

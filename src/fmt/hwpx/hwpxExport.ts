@@ -1,6 +1,6 @@
 // src/hwpx/hwpxExport.ts - 문서 모델(DocumentModel) → HWPX(XML) 저장
 import JSZip from 'jszip';
-import type { DocumentItem, DocumentModel, ParagraphNode, TableCellNode, TableNode, TextRun } from '../types';
+import type { DocumentItem, DocumentModel, ParagraphNode, TableCellNode, TableNode, TextRun } from '../../types';
 import { TEMPLATE_HEADER_XML } from './hwpxTemplate';
 
 const esc = (t: string) =>

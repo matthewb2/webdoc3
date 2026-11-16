@@ -13,7 +13,7 @@ import type {
   TableNode,
   TableRowNode,
   TextRun,
-} from '../types';
+} from '../../types';
 
 // HWPChar.type 값은 hwp.js CharType enum 과 동일한 숫자입니다.
 const CHAR_TYPE_CHAR = 0;
