@@ -4,7 +4,7 @@ import { parseHwpToDocumentModel } from '../fmt/hwp/hwpParser';
 import { parseHwpxToDocumentModel } from '../fmt/hwpx/hwpxParser';
 import { parseDocxToDocumentModel } from '../fmt/docx/docxParser';
 import { parseOdtToDocumentModel } from '../fmt/odt/odtParser';
-import { createDocEngine, type DocEngine, type DocEngineOptions } from '../worker/docEngine';
+import { createDocEngine, type DocEngine, type DocEngineOptions } from './docEngine';
 import { buildMockDocument } from './mockDocument';
 
 export type BreaksComputer = (model: DocumentModel) => Promise<Record<string, number[]>>;
@@ -88,4 +88,4 @@ export function createHeadlessEditorCore(options: Omit<EditorCoreOptions, 'defau
 }
 
 export { buildMockDocument, buildTableTest } from './mockDocument';
-export { createDocEngine, type DocEngine, type DocEngineOptions } from '../worker/docEngine';
+export { createDocEngine, type DocEngine, type DocEngineOptions } from './docEngine';
