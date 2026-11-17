@@ -23,6 +23,7 @@
     "files": [
       "dist/**/*",
       "electron/main.cjs",
+      "electron/preload.cjs",
       "src/assets/icon.ico",
       "package.json"
     ],
