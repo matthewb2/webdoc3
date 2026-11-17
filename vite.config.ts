@@ -3,7 +3,7 @@ import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
   base: './',
-  envPrefix: ['VITE_', 'GEMINI_', 'GROQ_', 'GRPQ_'],
+  envPrefix: ['VITE_', 'GEMINI_', 'GROQ_'],
   resolve: {
     alias: {
       '@hwp.js/parser': fileURLToPath(new URL('./lib/hwp.js/packages/parser/src/index.ts', import.meta.url)),
