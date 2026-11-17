@@ -496,6 +496,7 @@ export function syncColorControls() {
 }
 
 let zoomLevel = 1;
+let zoomApply: ((z: number) => void) | null = null;
 const ZOOM_MIN = 0.5;
 const ZOOM_MAX = 2;
 const ZOOM_STEP = 0.1;
@@ -504,11 +505,25 @@ export function getZoomLevel(): number {
   return zoomLevel;
 }
 
-// 스케일은 레이아웃 크기를 바꾸지 않으므로 스크롤 영역을 시각 크기에 맞춤.
-// 렌더 후에도 호출해야 함 (초기 빈 컨테이너 기준으로 고정되면 페이지가 찌그러짐)
+export function setEditorZoom(z: number): void {
+  if (zoomApply) zoomApply(z);
+}
+
+export function zoomEditorIn(): void {
+  setEditorZoom(zoomLevel + ZOOM_STEP);
+}
+
+export function zoomEditorOut(): void {
+  setEditorZoom(zoomLevel - ZOOM_STEP);
+}
+
+export function zoomEditorReset(): void {
+  setEditorZoom(1);
+}
+
+// 에디터 레이아웃 높이를 zoom 배율에 맞춤.
 export function refreshZoomLayout(container: HTMLDivElement): void {
   container.style.height = '';
-  // flex-shrink로 자식이 찌그러지지 않게 강제 후 측정
   const h = container.scrollHeight;
   container.style.height = `${Math.ceil(h * zoomLevel)}px`;
 }
@@ -528,6 +543,7 @@ export function initZoomControls(container: HTMLDivElement) {
     updateVisiblePages();
     window.dispatchEvent(new CustomEvent('editor-zoom', { detail: { zoom: zoomLevel } }));
   };
+  zoomApply = apply;
   outBtn.addEventListener('click', () => apply(zoomLevel - ZOOM_STEP));
   inBtn.addEventListener('click', () => apply(zoomLevel + ZOOM_STEP));
   label.addEventListener('click', () => apply(1));

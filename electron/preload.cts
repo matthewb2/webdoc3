@@ -12,4 +12,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setRibbonCollapsed: (collapsed: boolean) => {
     ipcRenderer.send('ribbon:set-collapsed', collapsed);
   },
+  setAiChatVisible: (visible: boolean) => {
+    ipcRenderer.send('ai-chat:set-visible', visible);
+  },
 });

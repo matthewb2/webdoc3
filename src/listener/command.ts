@@ -1,4 +1,6 @@
 import aboutLogoUrl from '../assets/logo.png';
+import { setAiChatOpen } from './aiChat';
+import { zoomEditorIn, zoomEditorOut, zoomEditorReset } from './initUI';
 
 let openRecentFileByNameFn: ((name: string) => void | Promise<void>) | null = null;
 
@@ -100,6 +102,15 @@ export function handleMenuCommand(command: string) {
     case 'view:preview':
       (document.getElementById('btn-preview') as HTMLButtonElement | null)?.click();
       return;
+    case 'view:zoomIn':
+      zoomEditorIn();
+      return;
+    case 'view:zoomOut':
+      zoomEditorOut();
+      return;
+    case 'view:zoomReset':
+      zoomEditorReset();
+      return;
     case 'view:toggleParaMarks': {
       const cb = document.getElementById('show-para-marks-checkbox') as HTMLInputElement | null;
       if (cb) {
@@ -113,6 +124,12 @@ export function handleMenuCommand(command: string) {
       return;
     case 'view:hideRibbon':
       setRibbonCollapsed(true);
+      return;
+    case 'view:showAiChat':
+      setAiChatOpen(true);
+      return;
+    case 'view:hideAiChat':
+      setAiChatOpen(false);
       return;
     case 'input:insertTable':
       (document.getElementById('btn-insert-table') as HTMLButtonElement | null)?.click();

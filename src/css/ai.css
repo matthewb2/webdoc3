@@ -8,6 +8,8 @@
   right: 0;
   bottom: 28px;
   width: var(--ai-panel-width);
+  min-width: 240px;
+  max-width: 70vw;
   background: #ffffff;
   border-left: 1px solid #d8dde3;
   display: flex;
@@ -15,6 +17,20 @@
   z-index: 9;
   box-sizing: border-box;
   font-family: var(--ui-font, '맑은 고딕', sans-serif);
+}
+
+.ai-chat-resizer {
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 2;
+}
+.ai-chat-resizer:hover,
+.ai-chat-resizer.dragging {
+  background: rgba(47, 111, 237, 0.15);
 }
 
 .ai-chat-panel.hidden {

@@ -336,6 +336,7 @@ export function createAppUI(): void {
     </div>
 
     <div id="ai-chat-panel" class="ai-chat-panel">
+        <div id="ai-chat-resizer" class="ai-chat-resizer" title="드래그하여 너비 조절"></div>
         <div class="ai-chat-header">
             <div class="ai-chat-header-title"><i class="bi bi-stars"></i> AI 어시스턴트</div>
             <div style="display:flex;gap:4px;align-items:center;">

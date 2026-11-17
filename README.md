@@ -1,4 +1,4 @@
-# webdoc3
+# DOC3
 Typescript Wordprocessor based on modern web technology
 
 # dependency
@@ -11,6 +11,9 @@ The top most abstraction is DocumentModel
 
 ## Read
 odt,  hwpx, docx -> DocumentModel
+
+## Input
+Layout and rendering are handled asynchronously. Input, however, must not be handled asynchronously; doing so would disrupt the cursor.
 
 ## Write
 DocumentModel

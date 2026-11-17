@@ -8,6 +8,28 @@ export interface AiChatDeps {
   applyModel: (model: DocumentModel) => Promise<void>;
 }
 
+let setAiChatOpenImpl: ((open: boolean) => void) | null = null;
+
+export function setAiChatOpen(open: boolean) {
+  if (setAiChatOpenImpl) {
+    setAiChatOpenImpl(open);
+    return;
+  }
+  const panel = document.getElementById('ai-chat-panel');
+  if (!panel) return;
+  panel.classList.toggle('hidden', !open);
+  document.body.classList.toggle('ai-chat-open', open);
+  const api = (window as any).electronAPI;
+  if (api && typeof api.setAiChatVisible === 'function') {
+    api.setAiChatVisible(open);
+  }
+}
+
+export function toggleAiChatOpen() {
+  const panel = document.getElementById('ai-chat-panel');
+  setAiChatOpen(!!panel?.classList.contains('hidden'));
+}
+
 function appendMessage(role: 'user' | 'assistant', text: string, toolLog?: string) {
   const list = document.getElementById('ai-chat-messages');
   if (!list) return;
@@ -77,7 +99,54 @@ export function initAiChat(deps?: Partial<AiChatDeps>) {
   const baseUrlInput = document.getElementById('ai-setting-baseurl') as HTMLInputElement | null;
   const modelInput = document.getElementById('ai-setting-model') as HTMLInputElement | null;
   const apiKeyInput = document.getElementById('ai-setting-apikey') as HTMLInputElement | null;
+  const resizer = document.getElementById('ai-chat-resizer') as HTMLDivElement | null;
   if (!panel || !input) return;
+
+  const WIDTH_KEY = 'doc3.ai.panelWidth';
+  const applyPanelWidth = (w: number, persist = true) => {
+    const clamped = Math.max(240, Math.min(Math.floor(window.innerWidth * 0.7), Math.round(w)));
+    document.documentElement.style.setProperty('--ai-panel-width', `${clamped}px`);
+    if (persist) {
+      try { localStorage.setItem(WIDTH_KEY, String(clamped)); } catch {}
+    }
+  };
+  try {
+    const savedW = parseInt(localStorage.getItem(WIDTH_KEY) || '', 10);
+    if (Number.isFinite(savedW) && savedW > 0) applyPanelWidth(savedW, false);
+  } catch {}
+
+  if (resizer) {
+    let dragging = false;
+    let startX = 0;
+    let startW = 0;
+    const onMove = (e: MouseEvent) => {
+      if (!dragging) return;
+      const dx = startX - e.clientX; // drag left => wider
+      applyPanelWidth(startW + dx);
+      e.preventDefault();
+    };
+    const onUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      resizer.classList.remove('dragging');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    resizer.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      dragging = true;
+      startX = e.clientX;
+      startW = panel.getBoundingClientRect().width;
+      resizer.classList.add('dragging');
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+      e.preventDefault();
+    });
+  }
 
   const history: ChatMessage[] = [];
 
@@ -93,7 +162,12 @@ export function initAiChat(deps?: Partial<AiChatDeps>) {
     panel.classList.toggle('hidden', !open);
     document.body.classList.toggle('ai-chat-open', open);
     if (toggleBtn) toggleBtn.classList.toggle('active', open);
+    const api = (window as any).electronAPI;
+    if (api && typeof api.setAiChatVisible === 'function') {
+      api.setAiChatVisible(open);
+    }
   };
+  setAiChatOpenImpl = setOpen;
   setOpen(true);
 
   const syncSettingsUi = () => {

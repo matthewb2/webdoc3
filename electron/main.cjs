@@ -42,11 +42,21 @@ electron_1.app.setPath('userData', userDataDir);
 electron_1.app.setPath('sessionData', userDataDir);
 let recentFileNames = [];
 let ribbonVisible = true;
+let aiChatVisible = true;
 function sendMenuCommand(win, command) {
-    const target = win ?? electron_1.BrowserWindow.getFocusedWindow() ?? electron_1.BrowserWindow.getAllWindows()[0];
-    if (!target)
-        return;
-    target.webContents.send('menu:command', command);
+    const targets = new Set();
+    if (win)
+        targets.add(win);
+    const focused = electron_1.BrowserWindow.getFocusedWindow();
+    if (focused)
+        targets.add(focused);
+    for (const w of electron_1.BrowserWindow.getAllWindows())
+        targets.add(w);
+    for (const target of targets) {
+        if (!target.isDestroyed()) {
+            target.webContents.send('menu:command', command);
+        }
+    }
 }
 function createApplicationMenu() {
     const recentSubmenu = recentFileNames.length > 0
@@ -102,15 +112,25 @@ function createApplicationMenu() {
                         sendMenuCommand(win, menuItem.checked ? 'view:showRibbon' : 'view:hideRibbon');
                     },
                 },
+                {
+                    id: 'toggle-ai-chat',
+                    label: 'AI 대화창',
+                    type: 'checkbox',
+                    checked: aiChatVisible,
+                    click: (menuItem, win) => {
+                        aiChatVisible = menuItem.checked;
+                        sendMenuCommand(win, menuItem.checked ? 'view:showAiChat' : 'view:hideAiChat');
+                    },
+                },
                 { type: 'separator' },
                 { label: '보기 탭 표시', click: (_item, win) => sendMenuCommand(win, 'tab:view') },
                 { type: 'separator' },
                 { role: 'reload', label: '다시 로드' },
                 { role: 'toggleDevTools', label: '개발자 도구' },
                 { type: 'separator' },
-                { role: 'resetZoom', label: '실제 크기' },
-                { role: 'zoomIn', label: '확대' },
-                { role: 'zoomOut', label: '축소' },
+                { label: '실제 크기', accelerator: 'CmdOrCtrl+0', click: (_item, win) => sendMenuCommand(win, 'view:zoomReset') },
+                { label: '확대', accelerator: 'CmdOrCtrl+=', click: (_item, win) => sendMenuCommand(win, 'view:zoomIn') },
+                { label: '축소', accelerator: 'CmdOrCtrl+-', click: (_item, win) => sendMenuCommand(win, 'view:zoomOut') },
                 { role: 'togglefullscreen', label: '전체 화면' },
             ],
         },
@@ -172,8 +192,14 @@ electron_1.ipcMain.on('ribbon:set-collapsed', (_event, collapsed) => {
     if (item)
         item.checked = ribbonVisible;
 });
+electron_1.ipcMain.on('ai-chat:set-visible', (_event, visible) => {
+    aiChatVisible = !!visible;
+    const item = electron_1.Menu.getApplicationMenu()?.getMenuItemById('toggle-ai-chat');
+    if (item)
+        item.checked = aiChatVisible;
+});
 function createWindow() {
-    const iconPath = path.join(__dirname, '..', 'build', 'icon.ico');
+    const iconPath = path.join(__dirname, '..', 'src', 'assets', 'icon.ico');
     const preloadPath = path.join(__dirname, 'preload.cjs');
     const mainWindow = new electron_1.BrowserWindow({
         width: 1280,
@@ -209,7 +235,7 @@ function createWindow() {
     }
 }
 electron_1.app.whenReady().then(() => {
-    const iconPath = path.join(__dirname, '..', 'build', 'icon.ico');
+    const iconPath = path.join(__dirname, '..', 'src', 'assets', 'icon.ico');
     const preloadPath = path.join(__dirname, 'preload.cjs');
     electron_1.app.on('web-contents-created', (_event, contents) => {
         contents.setWindowOpenHandler(() => ({
