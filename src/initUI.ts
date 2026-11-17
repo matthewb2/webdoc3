@@ -11,10 +11,10 @@ import { parseOdtToDocumentModel } from './fmt/odt/odtParser';
 import { parseHwpxToDocumentModel } from './fmt/hwpx/hwpxParser';
 import { collectProbeItems, computeBreaks } from './probe';
 import { getCachedPages, setRenderZoom, updateVisiblePages } from './renderHtml';
-import { saveCurrentDocument } from './fmt/odt/odtExport';
-import { saveCurrentDocumentDocx } from './fmt/docx/docxExport';
-import { saveCurrentDocumentHwp } from './fmt/hwp/hwpExport';
-import { saveCurrentHwpxDocument } from './fmt/hwpx/hwpxExport';
+import { saveCurrentDocument, buildOdtBlob } from './fmt/odt/odtExport';
+import { saveCurrentDocumentDocx, buildDocxBlob } from './fmt/docx/docxExport';
+import { saveCurrentDocumentHwp, buildHwpBlob } from './fmt/hwp/hwpExport';
+import { saveCurrentHwpxDocument, buildHwpxBlob } from './fmt/hwpx/hwpxExport';
 import { cellPosFromTd, clearCellSelection, getActiveTableDocIdx, getCellSelection } from './table';
 import { stashSelection, peekPendingSelection, selectionRangeInParagraph, selectedParagraphIndices } from './selection';
 export { type SelEnd, type SelSnapshot, snapshotSelection, stashSelection, peekPendingSelection, takePendingSelection, clearPendingSelection, selectionRangeInParagraph, selectedParagraphIndices, setAwaitingRender, initSelectionListener } from './selection';
@@ -554,6 +554,7 @@ export function initZoomControls(container: HTMLDivElement) {
 // 현재 문서 파일명 (열린 파일 기준, 없으면 제목 없음.odt)
 let currentFileName: string | null = null;
 let currentFileHandle: FileSystemFileHandle | null = null;
+let currentFilePath: string | null = null; // Electron native save path
 
 let recentWorker: Worker | null = null;
 let recentContainer: HTMLDivElement | null = null;
@@ -573,6 +574,10 @@ export function getCurrentFileName(): string {
 
 export function setCurrentFileHandle(handle: FileSystemFileHandle | null) {
   currentFileHandle = handle;
+}
+
+export function setCurrentFilePath(filePath: string | null) {
+  currentFilePath = filePath;
 }
 
 export function getCurrentFileHandle(): FileSystemFileHandle | null {
@@ -1148,11 +1153,49 @@ function getSaveFn(lower: string) {
   return saveCurrentDocumentHwp;
 }
 
+function getSaveMeta(lower: string): { build: (w: Worker) => Promise<Blob>; filter: { name: string; extensions: string[] } } {
+  if (/\.hwpx$/i.test(lower)) return { build: buildHwpxBlob, filter: { name: 'HWPX Document', extensions: ['hwpx'] } };
+  if (/\.docx$/i.test(lower)) return { build: buildDocxBlob, filter: { name: 'Word Document', extensions: ['docx'] } };
+  if (/\.odt$/i.test(lower)) return { build: buildOdtBlob, filter: { name: 'OpenDocument Text', extensions: ['odt'] } };
+  return { build: buildHwpBlob, filter: { name: 'Hanword Document', extensions: ['hwp'] } };
+}
+
 async function runSave(worker: Worker, saveAs: boolean) {
   const status = document.getElementById('hwp-status') as HTMLSpanElement | null;
   try {
     const filename = getCurrentFileName();
     const lower = filename.toLowerCase();
+
+    const api = (window as any).electronAPI;
+    if (api && typeof api.showSaveDialog === 'function' && typeof api.writeFile === 'function') {
+      const { build, filter } = getSaveMeta(lower);
+      let targetPath = (!saveAs && currentFilePath) ? currentFilePath : null;
+      if (saveAs || !targetPath) {
+        const dialogResult = await api.showSaveDialog({ defaultPath: filename, filters: [filter] });
+        if (!dialogResult || dialogResult.canceled || !dialogResult.filePath) {
+          if (status) status.textContent = '저장이 취소되었습니다.';
+          return;
+        }
+        targetPath = dialogResult.filePath;
+      }
+      if (!targetPath) {
+        if (status) status.textContent = '저장 경로가 없습니다.';
+        return;
+      }
+      if (status) status.textContent = saveAs ? '다른 이름으로 저장 중...' : '저장 중...';
+      const blob = await build(worker);
+      const data = new Uint8Array(await blob.arrayBuffer());
+      await api.writeFile(targetPath, data);
+      currentFilePath = targetPath;
+      currentFileHandle = null;
+      const outName = (targetPath.split(/[/\\]/).pop() || filename);
+      setCurrentFileName(outName);
+      await addRecentEntry(outName, null);
+      refreshRecentFiles();
+      if (status) status.textContent = `저장 완료: ${outName}`;
+      return;
+    }
+
     const saveFn = getSaveFn(lower);
     const result: any = await saveFn(worker, filename, { saveAs, handle: currentFileHandle });
     if (result?.canceled) {

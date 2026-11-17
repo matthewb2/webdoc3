@@ -11,11 +11,11 @@ import { appendStreamPages, getCachedPages, initRenderer, renderVirtualPages, up
 import { activateRibbonTab, clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFindReplace, initFontCombos, initFileOpen, initLineSpacingCombo, initNewDocument, initPageMargins, initParagraphStyles, initRecentFiles, initRibbonTabs, initSave, initSaveAs, initSelectionListener, initShapeInsert, initStyleButtons, initTableInsert, initTableProperties, initViewOptions, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, setCurrentFileName, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncLineSpacingCombo, syncStyleButtons, syncTablePropertiesRibbon } from './listener';
 import { initEditorListeners, isComposingActive, hasPendingInputState } from './keyinput';
 import { initCellSelection, paintCellSelection } from './table';
-import { initAiChat } from './aiChat';
+import { initAiChat } from './chat';
 import { initPreviewMode } from './preview';
 import { ruler } from './ruler';
 import { createAppUI } from './ui';
-import { createEditorCore } from './core';
+import { createEditorCore } from './core/documentCore';
 import { applyFavicon, hideStartupSpinner, showStartupSpinner } from './startup';
 import { createCursorState, restoreCursorPosition, saveCursorPosition } from './cursorManager';
 

@@ -1,4 +1,4 @@
-import type { DocBlockOutline, ToolCall } from './aiToolEngine';
+import type { DocBlockOutline, ToolCall } from './toolEngine';
 
 export interface AiSettings {
   apiKey: string;

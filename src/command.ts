@@ -1,5 +1,5 @@
 import aboutLogoUrl from './assets/logo.png';
-import { setAiChatOpen } from './aiChat';
+import { setAiChatOpen } from './chat';
 import { zoomEditorIn, zoomEditorOut, zoomEditorReset } from './initUI';
 
 let openRecentFileByNameFn: ((name: string) => void | Promise<void>) | null = null;

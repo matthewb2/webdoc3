@@ -1,6 +1,7 @@
-import { app, BrowserWindow, Menu, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, Menu, dialog, ipcMain } from 'electron';
 import * as path from 'path';
 import * as os from 'os';
+import * as fs from 'fs/promises';
 
 // 캐시/프로필 경로 권한 문제(0x5 등) 회피: 쓰기 가능한 temp 경로 사용
 const userDataDir = path.join(os.tmpdir(), 'webdoc3-electron');
@@ -166,6 +167,21 @@ ipcMain.on('ai-chat:set-visible', (_event, visible: boolean) => {
   aiChatVisible = !!visible;
   const item = Menu.getApplicationMenu()?.getMenuItemById('toggle-ai-chat');
   if (item) item.checked = aiChatVisible;
+});
+
+ipcMain.handle('dialog:showSaveDialog', async (event, options: { defaultPath?: string; filters?: Array<{ name: string; extensions: string[] }> }) => {
+  const win = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow() || undefined;
+  const result = await dialog.showSaveDialog(win as any, {
+    defaultPath: options?.defaultPath,
+    filters: options?.filters,
+  });
+  return result; // { canceled, filePath }
+});
+
+ipcMain.handle('fs:writeFile', async (_event, filePath: string, data: Uint8Array | number[]) => {
+  const buf = Buffer.from(data instanceof Uint8Array ? data : Uint8Array.from(data));
+  await fs.writeFile(filePath, buf);
+  return { ok: true };
 });
 
 

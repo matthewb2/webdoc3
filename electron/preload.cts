@@ -15,4 +15,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setAiChatVisible: (visible: boolean) => {
     ipcRenderer.send('ai-chat:set-visible', visible);
   },
+  showSaveDialog: (options: { defaultPath?: string; filters?: Array<{ name: string; extensions: string[] }> }) => {
+    return ipcRenderer.invoke('dialog:showSaveDialog', options);
+  },
+  writeFile: (filePath: string, data: Uint8Array) => {
+    return ipcRenderer.invoke('fs:writeFile', filePath, data);
+  },
 });
