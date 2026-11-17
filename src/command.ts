@@ -170,7 +170,22 @@ export function handleMenuCommand(command: string) {
   }
 }
 
+
+let menuCommandBound = false;
+function bindMenuCommandListener() {
+  if (menuCommandBound) return;
+  const api = (window as any).electronAPI;
+  if (api && typeof api.onMenuCommand === 'function') {
+    menuCommandBound = true;
+    api.onMenuCommand((command: string) => handleMenuCommand(command));
+  }
+}
+
+// Electron 메뉴 명령은 UI 초기화 타이밍과 무관하게 수신되도록 즉시 바인딩 시도
+bindMenuCommandListener();
+
 export function initRibbonTabs() {
+  bindMenuCommandListener();
   document.querySelectorAll<HTMLElement>('.ribbon-tab[data-tab-target]').forEach((el) => {
     el.addEventListener('click', () => {
       const tab = el.dataset.tabTarget;
@@ -196,7 +211,7 @@ export function initRibbonTabs() {
       const isElectron = !!(window as any).electronAPI;
       const key = e.key.toLowerCase();
       if (key === 'f') {
-        // Electron 기본 메뉴의 니모닉(Alt+F) 동작을 우선 허용
+        // Electron 기본 메뉴(니모닉/Alt+F) 동작을 우선 사용
         if (!isElectron) {
           e.preventDefault();
           activateRibbonTab('file');
@@ -210,9 +225,4 @@ export function initRibbonTabs() {
       }
     }
   });
-
-  const api = (window as any).electronAPI;
-  if (api && typeof api.onMenuCommand === 'function') {
-    api.onMenuCommand((command: string) => handleMenuCommand(command));
-  }
 }

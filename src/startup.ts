@@ -27,7 +27,7 @@ export function showStartupSpinner(containerEl: HTMLDivElement | null): void {
       to { transform: rotate(360deg); }
     }
     #startup-spinner-overlay {
-      position: fixed;
+      position: absolute;
       inset: 0;
       display: flex;
       flex-direction: column;
@@ -35,7 +35,7 @@ export function showStartupSpinner(containerEl: HTMLDivElement | null): void {
       justify-content: center;
       gap: 14px;
       background: rgba(243, 244, 246, 0.85);
-      z-index: 9999;
+      z-index: 1000;
       pointer-events: all;
     }
     #startup-spinner-overlay .spinner-ring {
