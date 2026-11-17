@@ -247,6 +247,74 @@ export function initEditorListeners(
     }
   });
 
+  function deleteSelectionForEdit(snap: ReturnType<typeof snapshotSelection>): boolean {
+    if (!snap) return false;
+    const hasRange = snap.anchor.docIdx !== snap.focus.docIdx || snap.anchor.charIndex !== snap.focus.charIndex;
+    if (!hasRange) return false;
+    const paraIndices = selectedParagraphIndices(container, cursor.docIdx, snap);
+    for (const docIdx of paraIndices) {
+      const r = selectionRangeInParagraph(container, docIdx, snap);
+      if (r) {
+        refreshParaBreaks(worker, docIdx);
+        worker.postMessage({
+          type: 'EDIT_DELETE_RANGE',
+          payload: { paragraphIndex: docIdx, fromCharIndex: r.from, endCharIndex: r.to },
+        });
+      }
+    }
+    const loStart = (snap.anchor.docIdx < snap.focus.docIdx ||
+      (snap.anchor.docIdx === snap.focus.docIdx && snap.anchor.charIndex <= snap.focus.charIndex))
+      ? snap.anchor : snap.focus;
+    cursor.docIdx = loStart.docIdx;
+    cursor.charIndex = loStart.charIndex;
+    cursor.charOffset = 0;
+    clearPendingSelection();
+    markEditPending();
+    clearCellSelection(container);
+    return true;
+  }
+
+  container.addEventListener('paste', (e: ClipboardEvent) => {
+    if (isImeLocked()) return;
+    const targetEl = e.target instanceof Element ? e.target : (e.target as Node | null)?.parentElement;
+    const anchorElement = (() => {
+      const sel = window.getSelection();
+      const n = sel?.anchorNode ?? null;
+      return n ? (n.nodeType === Node.TEXT_NODE ? n.parentElement : (n as HTMLElement)) : null;
+    })();
+    const inTable = !!anchorElement?.closest('td, th') || !!targetEl?.closest?.('td, th');
+    if (inTable) return; // 표 셀 내에서는 기본 붙여넣기/네이티브 편집 유지
+
+    const text = e.clipboardData?.getData('text/plain') ?? e.clipboardData?.getData('text') ?? '';
+    e.preventDefault();
+    if (text === '') return;
+
+    syncCursorFromSelection();
+    const snap = snapshotSelection(container);
+    deleteSelectionForEdit(snap);
+
+    // 줄바꿈은 문단 분할로 반영
+    const normalized = text.replace(/\r\n?/g, '\n');
+    const parts = normalized.split('\n');
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (part.length > 0) {
+        refreshParaBreaks(worker, cursor.docIdx);
+        worker.postMessage({ type: 'EDIT_INSERT', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex, text: part } });
+        cursor.charIndex += part.length;
+      }
+      if (i < parts.length - 1) {
+        refreshParaBreaks(worker, cursor.docIdx);
+        worker.postMessage({ type: 'EDIT_SPLIT', payload: { paragraphIndex: cursor.docIdx, charIndex: cursor.charIndex } });
+        cursor.docIdx += 1;
+        cursor.charIndex = 0;
+        cursor.charOffset = 0;
+      }
+    }
+    clearPendingSelection();
+    markEditPending();
+  });
+
   container.addEventListener('beforeinput', (e: InputEvent) => {
     if (e.inputType === 'insertLineBreak') {
       e.preventDefault();

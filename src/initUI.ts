@@ -1149,25 +1149,36 @@ function getSaveFn(lower: string) {
 }
 
 async function runSave(worker: Worker, saveAs: boolean) {
-  const filename = getCurrentFileName();
-  const lower = filename.toLowerCase();
-  const saveFn = getSaveFn(lower);
-  const result = await saveFn(worker, filename, { saveAs, handle: currentFileHandle });
-  currentFileHandle = result.handle ?? null;
-  if (result.filename) setCurrentFileName(result.filename);
-  if (result.filename) await addRecentEntry(result.filename, currentFileHandle);
-  refreshRecentFiles();
+  const status = document.getElementById('hwp-status') as HTMLSpanElement | null;
+  try {
+    const filename = getCurrentFileName();
+    const lower = filename.toLowerCase();
+    const saveFn = getSaveFn(lower);
+    const result: any = await saveFn(worker, filename, { saveAs, handle: currentFileHandle });
+    if (result?.canceled) {
+      if (status) status.textContent = '저장이 취소되었습니다.';
+      return;
+    }
+    currentFileHandle = result?.handle ?? null;
+    if (result?.filename) setCurrentFileName(result.filename);
+    if (result?.filename) await addRecentEntry(result.filename, currentFileHandle);
+    refreshRecentFiles();
+    if (status) status.textContent = `저장 완료: ${result?.filename || getCurrentFileName()}`;
+  } catch (err: any) {
+    console.error('[save] failed', err);
+    if (status) status.textContent = `저장 실패: ${err?.message || String(err)}`;
+  }
 }
 
 export function initSave(worker: Worker) {
   document.getElementById('btn-save')?.addEventListener('click', () => {
-    runSave(worker, false).catch(() => {});
+    void runSave(worker, false);
   });
 }
 
 export function initSaveAs(worker: Worker) {
   document.getElementById('btn-save-as')?.addEventListener('click', () => {
-    runSave(worker, true).catch(() => {});
+    void runSave(worker, true);
   });
 }
 
