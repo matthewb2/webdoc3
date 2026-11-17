@@ -18,6 +18,8 @@ export function showStartupSpinner(containerEl: HTMLDivElement | null): void {
   if (containerEl) {
     containerEl.style.display = 'none';
   }
+  document.documentElement.style.cursor = 'wait';
+  document.body.style.cursor = 'wait';
   if (document.getElementById('startup-spinner-overlay')) return;
 
   const style = document.createElement('style');
@@ -37,6 +39,7 @@ export function showStartupSpinner(containerEl: HTMLDivElement | null): void {
       background: rgba(243, 244, 246, 0.85);
       z-index: 1000;
       pointer-events: all;
+      cursor: wait;
     }
     #startup-spinner-overlay .spinner-ring {
       width: 36px;
@@ -69,6 +72,8 @@ export function hideStartupSpinner(containerEl: HTMLDivElement | null): void {
   if (isInitialReady) return;
   isInitialReady = true;
 
+  document.documentElement.style.cursor = '';
+  document.body.style.cursor = '';
   if (containerEl) {
     containerEl.style.display = 'inline-flex';
   }

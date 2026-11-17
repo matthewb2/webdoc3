@@ -48,6 +48,7 @@ function createApplicationMenu(): void {
         { type: 'separator' },
         { label: '파일 탭 표시', click: (_item, win) => sendMenuCommand(win as BrowserWindow | undefined, 'tab:file') },
         { type: 'separator' },
+        { label: '닫기', accelerator: 'CmdOrCtrl+W', click: (_item, win) => (win ?? BrowserWindow.getFocusedWindow())?.close() },
         { role: 'quit', label: '종료' },
       ],
     },
