@@ -1,6 +1,7 @@
 @import "./ribbon.css";
 @import "./preview.css";
 @import "./ruler.css";
+@import "./ai.css";
 
 html {
             height: 100%;

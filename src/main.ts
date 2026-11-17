@@ -11,6 +11,7 @@ import { appendStreamPages, getCachedPages, initRenderer, renderVirtualPages, up
 import { activateRibbonTab, clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFindReplace, initFontCombos, initFileOpen, initLineSpacingCombo, initNewDocument, initPageMargins, initParagraphStyles, initRecentFiles, initRibbonTabs, initSave, initSaveAs, initSelectionListener, initShapeInsert, initStyleButtons, initTableInsert, initTableProperties, initViewOptions, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, setCurrentFileName, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncLineSpacingCombo, syncStyleButtons, syncTablePropertiesRibbon } from './listener/listener';
 import { initEditorListeners, isComposingActive, hasPendingInputState } from './listener/keyinput';
 import { initCellSelection, paintCellSelection } from './listener/table';
+import { initAiChat } from './listener/aiChat';
 import { initPreviewMode } from './preview';
 import { ruler } from './ruler';
 import { createAppUI } from './ui';
@@ -213,4 +214,10 @@ initTableProperties(containerEl, worker);
 initZoomControls(containerEl);
 initSave(worker);
 initSaveAs(worker);
+initAiChat({
+  engine: core.engine,
+  applyModel: async (model) => {
+    await core.loadModel(model, async (m) => computeBreaks(collectProbeItems(m)));
+  },
+});
 initPreviewMode();

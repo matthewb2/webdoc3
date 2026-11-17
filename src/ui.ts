@@ -335,9 +335,35 @@ export function createAppUI(): void {
         <button id="cell-menu-merge" type="button"><i class="bi bi-arrows-collapse"></i> 셀 합치기 (M)</button>
     </div>
 
+    <div id="ai-chat-panel" class="ai-chat-panel">
+        <div class="ai-chat-header">
+            <div class="ai-chat-header-title"><i class="bi bi-stars"></i> AI 어시스턴트</div>
+            <div style="display:flex;gap:4px;align-items:center;">
+                <button id="btn-ai-chat-settings" class="ai-chat-close-btn" type="button" title="설정"><i class="bi bi-gear"></i></button>
+                <button id="btn-ai-chat-close" class="ai-chat-close-btn" type="button" title="닫기"><i class="bi bi-x-lg"></i></button>
+            </div>
+        </div>
+        <div id="ai-chat-settings" class="ai-chat-settings" style="display:none;">
+            <label>API Base URL <input id="ai-setting-baseurl" type="text" placeholder="https://api.openai.com/v1"></label>
+            <label>Model <input id="ai-setting-model" type="text" placeholder="gpt-4o-mini"></label>
+            <label>API Key <input id="ai-setting-apikey" type="password" placeholder="sk-..."></label>
+            <button id="btn-ai-chat-save-settings" type="button" class="ai-chat-send-btn" style="align-self:flex-end;">저장</button>
+        </div>
+        <div id="ai-chat-messages" class="ai-chat-messages">
+            <div class="ai-chat-msg assistant">안녕하세요. 문서 편집을 도와드릴 수 있어요. (설정에서 API 키를 입력하세요)</div>
+        </div>
+        <div class="ai-chat-input-area">
+            <textarea id="ai-chat-input" class="ai-chat-input" placeholder="예: item_0 문단 내용을 수정해줘"></textarea>
+            <div class="ai-chat-actions">
+                <button id="btn-ai-chat-send" class="ai-chat-send-btn" type="button"><i class="bi bi-send"></i> 보내기</button>
+            </div>
+        </div>
+    </div>
+
     <div class="statusbar" style="visibility:hidden">
         <span id="cursor-page" class="statusbar-info" title="커서 위치 페이지">- / -</span>
         <span class="statusbar-spacer"></span>
+        <button id="btn-ai-chat-toggle" class="statusbar-btn" type="button" title="AI 대화창"><i class="bi bi-stars"></i> AI</button>
         <button id="btn-zoom-out" class="statusbar-btn" type="button" title="축소"><i class="bi bi-dash"></i></button>
         <button id="zoom-label" class="statusbar-zoom" type="button">100%</button>
         <button id="btn-zoom-in" class="statusbar-btn" type="button" title="확대"><i class="bi bi-plus"></i></button>
