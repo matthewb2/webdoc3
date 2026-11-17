@@ -8,16 +8,16 @@ import { defaultFontFamily, defaultUiFontFamily, initSettings, loadSettings } fr
 import { setPageMargins } from './layout/layoutConstants';
 import { collectProbeItems, computeBreaks } from './probe';
 import { appendStreamPages, getCachedPages, initRenderer, renderVirtualPages, updateVisiblePages } from './renderHtml';
-import { activateRibbonTab, clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFindReplace, initFontCombos, initFileOpen, initLineSpacingCombo, initNewDocument, initPageMargins, initParagraphStyles, initRecentFiles, initRibbonTabs, initSave, initSaveAs, initSelectionListener, initShapeInsert, initStyleButtons, initTableInsert, initTableProperties, initViewOptions, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, setCurrentFileName, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncLineSpacingCombo, syncStyleButtons, syncTablePropertiesRibbon } from './listener/listener';
-import { initEditorListeners, isComposingActive, hasPendingInputState } from './listener/keyinput';
-import { initCellSelection, paintCellSelection } from './listener/table';
-import { initAiChat } from './listener/aiChat';
+import { activateRibbonTab, clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFindReplace, initFontCombos, initFileOpen, initLineSpacingCombo, initNewDocument, initPageMargins, initParagraphStyles, initRecentFiles, initRibbonTabs, initSave, initSaveAs, initSelectionListener, initShapeInsert, initStyleButtons, initTableInsert, initTableProperties, initViewOptions, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, setCurrentFileName, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncLineSpacingCombo, syncStyleButtons, syncTablePropertiesRibbon } from './listener';
+import { initEditorListeners, isComposingActive, hasPendingInputState } from './keyinput';
+import { initCellSelection, paintCellSelection } from './table';
+import { initAiChat } from './aiChat';
 import { initPreviewMode } from './preview';
 import { ruler } from './ruler';
 import { createAppUI } from './ui';
 import { createEditorCore } from './core';
-import { applyFavicon, hideStartupSpinner, showStartupSpinner } from './shell/startup';
-import { createCursorState, restoreCursorPosition, saveCursorPosition } from './shell/cursorManager';
+import { applyFavicon, hideStartupSpinner, showStartupSpinner } from './startup';
+import { createCursorState, restoreCursorPosition, saveCursorPosition } from './cursorManager';
 
 // Shell(UI) bootstrap
 createAppUI();

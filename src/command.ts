@@ -1,4 +1,4 @@
-import aboutLogoUrl from '../assets/logo.png';
+import aboutLogoUrl from './assets/logo.png';
 import { setAiChatOpen } from './aiChat';
 import { zoomEditorIn, zoomEditorOut, zoomEditorReset } from './initUI';
 

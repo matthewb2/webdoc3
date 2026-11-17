@@ -1,5 +1,5 @@
-import logoUrl from '../assets/logo.svg';
-import { showAppUI } from '../ui';
+import logoUrl from './assets/logo.svg';
+import { showAppUI } from './ui';
 
 let isInitialReady = false;
 

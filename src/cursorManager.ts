@@ -1,6 +1,6 @@
-import type { CursorState } from '../types';
-import { findCursorPageIndices, updateVisiblePages } from '../renderHtml';
-import { takePendingSelection } from '../listener/listener';
+import type { CursorState } from './types';
+import { findCursorPageIndices, updateVisiblePages } from './renderHtml';
+import { takePendingSelection } from './listener';
 
 export function createCursorState(): CursorState {
   return {
