@@ -13,7 +13,7 @@ import { initEditorListeners, isComposingActive, hasPendingInputState } from './
 import { initTableSelectionHandler, paintCellSelection } from './handlers/tableSelection';
 import { initAiChat } from './chat';
 import { initPreviewMode } from './preview';
-import { ruler } from './ruler';
+import { initRulerHandler } from './handlers/rulerHandler';
 import { createAppUI } from './ui';
 import { createEditorCore } from './core/documentCore';
 import { applyFavicon, hideStartupSpinner, showStartupSpinner } from './startup';
@@ -91,7 +91,7 @@ async function initWordProcessor() {
 
 const viewportEl = document.querySelector('.editor-viewport') as HTMLDivElement | null;
 if (viewportEl) {
-  ruler(worker);
+  initRulerHandler(worker);
   viewportEl.addEventListener('mousedown', (e: MouseEvent) => {
     const target = e.target as Element | null;
     if (target && !target.closest('.page')) {
@@ -99,7 +99,7 @@ if (viewportEl) {
     }
   });
 } else {
-  document.addEventListener('DOMContentLoaded', () => ruler(worker), { once: true });
+  document.addEventListener('DOMContentLoaded', () => initRulerHandler(worker), { once: true });
 }
 
 initRenderer(containerEl);

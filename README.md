@@ -1,10 +1,30 @@
 # DOC3
+
 Typescript Wordprocessor based on modern web technology
 
 # dependency
+
 hwp.js https://github.com/hahnlee/hwp.js.git
 
 hwplib-js https://github.com/erickim20/hwplib-js.git
+
+# Structure
+
+The top most abstraction is DocumentModel
+
+## Read
+
+odt, hwpx, docx -> DocumentModel
+
+## Input
+
+Layout and rendering are handled asynchronously. Input, however, must not be handled asynchronously; doing so would disrupt the cursor.
+
+## Write
+
+DocumentModel
+-> odt, hwpx, docx
+-> hwpFile -> hwp
 
 # DOC3 Editor Architecture: Web Worker & Hybrid Rendering Model
 
@@ -22,7 +42,7 @@ graph TD
         User["사용자 입력 (Keyboard / IME / Mouse)"] --> Events["Event Handlers (beforeinput, keydown)"]
         Events --> DOM["DOM / ContentEditable"]
         Events -->|Post Message| WorkerClient["Worker Client Proxy"]
-        
+
         Renderer["Virtualizer / rAF Renderer"] -->|DOM Mount| Viewport["Visible Viewport (A4 Pages)"]
     end
 
@@ -34,20 +54,4 @@ graph TD
     end
 
     WorkerClient ==>|State Synced / rAF Trigger| Renderer
-# Structure
-The top most abstraction is DocumentModel
-
-## Read
-odt,  hwpx, docx -> DocumentModel
-
-## Input
-Layout and rendering are handled asynchronously. Input, however, must not be handled asynchronously; doing so would disrupt the cursor.
-
-## Write
-DocumentModel
--> odt,  hwpx, docx
--> hwpFile -> hwp
-
-
-
-
+```

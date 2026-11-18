@@ -348,7 +348,10 @@ export function createAppUI(): void {
             <label>API Base URL <input id="ai-setting-baseurl" type="text" placeholder="https://api.openai.com/v1"></label>
             <label>Model <input id="ai-setting-model" type="text" placeholder="gpt-4o-mini"></label>
             <label>API Key <input id="ai-setting-apikey" type="password" placeholder="sk-..."></label>
-            <button id="btn-ai-chat-save-settings" type="button" class="ai-chat-send-btn" style="align-self:flex-end;">저장</button>
+            <div style="display:flex;gap:6px;justify-content:flex-end;">
+              <button id="btn-ai-chat-save-settings" type="button" class="ai-chat-send-btn">저장</button>
+              <button id="btn-ai-chat-close-settings" type="button" class="ai-chat-send-btn" style="background:#f3f4f6;color:#333;border:1px solid #d8dde3;">닫기</button>
+            </div>
         </div>
         <div id="ai-chat-messages" class="ai-chat-messages">
             <div class="ai-chat-msg assistant">안녕하세요. 문서 편집을 도와드릴 수 있어요. (설정에서 API 키를 입력하세요)</div>
