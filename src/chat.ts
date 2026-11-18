@@ -1,7 +1,7 @@
 import type { DocumentModel } from './types';
 import { collectProbeItems, computeBreaks } from './probe';
-import { applyToolCall, getDocumentOutline, parseBlockId } from './util/toolEngine';
-import { callLLMAgent, loadAiSettings, saveAiSettings, type ChatMessage } from './util/agentClient';
+import { applyToolCall, getDocumentOutline, parseBlockId } from './utils/toolEngine';
+import { callLLMAgent, loadAiSettings, saveAiSettings, type ChatMessage } from './utils/agentClient';
 
 export interface AiChatDeps {
   engine: { postMessage(msg: any): void; addEventListener(type: 'message', l: (e: MessageEvent<any>) => void): void; removeEventListener(type: 'message', l: (e: MessageEvent<any>) => void): void };

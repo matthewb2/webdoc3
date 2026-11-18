@@ -15,10 +15,10 @@ import { saveCurrentDocument, buildOdtBlob } from './fmt/odt/odtExport';
 import { saveCurrentDocumentDocx, buildDocxBlob } from './fmt/docx/docxExport';
 import { saveCurrentDocumentHwp, buildHwpBlob } from './fmt/hwp/hwpExport';
 import { saveCurrentHwpxDocument, buildHwpxBlob } from './fmt/hwpx/hwpxExport';
-import { cellPosFromTd, clearCellSelection, getActiveTableDocIdx, getCellSelection } from './table';
+import { cellPosFromTd, clearCellSelection, getActiveTableDocIdx, getCellSelection } from './handlers/tableSelection';
 import { stashSelection, peekPendingSelection, selectionRangeInParagraph, selectedParagraphIndices } from './selection';
 export { type SelEnd, type SelSnapshot, snapshotSelection, stashSelection, peekPendingSelection, takePendingSelection, clearPendingSelection, selectionRangeInParagraph, selectedParagraphIndices, setAwaitingRender, initSelectionListener } from './selection';
-import type { CellSel } from './table';
+import type { CellSel } from './handlers/tableSelection';
 
 const FONT_FAMILIES = [
   'Arial', 'Verdana', 'Tahoma', 'Times New Roman', 'Georgia', 'Courier New', '맑은 고딕', '굴림', '돋움', '바탕',  '궁서', '나눔고딕', 'Noto Sans KR'
