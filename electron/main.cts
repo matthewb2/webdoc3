@@ -185,6 +185,55 @@ ipcMain.handle('fs:writeFile', async (_event, filePath: string, data: Uint8Array
   return { ok: true };
 });
 
+const recentFilesPath = () => path.join(app.getPath('userData'), 'recent-files.json');
+
+type RecentFileEntry = { name: string; path: string };
+
+async function readRecentFiles(): Promise<RecentFileEntry[]> {
+  try {
+    const raw = await fs.readFile(recentFilesPath(), 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((x) => x && typeof x.name === 'string' && typeof x.path === 'string' && x.name && x.path)
+      .slice(0, 10);
+  } catch {
+    return [];
+  }
+}
+
+async function writeRecentFiles(entries: RecentFileEntry[]): Promise<void> {
+  const clean = entries
+    .filter((x) => x && typeof x.name === 'string' && typeof x.path === 'string' && x.name && x.path)
+    .slice(0, 10);
+  await fs.mkdir(path.dirname(recentFilesPath()), { recursive: true });
+  await fs.writeFile(recentFilesPath(), JSON.stringify(clean, null, 2), 'utf8');
+}
+
+ipcMain.handle('recent-files:get', async () => {
+  const entries = await readRecentFiles();
+  recentFileNames = entries.map((e) => e.name);
+  if (app.isReady()) createApplicationMenu();
+  return entries;
+});
+
+ipcMain.handle('recent-files:add', async (_event, entry: RecentFileEntry) => {
+  if (!entry || typeof entry.name !== 'string' || typeof entry.path !== 'string') {
+    return await readRecentFiles();
+  }
+  const cur = await readRecentFiles();
+  const next = [{ name: entry.name, path: entry.path }, ...cur.filter((e) => e.path !== entry.path && e.name !== entry.name)].slice(0, 10);
+  await writeRecentFiles(next);
+  recentFileNames = next.map((e) => e.name);
+  if (app.isReady()) createApplicationMenu();
+  return next;
+});
+
+ipcMain.handle('fs:readFile', async (_event, filePath: string) => {
+  const data = await fs.readFile(filePath);
+  return data;
+});
+
 
 function createWindow(): void {
   const iconPath = path.join(__dirname, '..', 'src', 'assets', 'icon.ico');

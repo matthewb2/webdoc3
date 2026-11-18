@@ -2,9 +2,54 @@
 import { activateRibbonTab, initRibbonTabs, setRecentFileOpener } from './command';
 import type { PageModel } from './layout/layout';
 import type { CursorState, TableBorderStyle } from './types';
-import { defaultAlign, defaultFontFamily, defaultFontSize, defaultLineSpacing, loadSettings, saveSettings } from './settings';
-import { addRecentEntry, getRecentEntries, getRecentHandle, verifyReadPermission } from './recentFileStore';
+import { defaultAlign, defaultFontFamily, defaultFontSize, defaultLineSpacing, loadSettings, saveSettings, getRecentFiles as getRecentNamesSetting, addRecentFile as addRecentNameSetting } from './settings';
 import { setPageMargins } from './layout/layoutConstants';
+
+type RecentFileEntry = { name: string; path?: string };
+
+function electronApi(): any | null {
+  const api = (window as any).electronAPI;
+  return api && typeof api === 'object' ? api : null;
+}
+
+async function getRecentFileEntries(): Promise<RecentFileEntry[]> {
+  const api = electronApi();
+  if (api && typeof api.getRecentFiles === 'function') {
+    try {
+      const entries = await api.getRecentFiles();
+      if (Array.isArray(entries)) {
+        return entries
+          .filter((e: any) => e && typeof e.name === 'string')
+          .map((e: any) => ({ name: e.name, path: typeof e.path === 'string' ? e.path : undefined }));
+      }
+    } catch (err) {
+      console.warn('[recent] failed to load recent files from disk', err);
+    }
+  }
+  return getRecentNamesSetting().map((name) => ({ name }));
+}
+
+async function addRecentFileEntry(name: string, filePath?: string | null): Promise<void> {
+  const api = electronApi();
+  if (api && typeof api.addRecentFile === 'function' && filePath) {
+    try {
+      await api.addRecentFile({ name, path: filePath });
+      return;
+    } catch (err) {
+      console.warn('[recent] failed to persist recent file to disk', err);
+    }
+  }
+  addRecentNameSetting(name);
+}
+
+async function syncRecentFilesMenu(): Promise<void> {
+  const entries = await getRecentFileEntries();
+  const names = entries.map((e) => e.name);
+  const api = electronApi();
+  if (api && typeof api.updateRecentFiles === 'function') {
+    api.updateRecentFiles(names);
+  }
+}
 import { parseHwpToDocumentModel } from './fmt/hwp/hwpParser';
 import { parseDocxToDocumentModel } from './fmt/docx/docxParser';
 import { parseOdtToDocumentModel } from './fmt/odt/odtParser';
@@ -231,23 +276,11 @@ async function loadDocumentFile(
   handle: FileSystemFileHandle | null,
   worker: Worker,
   containerEl: HTMLDivElement,
+  filePath?: string | null,
 ) {
   const hwpStatus = document.getElementById('hwp-status') as HTMLSpanElement | null;
-  const lower = file.name.toLowerCase();
-  const kind = /\.hwpx$/i.test(lower)
-    ? 'hwpx'
-    : /\.hwp$/i.test(lower)
-      ? 'hwp'
-      : /\.docx$/i.test(lower)
-        ? 'docx'
-        : /\.odt$/i.test(lower)
-          ? 'odt'
-          : null;
-  if (!kind) {
-    if (hwpStatus) hwpStatus.textContent = '.hwp, .hwpx, .docx, .odt 파일을 선택해 주세요';
-    return;
-  }
-  if (hwpStatus) hwpStatus.textContent = `파싱 중... (${file.name})`;
+  const ext = file.name.split('.').pop()?.toLowerCase() || '';
+  const kind = ext === 'hwpx' ? 'hwpx' : ext === 'hwp' ? 'hwp' : ext === 'docx' ? 'docx' : ext === 'odt' ? 'odt' : 'unknown';
   try {
     const bytes = new Uint8Array(await file.arrayBuffer());
     console.log('[open] file=', file.name, 'kind=', kind, 'bytes=', bytes.length);
@@ -265,8 +298,10 @@ async function loadDocumentFile(
     containerEl.style.display = 'inline-flex';
     setCurrentFileHandle(handle);
     setCurrentFileName(file.name);
-    await addRecentEntry(file.name, handle);
-    refreshRecentFiles();
+    const resolvedPath = filePath || (file as any).path || null;
+    setCurrentFilePath(resolvedPath);
+    await addRecentFileEntry(file.name, resolvedPath);
+    void syncRecentFilesMenu();
     clearCellSelection(containerEl);
     if (hwpStatus) hwpStatus.textContent = `파싱 완료: ${file.name} (${model.length}개 항목)`;
   } catch (err) {
@@ -889,35 +924,32 @@ async function openRecentFileByName(name: string) {
   if (!worker || !containerEl) return;
   const status = document.getElementById('hwp-status') as HTMLSpanElement | null;
   try {
-    const handle = await getRecentHandle(name);
-    if (handle) {
-      const ok = await verifyReadPermission(handle);
-      if (ok) {
-        const file = await handle.getFile();
-        await loadDocumentFile(file, handle, worker, containerEl);
-        return;
-      }
+    const entries = await getRecentFileEntries();
+    const entry = entries.find((e) => e.name === name) || entries.find((e) => e.name === decodeURIComponent(name));
+    const api = electronApi();
+    if (entry?.path && api && typeof api.readFile === 'function') {
+      const data = await api.readFile(entry.path);
+      const bytes = data instanceof Uint8Array ? new Uint8Array(data) : new Uint8Array(data as ArrayBuffer);
+      const file = new File([bytes as BlobPart], entry.name, {});
+      await loadDocumentFile(file, null, worker, containerEl, entry.path);
+      return;
     }
-  } catch {
-    /* 권한/핸들 실패 시 폴백 */
+  } catch (err) {
+    console.warn('[recent] failed to open recent file', err);
   }
-  if (status) status.textContent = `저장된 접근 권한이 없어 파일을 선택해 주세요: ${name}`;
+  if (status) status.textContent = `최근 파일을 열 수 없습니다. 파일을 다시 선택해 주세요: ${name}`;
   (document.getElementById('file-input') as HTMLInputElement | null)?.click();
 }
 
 export function refreshRecentFiles() {
-  const files = getRecentEntries();
-  const api = (window as any).electronAPI;
-  if (api && typeof api.updateRecentFiles === 'function') {
-    api.updateRecentFiles(files);
-  }
+  void syncRecentFilesMenu();
 }
 
 export function initRecentFiles(worker?: Worker, containerEl?: HTMLDivElement) {
   if (worker) recentWorker = worker;
   if (containerEl) recentContainer = containerEl;
   setRecentFileOpener(openRecentFileByName);
-  refreshRecentFiles();
+  void syncRecentFilesMenu();
 }
 
 export function initPageMargins(worker: Worker) {
@@ -1190,8 +1222,8 @@ async function runSave(worker: Worker, saveAs: boolean) {
       currentFileHandle = null;
       const outName = (targetPath.split(/[/\\]/).pop() || filename);
       setCurrentFileName(outName);
-      await addRecentEntry(outName, null);
-      refreshRecentFiles();
+      await addRecentFileEntry(outName, targetPath);
+      void syncRecentFilesMenu();
       if (status) status.textContent = `저장 완료: ${outName}`;
       return;
     }
@@ -1204,8 +1236,8 @@ async function runSave(worker: Worker, saveAs: boolean) {
     }
     currentFileHandle = result?.handle ?? null;
     if (result?.filename) setCurrentFileName(result.filename);
-    if (result?.filename) await addRecentEntry(result.filename, currentFileHandle);
-    refreshRecentFiles();
+    if (result?.filename) await addRecentFileEntry(result.filename, null);
+    void syncRecentFilesMenu();
     if (status) status.textContent = `저장 완료: ${result?.filename || getCurrentFileName()}`;
   } catch (err: any) {
     console.error('[save] failed', err);

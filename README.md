@@ -16,13 +16,6 @@ DOC3 에디터는 **타이핑 딜레이(Jank) 없는 부드러운 입력 경험*
 
 ```mermaid
 graph TD
-    subgraph Main Thread [Main Thread: UI & DOM]
-        User["사용자 입력 (Keyboard / IME / Mouse)"] --> Events["Event Handlers (beforeinput, keydown)"]
-        Events --> DOM["DOM / ContentEditable"]
-        Events -->|Post Message| WorkerClient["Worker Client Proxy"]
-
-        Renderer["Virtualizer / rAF Renderer"] -->|DOM Mount| Viewport["Visible Viewport (A4 Pages)"]
-    end
 
     subgraph Web Worker Thread [Web Worker: Core Model]
         WorkerClient -.->|EDIT_INSERT / SPLIT / DELETE| WorkerCore["Worker Message Router"]

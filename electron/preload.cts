@@ -21,4 +21,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   writeFile: (filePath: string, data: Uint8Array) => {
     return ipcRenderer.invoke('fs:writeFile', filePath, data);
   },
+  readFile: (filePath: string) => {
+    return ipcRenderer.invoke('fs:readFile', filePath);
+  },
+  getRecentFiles: () => {
+    return ipcRenderer.invoke('recent-files:get');
+  },
+  addRecentFile: (entry: { name: string; path: string }) => {
+    return ipcRenderer.invoke('recent-files:add', entry);
+  },
 });
