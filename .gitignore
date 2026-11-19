@@ -27,3 +27,4 @@ dist-ssr
 *.sw?
 .aider*
 electron/*.cjs
+package-lock.json

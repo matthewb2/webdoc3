@@ -281,18 +281,20 @@ html {
   position: fixed;
   pointer-events: none;
   z-index: 1002;
-  background: rgba(47, 111, 237, 0.9);
   display: none;
+  box-sizing: border-box;
 }
 .table-resize-guide-v {
   top: var(--ribbon-height);
   bottom: 28px;
-  width: 1px;
+  width: 0;
+  border-left: 1px dashed rgba(47, 111, 237, 0.9);
 }
 .table-resize-guide-h {
   left: 0;
   right: 0;
-  height: 1px;
+  height: 0;
+  border-top: 1px dashed rgba(47, 111, 237, 0.9);
 }
 body.ai-chat-open .table-resize-guide-h {
   right: var(--ai-panel-width);
