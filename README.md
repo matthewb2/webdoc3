@@ -56,5 +56,4 @@ odt, hwpx, docx
 ## Write
 
 DocumentModel
--> odt, hwpx, docx
--> hwpFile -> hwp
+-> odt, hwpx, docx, hwp

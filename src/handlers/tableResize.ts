@@ -6,6 +6,42 @@ import { clearCellSelection, exitCellEditMode } from './tableSelection';
 let rowResize: { table: HTMLTableElement; tableDocIdx: number; rowIndex: number; tr: HTMLTableRowElement; startY: number; startH: number } | null = null;
 let colResize: { table: HTMLTableElement; tableDocIdx: number; colIndex: number; startX: number; startW: number; startColWidths: number[]; originalLayout: string } | null = null;
 
+let guideV: HTMLDivElement | null = null;
+let guideH: HTMLDivElement | null = null;
+
+function ensureResizeGuides(): { v: HTMLDivElement; h: HTMLDivElement } {
+  if (!guideV) {
+    guideV = document.createElement('div');
+    guideV.className = 'table-resize-guide table-resize-guide-v';
+    document.body.appendChild(guideV);
+  }
+  if (!guideH) {
+    guideH = document.createElement('div');
+    guideH.className = 'table-resize-guide table-resize-guide-h';
+    document.body.appendChild(guideH);
+  }
+  return { v: guideV, h: guideH };
+}
+
+function showColResizeGuide(clientX: number) {
+  const { v, h } = ensureResizeGuides();
+  h.style.display = 'none';
+  v.style.left = `${clientX}px`;
+  v.style.display = 'block';
+}
+
+function showRowResizeGuide(clientY: number) {
+  const { v, h } = ensureResizeGuides();
+  v.style.display = 'none';
+  h.style.top = `${clientY}px`;
+  h.style.display = 'block';
+}
+
+function hideResizeGuides() {
+  if (guideV) guideV.style.display = 'none';
+  if (guideH) guideH.style.display = 'none';
+}
+
 export function isResizingActive() { return !!(rowResize || colResize); }
 
 export function rowResizeHit(container: HTMLDivElement, e: MouseEvent): { table: HTMLTableElement; tableDocIdx: number; rowIndex: number; tr: HTMLTableRowElement } | null {
@@ -48,6 +84,9 @@ const onRowResizeMove = (e: MouseEvent) => {
   rowResize.tr.querySelectorAll('td').forEach((td) => {
     (td as HTMLElement).style.height = `${h}px`;
   });
+  const trRect = rowResize.tr.getBoundingClientRect();
+  // 드래그 중 실제 행 높이에 맞춘 경계선 위치 표시
+  showRowResizeGuide(trRect.top + h);
   e.preventDefault();
 };
 const onRowResizeUp = (e: MouseEvent) => {
@@ -56,6 +95,7 @@ const onRowResizeUp = (e: MouseEvent) => {
   const { tableDocIdx, rowIndex } = rowResize;
   workerRef.postMessage({ type: 'EDIT_TABLE_ROW_HEIGHT', payload: { tableDocIdx, rowIndex, height: h } });
   rowResize = null;
+  hideResizeGuides();
   document.removeEventListener('mousemove', onRowResizeMove);
   document.removeEventListener('mouseup', onRowResizeUp);
   containerRef.style.cursor = '';
@@ -110,6 +150,11 @@ const onColResizeMove = (e: MouseEvent) => {
   applyColResizeWidths(colResize.table, widths);
   colResize.table.style.outline = '1px solid rgba(74,144,217,0.8)';
   colResize.table.style.outlineOffset = '0px';
+
+  // 드래그한 열 경계의 실제 화면 위치에 세로 가이드 라인 표시
+  const leftSum = widths.slice(0, colResize.colIndex + 1).reduce((a, b) => a + b, 0);
+  const tableRect = colResize.table.getBoundingClientRect();
+  showColResizeGuide(tableRect.left + leftSum);
   e.preventDefault();
 };
 
@@ -143,6 +188,7 @@ const onColResizeUp = (e: MouseEvent) => {
   delete (table as any).__resizeModelColWidths;
 
   colResize = null;
+  hideResizeGuides();
   document.removeEventListener('mousemove', onColResizeMove);
   document.removeEventListener('mouseup', onColResizeUp);
   containerRef.style.cursor = '';
@@ -250,6 +296,11 @@ export function tryHandleColResizeMouseDown(container: HTMLDivElement, worker: W
 
   colResize = { table: cHit.table, tableDocIdx: cHit.tableDocIdx, colIndex: boundaryCol, startX: e.clientX, startW, startColWidths, originalLayout };
   container.style.cursor = 'col-resize';
+  {
+    const leftSum = startColWidths.slice(0, boundaryCol + 1).reduce((a, b) => a + b, 0);
+    const tableRect = cHit.table.getBoundingClientRect();
+    showColResizeGuide(tableRect.left + leftSum);
+  }
   document.addEventListener('mousemove', onColResizeMove);
   document.addEventListener('mouseup', onColResizeUp);
   e.preventDefault();
@@ -264,6 +315,10 @@ export function tryHandleRowResizeMouseDown(container: HTMLDivElement, worker: W
   clearCellSelection(container);
   rowResize = { ...hit, startY: e.clientY, startH: hit.tr.getBoundingClientRect().height };
   container.style.cursor = 'row-resize';
+  {
+    const rect = hit.tr.getBoundingClientRect();
+    showRowResizeGuide(rect.bottom);
+  }
   document.addEventListener('mousemove', onRowResizeMove);
   document.addEventListener('mouseup', onRowResizeUp);
   e.preventDefault();

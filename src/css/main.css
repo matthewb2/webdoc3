@@ -275,3 +275,25 @@ html {
             white-space: break-spaces;
             word-break: break-word;
         }
+
+/* 표 리사이즈 가이드 라인 */
+.table-resize-guide {
+  position: fixed;
+  pointer-events: none;
+  z-index: 1002;
+  background: rgba(47, 111, 237, 0.9);
+  display: none;
+}
+.table-resize-guide-v {
+  top: var(--ribbon-height);
+  bottom: 28px;
+  width: 1px;
+}
+.table-resize-guide-h {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+body.ai-chat-open .table-resize-guide-h {
+  right: var(--ai-panel-width);
+}
