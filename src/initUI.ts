@@ -575,6 +575,9 @@ export function initZoomControls(container: HTMLDivElement) {
     refreshZoomLayout(container);
     setRenderZoom(zoomLevel);
     updateVisiblePages();
+    const bottomMargin = getComputedStyle(container).paddingBottom;
+    const pageHeights = Array.from(container.querySelectorAll('.page')).map((p) => (p as HTMLElement).getBoundingClientRect().height);
+    console.log('하단 여백 높이:', bottomMargin, '(zoom:', `${Math.round(zoomLevel * 100)}%`, ')', 'containerH:', container.getBoundingClientRect().height, 'pageHs:', pageHeights);
     window.dispatchEvent(new CustomEvent('editor-zoom', { detail: { zoom: zoomLevel } }));
   };
   zoomApply = apply;

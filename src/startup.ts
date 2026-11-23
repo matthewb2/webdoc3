@@ -75,7 +75,7 @@ export function hideStartupSpinner(containerEl: HTMLDivElement | null): void {
   document.documentElement.style.cursor = '';
   document.body.style.cursor = '';
   if (containerEl) {
-    containerEl.style.display = 'inline-flex';
+    containerEl.style.display = '';
   }
   document.getElementById('startup-spinner-overlay')?.remove();
   document.getElementById('startup-spinner-style')?.remove();

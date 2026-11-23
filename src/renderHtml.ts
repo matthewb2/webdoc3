@@ -520,6 +520,7 @@ export function renderVirtualPages(pages: PageModel[], isFinal: boolean) {
     loggedTableKeys.clear();
   }
   ensureSpacers();
+  rendererContainer.style.display = '';
   rendererContainer.style.gap = '0px';
   updateVisiblePages();
 }
@@ -528,6 +529,7 @@ export function appendStreamPages(newPages: PageModel[]) {
   if (!Array.isArray(newPages) || newPages.length === 0) return;
   newPages.forEach((p) => cachedPages.push(p));
   ensureSpacers();
+  rendererContainer.style.display = '';
   rendererContainer.style.gap = '0px';
   updateVisiblePages();
 }
@@ -592,7 +594,11 @@ export function updateVisiblePages(forceIdx?: number | number[]) {
     (el.style as any).zoom = z === 1 ? '' : String(z);
     el.style.transform = '';
     el.style.transformOrigin = '';
-    el.style.marginBottom = i === n - 1 ? '0px' : `${PAGE_GAP}px`;
+    // CSS zoom은 margin도 함께 확대하므로, 시각적 여백을 고정하려면 역보정
+    const gap = z === 1 ? PAGE_GAP : PAGE_GAP / z;
+    const isLastPage = i === n - 1;
+    el.style.margin = isLastPage ? '0 auto 0 auto' : `0 auto ${gap}px auto`;
+    if (isLastPage) el.style.marginBottom = '0px';
     if (el.parentNode !== rendererContainer || el.nextSibling !== anchor) {
       rendererContainer.insertBefore(el, anchor);
     }
@@ -601,6 +607,12 @@ export function updateVisiblePages(forceIdx?: number | number[]) {
   topSpacer.style.height = `${start * pitch}px`;
   if (end >= n - 1) {
     bottomSpacer.style.height = '0px';
+    // 마지막 문서 페이지 하단에는 페이지 간격을 두지 않음
+    const lastPageEl = rendererContainer.querySelector('.page:last-of-type') as HTMLElement | null;
+    if (lastPageEl) {
+      lastPageEl.style.margin = '0 auto 0 auto';
+      lastPageEl.style.marginBottom = '0px';
+    }
   } else {
     const count = n - 1 - end;
     bottomSpacer.style.height = `${count * pitch - PAGE_GAP}px`;

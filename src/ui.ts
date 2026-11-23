@@ -335,7 +335,7 @@ export function createAppUI(): void {
         <button id="cell-menu-merge" type="button"><i class="bi bi-arrows-collapse"></i> 셀 합치기 (M)</button>
     </div>
 
-    <div id="ai-chat-panel" class="ai-chat-panel">
+    <div id="ai-chat-panel" class="ai-chat-panel hidden">
         <div id="ai-chat-resizer" class="ai-chat-resizer" title="드래그하여 너비 조절"></div>
         <div class="ai-chat-header">
             <div class="ai-chat-header-title"><i class="bi bi-stars"></i> AI 어시스턴트</div>

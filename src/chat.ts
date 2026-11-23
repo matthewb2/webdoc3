@@ -97,7 +97,7 @@ export function initAiChat(deps?: Partial<AiChatDeps>) {
     }
   };
   registerSetAiChatOpenImpl(setOpen);
-  setOpen(true);
+  setOpen(false);
 
   const syncSettingsUi = () => {
     const s = loadAiSettings();
