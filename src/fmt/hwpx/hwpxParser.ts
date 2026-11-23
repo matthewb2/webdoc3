@@ -227,7 +227,8 @@ function collectHeader(ctx: Ctx, headerDoc: Document | null) {
     const strike = firstDesc(cp, 'strikeout') || firstDesc(cp, 'strike');
     if (strike) {
       const shape = (attr(strike, 'shape') || attr(strike, 'type') || '').toUpperCase();
-      if (shape && shape !== 'NONE' && shape !== '0' && shape !== 'FALSE') props.strike = true;
+      // '3D' 등 문자 입체 효과는 취소선이 아니므로 제외
+      if (shape && shape !== 'NONE' && shape !== '0' && shape !== 'FALSE' && shape !== '3D') props.strike = true;
       if (attr(strike, 'shape') == null && attr(strike, 'type') == null) props.strike = true;
     }
 
