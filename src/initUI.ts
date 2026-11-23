@@ -295,7 +295,7 @@ async function loadDocumentFile(
     console.log('[open] parsed model items=', model.length, model);
     worker.postMessage({ type: 'BREAKS', payload: await computeBreaks(collectProbeItems(model)) });
     worker.postMessage({ type: 'INIT_DOC', payload: model });
-    containerEl.style.display = 'inline-flex';
+    containerEl.style.display = '';
     setCurrentFileHandle(handle);
     setCurrentFileName(file.name);
     const resolvedPath = filePath || (file as any).path || null;
@@ -559,8 +559,7 @@ export function zoomEditorReset(): void {
 // 에디터 레이아웃 높이를 zoom 배율에 맞춤.
 export function refreshZoomLayout(container: HTMLDivElement): void {
   container.style.height = '';
-  const h = container.scrollHeight;
-  container.style.height = `${Math.ceil(h * zoomLevel)}px`;
+  container.style.marginBottom = '';
 }
 
 export function initZoomControls(container: HTMLDivElement) {
@@ -571,8 +570,8 @@ export function initZoomControls(container: HTMLDivElement) {
   const apply = (z: number) => {
     zoomLevel = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z * 100) / 100));
     label.textContent = `${Math.round(zoomLevel * 100)}%`;
-    container.style.transform = `scale(${zoomLevel})`;
-    container.style.transformOrigin = 'top center';
+    container.style.transform = '';
+    container.style.transformOrigin = '';
     refreshZoomLayout(container);
     setRenderZoom(zoomLevel);
     updateVisiblePages();

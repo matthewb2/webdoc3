@@ -1,7 +1,7 @@
 // src/render.ts - 페이지 DOM 생성 + 가상화 뷰포트
 import type { PageModel } from './layout/layout';
 import { defaultAlign, defaultIndent, defaultLineSpacing } from './settings';
-import { PAGE_GAP, PAGE_HEIGHT, PAGE_PITCH, PAGE_WIDTH, pageLayout } from './layout/layoutConstants';
+import { PAGE_GAP, PAGE_HEIGHT, PAGE_WIDTH, pageLayout } from './layout/layoutConstants';
 
 let rendererContainer!: HTMLDivElement;
 
@@ -532,6 +532,10 @@ export function appendStreamPages(newPages: PageModel[]) {
   updateVisiblePages();
 }
 
+function currentPagePitch(): number {
+  return PAGE_HEIGHT * renderZoom + PAGE_GAP;
+}
+
 function visibleRange(forceIdx?: number | number[]): [number, number] {
   const n = cachedPages.length;
   if (n === 0) return [0, -1];
@@ -541,10 +545,13 @@ function visibleRange(forceIdx?: number | number[]): [number, number] {
   if (viewportEl) {
     const vRect = viewportEl.getBoundingClientRect();
     const cRect = rendererContainer.getBoundingClientRect();
-    const topInContent = (vRect.top - cRect.top) / renderZoom;
+    const cs = getComputedStyle(rendererContainer);
+    const padTop = parseFloat(cs.paddingTop) || 0;
+    const topInContent = vRect.top - cRect.top - padTop;
     const bottomInContent = topInContent + viewportEl.clientHeight;
-    start = Math.floor(topInContent / PAGE_PITCH) - VIRTUAL_BUFFER;
-    end = Math.floor(bottomInContent / PAGE_PITCH) + VIRTUAL_BUFFER;
+    const pitch = currentPagePitch();
+    start = Math.floor(topInContent / pitch) - VIRTUAL_BUFFER;
+    end = Math.floor(bottomInContent / pitch) + VIRTUAL_BUFFER;
   }
   if (forceIdx !== undefined) {
     const list = Array.isArray(forceIdx) ? forceIdx : [forceIdx];
@@ -573,6 +580,8 @@ export function updateVisiblePages(forceIdx?: number | number[]) {
       mountedPages.delete(idx);
     }
   });
+  const pitch = currentPagePitch();
+  const z = renderZoom;
   let anchor: Node | null = bottomSpacer;
   for (let i = end; i >= start; i--) {
     let el = mountedPages.get(i);
@@ -580,14 +589,22 @@ export function updateVisiblePages(forceIdx?: number | number[]) {
       el = createPageElement(cachedPages[i], i);
       mountedPages.set(i, el);
     }
+    (el.style as any).zoom = z === 1 ? '' : String(z);
+    el.style.transform = '';
+    el.style.transformOrigin = '';
     el.style.marginBottom = i === n - 1 ? '0px' : `${PAGE_GAP}px`;
     if (el.parentNode !== rendererContainer || el.nextSibling !== anchor) {
       rendererContainer.insertBefore(el, anchor);
     }
     anchor = el;
   }
-  topSpacer.style.height = `${start * PAGE_PITCH}px`;
-  bottomSpacer.style.height = end >= n - 1 ? '0px' : `${(n - 1 - end) * PAGE_PITCH}px`;
+  topSpacer.style.height = `${start * pitch}px`;
+  if (end >= n - 1) {
+    bottomSpacer.style.height = '0px';
+  } else {
+    const count = n - 1 - end;
+    bottomSpacer.style.height = `${count * pitch - PAGE_GAP}px`;
+  }
 }
 
 export function findCursorPageIndex(docIdx: number): number {

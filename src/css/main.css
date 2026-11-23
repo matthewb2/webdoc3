@@ -131,10 +131,12 @@ html {
         .statusbar-zoom:hover { background: #eef2f5; }
 
         #editor-container {
-            display: inline-flex; 
+            display: flex;
             flex-direction: column;
             gap: 30px;
-            padding: 20px 20px 40px 20px; 
+            width: fit-content;
+            margin: 0 auto;
+            padding: 0 20px 20px 20px; 
             box-sizing: content-box;
             text-align: left;
         }
