@@ -56,6 +56,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
   const pages: PageModel[] = [];
   let currentPage: PageModel = [];
   let currentHeight = 0;
+  let trailingSpace = 0; // 마지막 아이템의 spaceAfter - 페이지 하단 넘침 판단에서 회수 가능
   let pendingCols: { columns: number; total: number } | null = null;
   let itemIndex = 0;
   let lastStreamCount = 0;
@@ -85,11 +86,12 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
           pendingCols.total += paraTotal;
           charge = Math.ceil(pendingCols.total / columns) - prevBalanced;
         }
-        if (currentHeight + spaceBefore + charge > getPageMaxHeight()) {
+        if (currentHeight + spaceBefore + charge > getPageMaxHeight() + 1) {
           if (currentPage.length > 0) {
             pages.push(currentPage);
             currentPage = [];
             currentHeight = 0;
+            trailingSpace = 0;
           }
           charge = Math.ceil(paraTotal / columns) + LINE_HEIGHT;
           pendingCols = { columns, total: paraTotal };
@@ -100,6 +102,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
           currentPage.push(colFragment);
         }
         currentHeight += charge + spaceAfter;
+        trailingSpace = spaceAfter;
       } else {
       pendingCols = null;
       const runs = item.children || [];
@@ -113,28 +116,39 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
         const lineHeight = lineHeightOfLine(line, spacing);
         const before = lineIndex === 0 ? spaceBefore : 0;
 
-        if (currentHeight + before + lineHeight > getPageMaxHeight()) {
-          console.log(`[layout-break] 페이지 초과 발생! docIdx=${idx}, lineIdx=${lineIndex}, 누적높이=${currentHeight + before + lineHeight}`);
-          if (currentParagraphLines.length === 0 && currentPage.length > 0) {
-            console.log(`[para-break] docIdx=${idx} cur=${currentHeight} lh=${lineHeight} text=${JSON.stringify(runs.map((r) => r.text).join('').slice(0, 30))}`);
-          }
-          if (currentParagraphLines.length > 0) {
-            const fragment = buildParagraphFragment(currentParagraphLines, idx, charOffset, item.align, undefined, item.indent, item.lineSpacing, fragmentCount === 0 ? spaceBefore : undefined, undefined, item.leftIndent, item.textIndent);
-            if (fragment && fragment.children.length > 0) {
-              currentPage.push(fragment);
-              charOffset += fragment.children.reduce((acc, run) => acc + run.text.length, 0);
-              fragmentCount += 1;
+        const maxH = getPageMaxHeight();
+        // 1px epsilon: 분수 line-height/부동소수점 누적 오차로 인한 조기 분할 방지
+        if (currentHeight + before + lineHeight > maxH + 1) {
+          // 페이지 하단 trailing spaceAfter는 다음 문단을 밀어내지 않도록 회수
+          if (currentParagraphLines.length === 0 && currentPage.length > 0 && trailingSpace > 0
+            && currentHeight - trailingSpace + before + lineHeight <= maxH + 1) {
+            currentHeight -= trailingSpace;
+            trailingSpace = 0;
+          } else {
+            if (currentParagraphLines.length === 0 && currentPage.length > 0) {
+              console.log(`[para-break] docIdx=${idx} cur=${currentHeight} lh=${lineHeight} text=${JSON.stringify(runs.map((r) => r.text).join('').slice(0, 30))}`);
             }
+            if (currentParagraphLines.length > 0) {
+              const fragment = buildParagraphFragment(currentParagraphLines, idx, charOffset, item.align, undefined, item.indent, item.lineSpacing, fragmentCount === 0 ? spaceBefore : undefined, undefined, item.leftIndent, item.textIndent);
+              if (fragment && fragment.children.length > 0) {
+                currentPage.push(fragment);
+                charOffset += fragment.children.reduce((acc, run) => acc + run.text.length, 0);
+                fragmentCount += 1;
+              }
+            }
+            pages.push(currentPage);
+            currentPage = [];
+            currentHeight = 0;
+            trailingSpace = 0;
+            currentHeight += before;
+            currentParagraphLines = [line];
+            currentHeight += lineHeight;
+            return;
           }
-          pages.push(currentPage);
-          currentPage = [];
-          currentHeight = 0;
-          currentHeight += before;
-          currentParagraphLines = [line];
-        } else {
-          currentHeight += before;
-          currentParagraphLines.push(line);
         }
+        currentHeight += before;
+        currentParagraphLines.push(line);
+        trailingSpace = 0;
         currentHeight += lineHeight;
       });
 
@@ -145,21 +159,24 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
         }
       }
       currentHeight += spaceAfter;
+      trailingSpace = spaceAfter;
       }
     } else if (item.type === 'shape') {
       pendingCols = null;
       const w = Math.max(20, Math.min(pageLayout.contentWidth, (item as any).width || 160));
       const h = Math.max(10, (item as any).height || 100);
       const blockH = h + 16;
-      if (currentHeight + blockH > getPageMaxHeight()) {
+      if (currentHeight + blockH > getPageMaxHeight() + 1) {
         if (currentPage.length > 0) {
           pages.push(currentPage);
           currentPage = [];
           currentHeight = 0;
+          trailingSpace = 0;
         }
       }
       currentPage.push({ ...(item as any), width: w, height: h, _docIdx: idx } as any);
       currentHeight += blockH;
+      trailingSpace = 0;
     } else if (item.type === 'table') {
       pendingCols = null;
       const tableProps = () => ({
@@ -215,7 +232,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
 
         // 새 조각의 첫 행이면 상단 마진도 함께 검사 (이어진 조각은 상단 마진 없음)
         const overhead = currentTableInPage.rows.length === 0 ? (currentTableInPage._continued ? 0 : TABLE_MARGIN_EDGE) : 0;
-        if (currentHeight + overhead + rowHeight > getPageMaxHeight()) {
+        if (currentHeight + overhead + rowHeight > getPageMaxHeight() + 1) {
           // 글자(줄) 높이 기준 분할: 남은 공간에 들어가는 줄 수 (뒷부분에 최소 1줄 남김)
           const remaining = getPageMaxHeight() - currentHeight - overhead;
           let splitLines = 0;
@@ -248,6 +265,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
             pages.push(currentPage);
             currentPage = [];
             currentHeight = 0;
+            trailingSpace = 0;
             currentTableInPage = { type: 'table', rows: [{ ...row, cells: tailCells, height: undefined }], _docIdx: idx, _continued: true, ...tableProps() };
             const tailContent = contentHeight - (headAcc - TABLE_CELL_VERTICAL_PADDING - TABLE_BORDER_HEIGHT);
             currentHeight += tailContent + TABLE_CELL_VERTICAL_PADDING + TABLE_BORDER_HEIGHT;
@@ -264,6 +282,7 @@ export function runLayoutEngineAsync(documentState: DocumentModel, post: (messag
               pages.push(currentPage);
               currentPage = [];
               currentHeight = 0;
+              trailingSpace = 0;
               currentTableInPage = { type: 'table', rows: [row], _docIdx: idx, _continued: true, ...tableProps() };
               currentHeight += rowHeight;
               pieceRow = row;
@@ -465,7 +484,8 @@ function lineHeightOfLine(line: Glyph[], spacingPct: number): number {
     if (size > maxFont) maxFont = size;
   });
   if (maxFont <= 0) maxFont = BASE_FONT_PX;
-  return Math.max(1, Math.round((maxFont * spacingPct) / 100));
+  // 브라우저 CSS line-height와 동일하게 분수 값을 사용 (반올림 누적 오차로 조기 페이지 넘김 방지)
+  return Math.max(1, (maxFont * spacingPct) / 100);
 }
 
 const breakCache = new Map<string, number[]>();
