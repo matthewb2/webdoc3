@@ -16,7 +16,7 @@
   flex-direction: column;
   z-index: 9;
   box-sizing: border-box;
-  font-family: var(--ui-font, '맑은 고딕', sans-serif);
+  font-family: var(--ui-font, 'Malgun Gothic', '맑은 고딕'), sans-serif;
 }
 
 .ai-chat-resizer {

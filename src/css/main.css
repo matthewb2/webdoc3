@@ -11,7 +11,7 @@ html {
             background-color: #f0f3f6;
             margin: 0;
             padding: 0;
-            font-family: var(--doc-font, '바탕'), 'Arial', sans-serif;
+            font-family: var(--doc-font, 'Batang', '바탕'), 'Arial', sans-serif;
             width: 100vw;
             height: 100vh;
             overflow: hidden; 
@@ -97,7 +97,7 @@ html {
             box-sizing: border-box;
             font-size: 12px;
             color: #555;
-            font-family: var(--doc-font, '바탕'), 'Arial', sans-serif;
+            font-family: var(--doc-font, 'Batang', '바탕'), 'Arial', sans-serif;
         }
         .statusbar-info {
             white-space: nowrap;
@@ -175,7 +175,7 @@ html {
             color: #888;
         }
         p {
-            font-family: var(--doc-font, '바탕'), 'Arial', sans-serif;
+            font-family: var(--doc-font, 'Batang', '바탕'), 'Arial', sans-serif;
             font-size: 0;
             line-height: 0;
             margin: 0;
@@ -247,7 +247,7 @@ html {
             border: 1px solid #b0b4b8 !important; 
             background-color: white;
             padding: 5px 5px;
-            font-family: var(--doc-font, '바탕'), 'Arial', sans-serif;
+            font-family: var(--doc-font, 'Batang', '바탕'), 'Arial', sans-serif;
             font-size: 14px;
             color: #333;
             word-break: normal;

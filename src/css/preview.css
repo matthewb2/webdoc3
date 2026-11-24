@@ -16,7 +16,7 @@
             box-sizing: border-box;
             font-size: 13px;
             color: #333;           
-                 font-family: var(--ui-font, '맑은 고딕'), sans-serif;
+                 font-family: var(--ui-font, 'Malgun Gothic', '맑은 고딕'), sans-serif;
        
         }
         .preview-viewport {
@@ -79,7 +79,7 @@
             box-sizing: border-box;
             font-size: 12px;
             color: #555;
-                 font-family: var(--ui-font, '맑은 고딕'), sans-serif;
+                 font-family: var(--ui-font, 'Malgun Gothic', '맑은 고딕'), sans-serif;
        
             
         }

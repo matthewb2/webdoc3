@@ -11,7 +11,7 @@
             z-index: 10;
             box-shadow: 0 2px 8px rgba(0,0,0,0.06);
             box-sizing: border-box;
-            font-family: var(--ui-font, '맑은 고딕'), sans-serif;
+            font-family: var(--ui-font, 'Malgun Gothic', '맑은 고딕'), sans-serif;
             overflow: hidden;
         }
         .ribbon-tabs {

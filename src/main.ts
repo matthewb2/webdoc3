@@ -55,15 +55,19 @@ async function initWordProcessor() {
   await initSettings();
   const settings = loadSettings();
   setPageMargins(settings.pageMargins);
-  document.documentElement.style.setProperty('--doc-font', `"${defaultFontFamily()}"`);
-  document.documentElement.style.setProperty('--ui-font', `"${defaultUiFontFamily()}"`);
+  const docFont = defaultFontFamily();
+  const docFontStack = /바탕|batang/i.test(docFont) ? '"Batang", "바탕"' : `"${docFont}", "Batang"`;
+  document.documentElement.style.setProperty('--doc-font', docFontStack);
+  const uiFont = defaultUiFontFamily();
+  const uiFontStack = /맑은\s*고딕|malgun/i.test(uiFont) ? '"Malgun Gothic", "맑은 고딕"' : `"${uiFont}", "Malgun Gothic"`;
+  document.documentElement.style.setProperty('--ui-font', uiFontStack);
 
   core.initSettings({
     charShape: settings.charShape,
     lineSpacing: settings.paraShape.lineSpacing,
     pageMargins: settings.pageMargins,
   });
-  core.initMetrics(generateFontMetrics(`16px "${defaultFontFamily()}", Arial`));
+  core.initMetrics(generateFontMetrics(`16px ${docFontStack}, Arial`));
 
   const computeBreaksForModel = async (model: any) => computeBreaks(collectProbeItems(model));
 
