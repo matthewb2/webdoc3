@@ -61,6 +61,17 @@ async function initWordProcessor() {
   const uiFont = defaultUiFontFamily();
   const uiFontStack = /맑은\s*고딕|malgun/i.test(uiFont) ? '"Malgun Gothic", "맑은 고딕"' : `"${uiFont}", "Malgun Gothic"`;
   document.documentElement.style.setProperty('--ui-font', uiFontStack);
+  console.log('[font-debug] settings', { docFont, docFontStack, uiFont, uiFontStack });
+  console.log('[font-debug] css-vars', {
+    docFontVar: getComputedStyle(document.documentElement).getPropertyValue('--doc-font'),
+    uiFontVar: getComputedStyle(document.documentElement).getPropertyValue('--ui-font'),
+  });
+  console.log('[font-debug] fonts.check', {
+    batang: document.fonts?.check?.('16px "Batang"'),
+    batangKo: document.fonts?.check?.('16px "바탕"'),
+    malgun: document.fonts?.check?.('16px "Malgun Gothic"'),
+    malgunKo: document.fonts?.check?.('16px "맑은 고딕"'),
+  });
 
   core.initSettings({
     charShape: settings.charShape,
@@ -117,6 +128,32 @@ initNewDocument(containerEl, worker, savedCursor);
 initFileOpen(worker, containerEl);
 
 let pendingPages: PageModel[] | null = null;
+let fontDebugLogged = false;
+function logFontDebug() {
+  if (fontDebugLogged) return;
+  fontDebugLogged = true;
+  const page = containerEl.querySelector('.page') as HTMLElement | null;
+  const span = containerEl.querySelector('.page p span, .page span') as HTMLElement | null;
+  const p = containerEl.querySelector('.page p') as HTMLElement | null;
+  const body = document.body;
+  console.log('[font-debug] computed', {
+    body: getComputedStyle(body).fontFamily,
+    container: getComputedStyle(containerEl).fontFamily,
+    page: page ? getComputedStyle(page).fontFamily : null,
+    p: p ? getComputedStyle(p).fontFamily : null,
+    span: span ? getComputedStyle(span).fontFamily : null,
+  });
+  console.log('[font-debug] css-vars-after', {
+    docFontVar: getComputedStyle(document.documentElement).getPropertyValue('--doc-font'),
+    uiFontVar: getComputedStyle(document.documentElement).getPropertyValue('--ui-font'),
+  });
+  console.log('[font-debug] fonts.check-after', {
+    batang: document.fonts?.check?.('16px "Batang"'),
+    batangKo: document.fonts?.check?.('16px "바탕"'),
+    malgun: document.fonts?.check?.('16px "Malgun Gothic"'),
+  });
+  console.log('[font-debug] document.fonts.status', (document as any).fonts?.status);
+}
 
 function updateCursorPage() {
   const el = document.getElementById('cursor-page');
@@ -156,6 +193,7 @@ function applyReadyPages(pages: PageModel[]) {
   } else {
     paintCellSelection(containerEl);
   }
+  requestAnimationFrame(() => logFontDebug());
 }
 
 function flushPendingRender() {
