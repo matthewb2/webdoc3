@@ -30,4 +30,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   addRecentFile: (entry: { name: string; path: string }) => {
     return ipcRenderer.invoke('recent-files:add', entry);
   },
+  getSystemFonts: () => {
+    return ipcRenderer.invoke('fonts:getSystemFonts');
+  },
 });

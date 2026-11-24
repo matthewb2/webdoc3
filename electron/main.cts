@@ -2,6 +2,10 @@ import { app, BrowserWindow, Menu, dialog, ipcMain } from 'electron';
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs/promises';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 // 캐시/프로필 경로 권한 문제(0x5 등) 회피: 쓰기 가능한 temp 경로 사용
 const userDataDir = path.join(os.tmpdir(), 'webdoc3-electron');
@@ -232,6 +236,24 @@ ipcMain.handle('recent-files:add', async (_event, entry: RecentFileEntry) => {
 ipcMain.handle('fs:readFile', async (_event, filePath: string) => {
   const data = await fs.readFile(filePath);
   return data;
+});
+
+ipcMain.handle('fonts:getSystemFonts', async () => {
+  if (process.platform !== 'win32') return [];
+  try {
+    const script = [
+      '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+      'Add-Type -AssemblyName System.Drawing',
+      '(New-Object System.Drawing.Text.InstalledFontCollection).Families | ForEach-Object { $_.Name }',
+    ].join('; ');
+    const { stdout } = await execFileAsync('powershell', ['-NoProfile', '-Command', script], {
+      windowsHide: true,
+      maxBuffer: 1024 * 1024,
+    });
+    return stdout.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
 });
 
 

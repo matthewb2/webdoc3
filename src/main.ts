@@ -8,16 +8,17 @@ import { defaultFontFamily, defaultUiFontFamily, initSettings, loadSettings } fr
 import { setPageMargins } from './layout/layoutConstants';
 import { collectProbeItems, computeBreaks } from './probe';
 import { appendStreamPages, getCachedPages, initRenderer, renderVirtualPages, updateVisiblePages } from './renderHtml';
-import { activateRibbonTab, clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFindReplace, initFontCombos, initFileOpen, initLineSpacingCombo, initNewDocument, initPageMargins, initParagraphStyles, initRecentFiles, initRibbonTabs, initSave, initSaveAs, initSelectionListener, initShapeInsert, initStyleButtons, initTableInsert, initTableProperties, initViewOptions, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, setCurrentFileName, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncLineSpacingCombo, syncStyleButtons, syncTablePropertiesRibbon } from './initUI';
+import { activateRibbonTab, clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFindReplace, initFontCombos, initFileOpen, initLineSpacingCombo, initNewDocument, initPageMargins, initParagraphStyles, initRecentFiles, initRibbonTabs, initSave, initSaveAs, initSelectionListener, initShapeInsert, initStyleButtons, initTableInsert, initTableProperties, initViewOptions, initViewportScrollListener, initWorkerListener, initZoomControls, refreshFontFamilyList, refreshZoomLayout, setAwaitingRender, setCurrentFileName, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncLineSpacingCombo, syncStyleButtons, syncTablePropertiesRibbon } from './initUI';
 import { initEditorListeners, isComposingActive, hasPendingInputState } from './handlers/index';
 import { initTableSelectionHandler, paintCellSelection } from './handlers/tableSelection';
 import { initAiChat } from './chat';
 import { initPreviewMode } from './preview';
 import { initRulerHandler } from './handlers/rulerHandler';
 import { createAppUI } from './ui';
-import { createEditorCore } from './core/documentCore';
+import { createEditorCore, parseDocumentBytes } from './core/documentCore';
 import { applyFavicon, hideStartupSpinner, showStartupSpinner } from './startup';
 import { createCursorState, restoreCursorPosition, saveCursorPosition } from './cursorManager';
+import { initFontRegistry, resolveModelFonts } from './utils/fontRegistry';
 
 // Shell(UI) bootstrap
 createAppUI();
@@ -53,6 +54,8 @@ function generateFontMetrics(fontStyle: string): FontMetrics {
 
 async function initWordProcessor() {
   await initSettings();
+  await initFontRegistry();
+  refreshFontFamilyList();
   const settings = loadSettings();
   setPageMargins(settings.pageMargins);
   const docFont = defaultFontFamily();
@@ -95,7 +98,9 @@ async function initWordProcessor() {
     const res = await fetch(defaultDocUrl);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const bytes = new Uint8Array(await res.arrayBuffer());
-    await core.loadFromBytes(bytes, defaultDocName, computeBreaksForModel);
+    const model = await parseDocumentBytes(bytes, defaultDocName);
+    resolveModelFonts(model);
+    await core.loadModel(model, computeBreaksForModel);
     setCurrentFileName(defaultDocName);
   } catch (err: any) {
     console.warn(`기본 문서 로드 실패, 더미 표시: ${err?.message ?? String(err)}`);

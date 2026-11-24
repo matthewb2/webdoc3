@@ -54,6 +54,7 @@ import { parseHwpToDocumentModel } from './fmt/hwp/hwpParser';
 import { parseDocxToDocumentModel } from './fmt/docx/docxParser';
 import { parseOdtToDocumentModel } from './fmt/odt/odtParser';
 import { parseHwpxToDocumentModel } from './fmt/hwpx/hwpxParser';
+import { resolveModelFonts, getInstalledFonts } from './utils/fontRegistry';
 import { collectProbeItems, computeBreaks } from './probe';
 import { getCachedPages, setRenderZoom, updateVisiblePages } from './renderHtml';
 import { saveCurrentDocument, buildOdtBlob } from './fmt/odt/odtExport';
@@ -65,9 +66,32 @@ import { stashSelection, peekPendingSelection, selectionRangeInParagraph, select
 export { type SelEnd, type SelSnapshot, snapshotSelection, stashSelection, peekPendingSelection, takePendingSelection, clearPendingSelection, selectionRangeInParagraph, selectedParagraphIndices, setAwaitingRender, initSelectionListener } from './selection';
 import type { CellSel } from './handlers/tableSelection';
 
-const FONT_FAMILIES = [
-  'Arial', 'Verdana', 'Tahoma', 'Times New Roman', 'Georgia', 'Courier New', '맑은 고딕', '굴림', '돋움', '바탕',  '궁서', '나눔고딕', 'Noto Sans KR'
+const DEFAULT_FONT_FAMILIES = [
+  '맑은 고딕', '바탕', '굴림', '돋움', '궁서', '함초롬바탕', '함초롬돋움',
+  'Arial', 'Times New Roman', 'Georgia', 'Verdana', 'Tahoma', 'Courier New', 'Noto Sans KR'
 ];
+
+function getFontFamilyList(): string[] {
+  const installed = getInstalledFonts();
+  if (installed.length === 0) return DEFAULT_FONT_FAMILIES;
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const add = (f: string) => { const k = f.toLowerCase().trim(); if (!k || seen.has(k)) return; seen.add(k); out.push(f); };
+  for (const f of DEFAULT_FONT_FAMILIES) add(f);
+  const rest = installed.filter((f) => !seen.has(f.toLowerCase().trim()));
+  rest.sort((a, b) => a.localeCompare(b, 'ko'));
+  for (const f of rest) add(f);
+  return out;
+}
+
+export function refreshFontFamilyList(): void {
+  const familySelect = document.getElementById('font-family-select') as HTMLSelectElement | null;
+  if (!familySelect) return;
+  const current = familySelect.value;
+  fillSelect(familySelect, getFontFamilyList());
+  setSelectValue(familySelect, current || defaultFontFamily());
+}
+
 const FONT_SIZES_PT = [8, 9, 10, 10.5, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72];
 const pxToPt = (px: number) => Math.round((px * 72 / 96) * 10) / 10;
 const ptToPx = (pt: number) => Math.round((pt * 96 / 72) * 100) / 100;
@@ -111,7 +135,7 @@ export function initFontCombos(container: HTMLDivElement, worker: Worker, cursor
   const familySelect = document.getElementById('font-family-select') as HTMLSelectElement | null;
   const sizeSelect = document.getElementById('font-size-select') as HTMLSelectElement | null;
   if (!familySelect || !sizeSelect) return;
-  fillSelect(familySelect, FONT_FAMILIES);
+  fillSelect(familySelect, getFontFamilyList());
   fillSelect(sizeSelect, FONT_SIZES_PT.map(String));
   familySelect.disabled = false;
   sizeSelect.disabled = false;
@@ -293,6 +317,7 @@ async function loadDocumentFile(
             ? parseDocxToDocumentModel(bytes)
             : parseOdtToDocumentModel(bytes);
     console.log('[open] parsed model items=', model.length, model);
+    resolveModelFonts(model);
     worker.postMessage({ type: 'BREAKS', payload: await computeBreaks(collectProbeItems(model)) });
     worker.postMessage({ type: 'INIT_DOC', payload: model });
     containerEl.style.display = '';
