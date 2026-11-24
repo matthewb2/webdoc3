@@ -67,20 +67,37 @@ export { type SelEnd, type SelSnapshot, snapshotSelection, stashSelection, peekP
 import type { CellSel } from './handlers/tableSelection';
 
 const DEFAULT_FONT_FAMILIES = [
-  '맑은 고딕', '바탕', '굴림', '돋움', '궁서', '함초롬바탕', '함초롬돋움',
+  '맑은 고딕', '바탕', '굴림', '돋움', '궁서',
   'Arial', 'Times New Roman', 'Georgia', 'Verdana', 'Tahoma', 'Courier New', 'Noto Sans KR'
 ];
 
+function canonicalFontListName(name: string): string {
+  const lower = name.toLowerCase().trim();
+  if (lower.includes('함초롬바탕') || lower.includes('함초롱바탕') || lower === 'batang' || lower === '바탕') return '바탕';
+  if (lower.includes('함초롬돋움') || lower.includes('함초롱돋움')) return '맑은 고딕';
+  if (lower === 'dotum' || lower === '돋움') return '돋움';
+  if (lower === 'malgun gothic' || lower === '맑은 고딕') return '맑은 고딕';
+  if (lower === 'gulim' || lower === '굴림') return '굴림';
+  if (lower === 'gungsuh' || lower === '궁서') return '궁서';
+  return name.trim();
+}
+
 function getFontFamilyList(): string[] {
   const installed = getInstalledFonts();
-  if (installed.length === 0) return DEFAULT_FONT_FAMILIES;
   const seen = new Set<string>();
   const out: string[] = [];
-  const add = (f: string) => { const k = f.toLowerCase().trim(); if (!k || seen.has(k)) return; seen.add(k); out.push(f); };
+  const add = (f: string) => {
+    const k = canonicalFontListName(f).toLowerCase().trim();
+    if (!k || seen.has(k)) return;
+    seen.add(k);
+    out.push(canonicalFontListName(f));
+  };
   for (const f of DEFAULT_FONT_FAMILIES) add(f);
-  const rest = installed.filter((f) => !seen.has(f.toLowerCase().trim()));
-  rest.sort((a, b) => a.localeCompare(b, 'ko'));
-  for (const f of rest) add(f);
+  if (installed.length > 0) {
+    const rest = installed.filter((f) => !seen.has(canonicalFontListName(f).toLowerCase().trim()));
+    rest.sort((a, b) => a.localeCompare(b, 'ko'));
+    for (const f of rest) add(f);
+  }
   return out;
 }
 
@@ -92,7 +109,7 @@ export function refreshFontFamilyList(): void {
   setSelectValue(familySelect, current || defaultFontFamily());
 }
 
-const FONT_SIZES_PT = [8, 9, 10, 10.5, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72];
+const FONT_SIZES_PT = [8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72];
 const pxToPt = (px: number) => Math.round((px * 72 / 96) * 10) / 10;
 const ptToPx = (pt: number) => Math.round((pt * 96 / 72) * 100) / 100;
 
@@ -114,17 +131,36 @@ function fillSelect(select: HTMLSelectElement, values: Array<string | number>) {
   });
 }
 
+function canonicalFontName(value: string): string {
+  const raw = (value || '').split(',')[0].replace(/['"]/g, '').trim();
+  const lower = raw.toLowerCase();
+  if (lower.includes('함초롬바탕') || lower.includes('함초롱바탕') || lower === 'batang' || lower === '바탕') return '바탕';
+  if (lower.includes('함초롬돋움') || lower.includes('함초롱돋움')) return '맑은 고딕';
+  if (lower === 'dotum' || lower === '돋움') return '돋움';
+  if (lower === 'malgun gothic' || lower === '맑은 고딕') return '맑은 고딕';
+  if (lower === 'gulim' || lower === '굴림') return '굴림';
+  if (lower === 'gungsuh' || lower === '궁서') return '궁서';
+  return raw;
+}
+
 function setSelectValue(select: HTMLSelectElement, value: string) {
   const norm = (s: string) => s.replace(/['"]/g, '').trim().toLowerCase();
-  const found = Array.from(select.options).find((o) => norm(o.value) === norm(value));
+  const raw = (value || '').split(',')[0].replace(/['"]/g, '').trim();
+  const canonical = canonicalFontName(value);
+  const options = Array.from(select.options);
+  const found =
+    options.find((o) => norm(o.value) === norm(value)) ||
+    options.find((o) => norm(o.value) === norm(raw)) ||
+    options.find((o) => norm(o.value) === norm(canonical)) ||
+    options.find((o) => norm(canonicalFontName(o.value)) === norm(canonical));
   if (found) {
     select.value = found.value;
-  } else if (value) {
+  } else if (raw) {
     const opt = document.createElement('option');
-    opt.value = value;
-    opt.textContent = value;
+    opt.value = raw;
+    opt.textContent = raw;
     select.appendChild(opt);
-    select.value = value;
+    select.value = raw;
   }
 }
 
