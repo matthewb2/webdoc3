@@ -2,6 +2,7 @@
 import type { PageModel } from './layout/layout';
 import { defaultAlign, defaultIndent, defaultLineSpacing } from './settings';
 import { PAGE_GAP, PAGE_HEIGHT, PAGE_WIDTH, pageLayout } from './layout/layoutConstants';
+import { fontFamilyWithFallback } from './utils/fontFallback';
 
 let rendererContainer!: HTMLDivElement;
 
@@ -20,7 +21,7 @@ function applyRunStyle(span: HTMLSpanElement, run: any, lineSpacing?: number) {
   if (run.underline) decorations.push('underline');
   if (run.strike) decorations.push('line-through');
   if (decorations.length > 0) span.style.textDecoration = decorations.join(' ');
-  if (run.fontFamily) span.style.fontFamily = run.fontFamily;
+  if (run.fontFamily) span.style.fontFamily = fontFamilyWithFallback(run.fontFamily);
   const fs = run.fontSize ?? 16;
   span.style.fontSize = `${fs}px`;
   if (run.color) span.style.color = run.color;

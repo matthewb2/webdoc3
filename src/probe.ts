@@ -1,6 +1,7 @@
 // src/probe.ts - 브라우저 실측 줄바꿈 (숨김 probe로 런별 분절점을 재서 워커에 전달)
 import type { BreakMap, DocumentModel, TextRun } from './types';
 import { pageLayout } from './layout/layoutConstants';
+import { fontFamilyWithFallback } from './utils/fontFallback';
 
 // 워커(layout.ts)의 기하 상수와 동일해야 함
 const CELL_PAD = 16;
@@ -66,7 +67,7 @@ export async function computeBreaks(items: ProbeItem[], onProgress?: (done: numb
             const sp = document.createElement('span');
             if (fs !== 16) sp.style.fontSize = `${fs}px`;
             if (run.bold) sp.style.fontWeight = 'bold';
-            if (run.fontFamily) sp.style.fontFamily = run.fontFamily;
+            if (run.fontFamily) sp.style.fontFamily = fontFamilyWithFallback(run.fontFamily);
             sp.style.lineHeight = '1.6';
             sp.textContent = ch;
             div.appendChild(sp);

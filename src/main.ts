@@ -142,6 +142,7 @@ function logFontDebug() {
     page: page ? getComputedStyle(page).fontFamily : null,
     p: p ? getComputedStyle(p).fontFamily : null,
     span: span ? getComputedStyle(span).fontFamily : null,
+    spanInline: span ? span.style.fontFamily : null,
   });
   console.log('[font-debug] css-vars-after', {
     docFontVar: getComputedStyle(document.documentElement).getPropertyValue('--doc-font'),
