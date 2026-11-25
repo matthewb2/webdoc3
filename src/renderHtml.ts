@@ -450,18 +450,28 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
           const cellChildren: Array<any> = cell.children || [];
           
           if (cellChildren.length > 0 && cellChildren[0].type === 'paragraph') {
-            cellChildren.forEach((paraItem: any) => {
+            cellChildren.forEach((paraItem: any, paraIdx: number) => {
               const p = document.createElement('p');
               p.style.margin = '0';
               p.contentEditable = 'true';
               p.style.lineHeight = '0';
+              p.dataset.tableIdx = String(docIdx);
+              p.dataset.cellR = String(modelRow);
+              p.dataset.cellC = String(ci);
+              p.dataset.cellPara = String(paraIdx);
+              const effectiveAlign = paraItem.align ?? defaultAlign();
+              p.dataset.align = effectiveAlign;
+              p.style.textAlign = effectiveAlign;
+              const left = paraItem.leftIndent ?? 0;
+              const first = paraItem.textIndent ?? 0;
+              if (left) { p.style.paddingLeft = `${left}px`; p.dataset.leftIndent = String(left); }
+              if (first) { p.style.textIndent = `${first}px`; p.dataset.textIndent = String(first); }
               const pChildren: Array<any> = paraItem.children || [];
               const paraMarkSize = typeof (pChildren[0] as any)?.fontSize === 'number' && isFinite((pChildren[0] as any).fontSize)
                 ? (pChildren[0] as any).fontSize
                 : 16;
               p.style.fontSize = `${paraMarkSize}px`;
               if (pChildren.length === 0) {
-                // 내용이 비어있어도 텍스트 노드(제로 폭 공백)를 반드시 생성하여 커서가 p가 아닌 텍스트 노드에 앵커되도록 함
                 const span = document.createElement('span');
                 span.textContent = '\u200B';
                 p.appendChild(span);
@@ -469,7 +479,7 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
                 pChildren.forEach((run: any) => {
                   const span = document.createElement('span');
                   span.textContent = run.text === '' ? '\u200B' : run.text;
-                  applyRunStyle(span, run, defaultLineSpacing());
+                  applyRunStyle(span, run, paraItem.lineSpacing ?? defaultLineSpacing());
                   p.appendChild(span);
                 });
               }
@@ -480,6 +490,17 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
             p.style.margin = '0';
             p.contentEditable = 'true';
             p.style.lineHeight = '0';
+            p.dataset.tableIdx = String(docIdx);
+            p.dataset.cellR = String(modelRow);
+            p.dataset.cellC = String(ci);
+            p.dataset.cellPara = '0';
+            const effectiveAlign = (cell as any).align ?? defaultAlign();
+            p.dataset.align = effectiveAlign;
+            p.style.textAlign = effectiveAlign;
+            const left = (cell as any).leftIndent ?? 0;
+            const first = (cell as any).textIndent ?? 0;
+            if (left) { p.style.paddingLeft = `${left}px`; p.dataset.leftIndent = String(left); }
+            if (first) { p.style.textIndent = `${first}px`; p.dataset.textIndent = String(first); }
             const paraMarkSize = typeof (cellChildren[0] as any)?.fontSize === 'number' && isFinite((cellChildren[0] as any).fontSize)
               ? (cellChildren[0] as any).fontSize
               : 16;

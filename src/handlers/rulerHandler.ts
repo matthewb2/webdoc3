@@ -1,11 +1,11 @@
 import {
   TRACK_WIDTH,
   marginLeftTrack,
-  contentWidth,
   renderRulerTicks,
-  getTargetParagraph,
+  getTargetParagraphContext,
   readIndent,
   applyIndentToDom,
+  type ParagraphContext,
 } from '../utils/rulerUtils';
 
 type EditorZoomDetail = { zoom?: number };
@@ -36,22 +36,28 @@ function setupRuler(worker?: Worker): void {
 
   let rulerZoom = 1;
   let activeMarker: HTMLElement | null = null;
-  let dragTargetP: HTMLElement | null = null;
+  let dragCtx: ParagraphContext | null = null;
 
-  function updateMarkersFromParagraph(p: HTMLElement | null): void {
-    if (!p) {
+  function getCtx(): ParagraphContext | null {
+    if (dragCtx && dragCtx.p && document.contains(dragCtx.p)) return dragCtx;
+    return getTargetParagraphContext();
+  }
+
+  function updateMarkersFromContext(ctx: ParagraphContext | null): void {
+    const base = marginLeftTrack() + (ctx?.leftOffset ?? 0);
+    if (!ctx) {
       leftIndentMarker!.style.left = `${marginLeftTrack() * rulerZoom}px`;
       firstLineMarker!.style.left = `${marginLeftTrack() * rulerZoom}px`;
       return;
     }
-    const { leftIndent, textIndent } = readIndent(p);
-    leftIndentMarker!.style.left = `${(marginLeftTrack() + leftIndent) * rulerZoom}px`;
-    firstLineMarker!.style.left = `${(marginLeftTrack() + leftIndent + textIndent) * rulerZoom}px`;
+    const { leftIndent, textIndent } = readIndent(ctx.p);
+    leftIndentMarker!.style.left = `${(base + leftIndent) * rulerZoom}px`;
+    firstLineMarker!.style.left = `${(base + leftIndent + textIndent) * rulerZoom}px`;
   }
 
   function updateMarkersFromSelection(): void {
     if (activeMarker) return;
-    updateMarkersFromParagraph(getTargetParagraph());
+    updateMarkersFromContext(getTargetParagraphContext());
   }
 
   function setRulerZoom(zoom: number | undefined): void {
@@ -59,49 +65,55 @@ function setupRuler(worker?: Worker): void {
     rulerZoom = zoom;
     rulerTrack!.style.width = `${TRACK_WIDTH * rulerZoom}px`;
     renderRulerTicks(rulerTicksContainer!, rulerZoom);
-
-    if (getTargetParagraph()) {
-      updateMarkersFromSelection();
-    } else {
-      leftIndentMarker!.style.left = `${marginLeftTrack() * rulerZoom}px`;
-      firstLineMarker!.style.left = `${marginLeftTrack() * rulerZoom}px`;
-    }
+    updateMarkersFromSelection();
   }
 
-  function commitIndent(p: HTMLElement) {
+  function commitIndent(ctx: ParagraphContext) {
     if (!worker) return;
-    const idx = parseInt(p.dataset.pIdx || '', 10);
-    if (!Number.isFinite(idx)) return;
+    const p = ctx.p;
     const leftIndent = parseFloat(p.dataset.leftIndent || '0') || 0;
     const textIndent = parseFloat(p.dataset.textIndent || '0') || 0;
+    const tableIdx = parseInt(p.dataset.tableIdx || '', 10);
+    const cellR = parseInt(p.dataset.cellR || '', 10);
+    const cellC = parseInt(p.dataset.cellC || '', 10);
+    const cellPara = parseInt(p.dataset.cellPara || '0', 10);
+    if (Number.isFinite(tableIdx) && Number.isFinite(cellR) && Number.isFinite(cellC)) {
+      worker.postMessage({
+        type: 'EDIT_INDENT',
+        payload: { paragraphIndices: [], leftIndent, textIndent, tableCell: { tableIdx, row: cellR, col: cellC, cellPara: Number.isFinite(cellPara) ? cellPara : 0 } },
+      });
+      return;
+    }
+    const idx = parseInt(p.dataset.pIdx || '', 10);
+    if (!Number.isFinite(idx)) return;
     worker.postMessage({ type: 'EDIT_INDENT', payload: { paragraphIndices: [idx], leftIndent, textIndent } });
   }
 
   const onMouseMove = (event: MouseEvent) => {
     if (!activeMarker) return;
+    const ctx = getCtx();
+    if (!ctx) return;
     const rect = rulerTrack!.getBoundingClientRect();
-    const margin = marginLeftTrack() * rulerZoom;
-    const content = contentWidth() * rulerZoom;
+    const base = marginLeftTrack() + ctx.leftOffset;
+    const cw = Math.max(20, ctx.contentWidth);
+    const basePx = base * rulerZoom;
+    const cwPx = cw * rulerZoom;
 
     let posX = event.clientX - rect.left;
-    posX = Math.max(margin, Math.min(posX, margin + content));
+    posX = Math.max(basePx, Math.min(posX, basePx + cwPx));
 
-    const absValue = (posX - margin) / rulerZoom;
-    const targetP = dragTargetP && document.contains(dragTargetP) ? dragTargetP : getTargetParagraph();
-
-    if (targetP) {
-      const cur = readIndent(targetP);
-      if (activeMarker === leftIndentMarker) {
-        const newLeft = Math.max(0, Math.min(contentWidth(), absValue));
-        applyIndentToDom(targetP, newLeft, cur.textIndent);
-        leftIndentMarker!.style.left = `${(marginLeftTrack() + newLeft) * rulerZoom}px`;
-        firstLineMarker!.style.left = `${(marginLeftTrack() + newLeft + cur.textIndent) * rulerZoom}px`;
-      } else if (activeMarker === firstLineMarker) {
-        const relIndent = Math.max(-cur.leftIndent, Math.min(contentWidth() - cur.leftIndent, absValue - cur.leftIndent));
-        applyIndentToDom(targetP, cur.leftIndent, relIndent);
-        leftIndentMarker!.style.left = `${(marginLeftTrack() + cur.leftIndent) * rulerZoom}px`;
-        firstLineMarker!.style.left = `${(marginLeftTrack() + cur.leftIndent + relIndent) * rulerZoom}px`;
-      }
+    const absValue = (posX - basePx) / rulerZoom;
+    const cur = readIndent(ctx.p);
+    if (activeMarker === leftIndentMarker) {
+      const newLeft = Math.max(0, Math.min(cw, absValue));
+      applyIndentToDom(ctx.p, newLeft, cur.textIndent);
+      leftIndentMarker!.style.left = `${(base + newLeft) * rulerZoom}px`;
+      firstLineMarker!.style.left = `${(base + newLeft + cur.textIndent) * rulerZoom}px`;
+    } else if (activeMarker === firstLineMarker) {
+      const relIndent = Math.max(-cur.leftIndent, Math.min(cw - cur.leftIndent, absValue - cur.leftIndent));
+      applyIndentToDom(ctx.p, cur.leftIndent, relIndent);
+      leftIndentMarker!.style.left = `${(base + cur.leftIndent) * rulerZoom}px`;
+      firstLineMarker!.style.left = `${(base + cur.leftIndent + relIndent) * rulerZoom}px`;
     }
 
     const markerRect = activeMarker.getBoundingClientRect();
@@ -109,11 +121,10 @@ function setupRuler(worker?: Worker): void {
   };
 
   const onMouseUp = () => {
-    if (dragTargetP && document.contains(dragTargetP)) {
-      commitIndent(dragTargetP);
-    }
+    const ctx = getCtx();
+    if (ctx && ctx.p && document.contains(ctx.p)) commitIndent(ctx);
     activeMarker = null;
-    dragTargetP = null;
+    dragCtx = null;
     guideLine!.style.display = 'none';
     document.removeEventListener('mousemove', onMouseMove);
     document.removeEventListener('mouseup', onMouseUp);
@@ -122,8 +133,9 @@ function setupRuler(worker?: Worker): void {
   const attachMarkerListener = (marker: HTMLElement) => {
     marker.addEventListener('mousedown', (event) => {
       event.preventDefault();
+      dragCtx = getTargetParagraphContext();
+      if (!dragCtx) return;
       activeMarker = marker;
-      dragTargetP = getTargetParagraph();
       guideLine!.style.display = 'block';
       const markerRect = marker.getBoundingClientRect();
       guideLine!.style.left = `${markerRect.left + markerRect.width / 2}px`;

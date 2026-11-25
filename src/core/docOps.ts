@@ -398,7 +398,31 @@ export function createDocOps(ctx: DocOpsContext) {
     requestLayout();
   }
 
-  function editIndent(docIndices: number[], payload: { leftIndent?: number; textIndent?: number }) {
+  function editIndent(docIndices: number[], payload: { leftIndent?: number; textIndent?: number; tableCell?: { tableIdx: number; row: number; col: number; cellPara?: number } }) {
+    if (payload.tableCell) {
+      const { tableIdx, row, col, cellPara } = payload.tableCell;
+      const table = documentState()[tableIdx] as any;
+      const cell = table?.type === 'table' ? table.rows?.[row]?.cells?.[col] : null;
+      if (cell) {
+        const target: any = (cell.children?.[0]?.type === 'paragraph')
+          ? (cell.children[cellPara ?? 0] ?? cell.children[0])
+          : cell;
+        if (target) {
+          if (payload.leftIndent !== undefined) {
+            const v = Number(payload.leftIndent);
+            if (Number.isFinite(v)) target.leftIndent = Math.max(0, Math.min(600, Math.round(v * 100) / 100));
+          }
+          if (payload.textIndent !== undefined) {
+            const v = Number(payload.textIndent);
+            if (Number.isFinite(v)) target.textIndent = Math.max(-600, Math.min(600, Math.round(v * 100) / 100));
+          }
+          if (payload.leftIndent !== undefined || payload.textIndent !== undefined) delete target.indent;
+        }
+      }
+      requestLayout();
+      return;
+    }
+
     (Array.isArray(docIndices) ? docIndices : []).forEach((docIdx) => {
       const item = documentState()[docIdx];
       if (item?.type !== 'paragraph') return;

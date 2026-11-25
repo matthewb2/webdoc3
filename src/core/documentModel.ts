@@ -37,11 +37,13 @@ export interface ParagraphNode {
 // 👈 표(Table) 구조를 위한 인터페이스 정의
 export interface TableCellNode {
   type: 'table-cell';
-  children: TextRun[]; // 셀 내부 텍스트
+  children: TextRun[]; // 셀 내용 텍스트
   align?: TextAlign;
+  leftIndent?: number;
+  textIndent?: number;
   rowSpan?: number;
   colSpan?: number;
-  /** 다른 셀에 가려진 병합 자리 표시자 (렌더/측정 제외) */
+  /** 다른 셀에 병합된 자리 표시(렌더/측정 제외) */
   merged?: boolean;
 }
 
