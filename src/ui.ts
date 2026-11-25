@@ -345,9 +345,22 @@ export function createAppUI(): void {
             </div>
         </div>
         <div id="ai-chat-settings" class="ai-chat-settings" style="display:none;">
+            <label>API 공급자
+              <select id="ai-setting-provider">
+                <option value="gemini">Gemini</option>
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="openrouter">OpenRouter</option>
+              </select>
+            </label>
             <label>API Base URL <input id="ai-setting-baseurl" type="text" placeholder="https://api.openai.com/v1"></label>
             <label>Model <input id="ai-setting-model" type="text" placeholder="gpt-4o-mini"></label>
-            <label>API Key <input id="ai-setting-apikey" type="password" placeholder="sk-..."></label>
+            <label>API Key
+              <div class="ai-input-password-wrap">
+                <input id="ai-setting-apikey" type="password" placeholder="sk-...">
+                <button id="btn-ai-apikey-toggle" type="button" class="ai-input-eye-btn" title="API Key 표시/숨김"><i class="bi bi-eye"></i></button>
+              </div>
+            </label>
             <div style="display:flex;gap:6px;justify-content:flex-end;">
               <button id="btn-ai-chat-save-settings" type="button" class="ai-chat-send-btn">저장</button>
               <button id="btn-ai-chat-close-settings" type="button" class="ai-chat-send-btn" style="background:#f3f4f6;color:#333;border:1px solid #d8dde3;">닫기</button>

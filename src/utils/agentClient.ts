@@ -1,12 +1,33 @@
 import type { DocBlockOutline, ToolCall } from './toolEngine';
 
+export type AiProvider = 'gemini' | 'openai' | 'anthropic' | 'openrouter';
+
 export interface AiSettings {
+  provider: AiProvider;
   apiKey: string;
-  baseUrl: string; // e.g. https://api.openai.com/v1 or https://generativelanguage.googleapis.com/v1beta
-  model: string;   // e.g. gpt-4o-mini or gemini-1.5-flash
+  baseUrl: string;
+  model: string;
 }
 
+export const AI_PROVIDER_DEFAULTS: Record<AiProvider, { baseUrl: string; model: string; label: string }> = {
+  gemini: { baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-1.5-flash', label: 'Gemini' },
+  openai: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini', label: 'OpenAI' },
+  anthropic: { baseUrl: 'https://api.anthropic.com/v1', model: 'claude-sonnet-4-20250514', label: 'Anthropic' },
+  openrouter: { baseUrl: 'https://openrouter.ai/api/v1', model: 'openai/gpt-4o-mini', label: 'OpenRouter' },
+};
+
 const SETTINGS_KEY = 'doc3.ai.settings.v1';
+
+function inferProvider(p: any): AiProvider {
+  const v = String(p?.provider || '').toLowerCase();
+  if (v === 'gemini' || v === 'openai' || v === 'anthropic' || v === 'openrouter') return v;
+  const base = String(p?.baseUrl || '').toLowerCase();
+  const model = String(p?.model || '').toLowerCase();
+  if (base.includes('generativelanguage.googleapis.com') || model.startsWith('gemini')) return 'gemini';
+  if (base.includes('anthropic.com') || model.startsWith('claude')) return 'anthropic';
+  if (base.includes('openrouter.ai')) return 'openrouter';
+  return 'openai';
+}
 
 function envDefaults(): Partial<AiSettings> {
   const env = (import.meta as any).env || {};
@@ -14,6 +35,7 @@ function envDefaults(): Partial<AiSettings> {
   const geminiModel = env.GEMINI_LLM_MODEL || env.VITE_GEMINI_LLM_MODEL || '';
   if (geminiKey) {
     return {
+      provider: 'gemini',
       apiKey: geminiKey,
       baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
       model: geminiModel || 'gemini-1.5-flash',
@@ -28,18 +50,24 @@ export function loadAiSettings(): AiSettings {
     if (raw) {
       const p = JSON.parse(raw);
       const d = envDefaults();
+      const provider = inferProvider(p.provider ? p : d.provider ? d : p);
+      const defs = AI_PROVIDER_DEFAULTS[provider];
       return {
+        provider,
         apiKey: typeof p.apiKey === 'string' && p.apiKey ? p.apiKey : (d.apiKey || ''),
-        baseUrl: typeof p.baseUrl === 'string' && p.baseUrl ? p.baseUrl : (d.baseUrl || 'https://api.openai.com/v1'),
-        model: typeof p.model === 'string' && p.model ? p.model : (d.model || 'gpt-4o-mini'),
+        baseUrl: typeof p.baseUrl === 'string' && p.baseUrl ? p.baseUrl : (d.baseUrl || defs.baseUrl),
+        model: typeof p.model === 'string' && p.model ? p.model : (d.model || defs.model),
       };
     }
   } catch {}
   const d = envDefaults();
+  const provider = (d.provider as AiProvider) || 'openai';
+  const defs = AI_PROVIDER_DEFAULTS[provider];
   return {
+    provider,
     apiKey: d.apiKey || '',
-    baseUrl: d.baseUrl || 'https://api.openai.com/v1',
-    model: d.model || 'gpt-4o-mini',
+    baseUrl: d.baseUrl || defs.baseUrl,
+    model: d.model || defs.model,
   };
 }
 
@@ -135,7 +163,19 @@ ${JSON.stringify(outline, null, 2)}
 }
 
 function isGemini(settings: AiSettings): boolean {
-  return /generativelanguage\.googleapis\.com/i.test(settings.baseUrl) || /^gemini/i.test(settings.model || '');
+  return settings.provider === 'gemini' || /generativelanguage\.googleapis\.com/i.test(settings.baseUrl) || /^gemini/i.test(settings.model || '');
+}
+
+function isAnthropic(settings: AiSettings): boolean {
+  return settings.provider === 'anthropic' || /anthropic\.com/i.test(settings.baseUrl);
+}
+
+function toAnthropicTools() {
+  return DOC3_TOOLS.map((t) => ({
+    name: t.function.name,
+    description: t.function.description,
+    input_schema: t.function.parameters,
+  }));
 }
 
 function toGeminiTools() {
@@ -207,6 +247,60 @@ async function callGeminiAgent(params: {
   return { replyText, toolCalls };
 }
 
+async function callAnthropicAgent(params: {
+  settings: AiSettings;
+  prompt: string;
+  outline: DocBlockOutline[];
+  history: ChatMessage[];
+}): Promise<AgentResult> {
+  const { settings, prompt, outline, history } = params;
+  const base = settings.baseUrl.replace(/\/+$/, '');
+  const url = `${base}/messages`;
+  const messages = [
+    ...history.slice(-12).map((m) => ({ role: m.role, content: m.content })),
+    { role: 'user', content: prompt },
+  ];
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': settings.apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: settings.model || 'claude-sonnet-4-20250514',
+      max_tokens: 2048,
+      system: buildSystemPrompt(outline),
+      messages,
+      tools: toAnthropicTools(),
+      temperature: 0.2,
+    }),
+  });
+
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    throw new Error(`Anthropic API 오류 (${res.status}): ${t.slice(0, 400)}`);
+  }
+
+  const data = await res.json();
+  const content = Array.isArray(data?.content) ? data.content : [];
+  let replyText = '';
+  const toolCalls: ToolCall[] = [];
+  for (const part of content) {
+    if (part?.type === 'text' && typeof part.text === 'string') {
+      replyText += (replyText ? '\n' : '') + part.text;
+    } else if (part?.type === 'tool_use' && part?.name) {
+      const name = part.name;
+      const args = part.input || {};
+      if (name === 'patch_paragraph' || name === 'insert_paragraph' || name === 'delete_block' || name === 'update_table_cell') {
+        toolCalls.push({ name, args } as ToolCall);
+      }
+    }
+  }
+  return { replyText, toolCalls };
+}
+
 export async function callLLMAgent(params: {
   settings: AiSettings;
   prompt: string;
@@ -218,6 +312,10 @@ export async function callLLMAgent(params: {
 
   if (isGemini(settings)) {
     return callGeminiAgent({ settings, prompt, outline, history });
+  }
+
+  if (isAnthropic(settings)) {
+    return callAnthropicAgent({ settings, prompt, outline, history });
   }
 
   const base = settings.baseUrl.replace(/\/+$/, '');

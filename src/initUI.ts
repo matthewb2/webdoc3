@@ -1,4 +1,4 @@
-/* src/listener/initUI.ts */
+/* src/initUI.ts */
 import { activateRibbonTab, initRibbonTabs, setRecentFileOpener } from './command';
 import type { PageModel } from './layout/layout';
 import type { CursorState, TableBorderStyle } from './types';
@@ -29,7 +29,7 @@ async function getRecentFileEntries(): Promise<RecentFileEntry[]> {
   return getRecentNamesSetting().map((name) => ({ name }));
 }
 
-async function addRecentFileEntry(name: string, filePath?: string | null): Promise<void> {
+export async function addRecentFileEntry(name: string, filePath?: string | null): Promise<void> {
   const api = electronApi();
   if (api && typeof api.addRecentFile === 'function' && filePath) {
     try {
@@ -42,7 +42,7 @@ async function addRecentFileEntry(name: string, filePath?: string | null): Promi
   addRecentNameSetting(name);
 }
 
-async function syncRecentFilesMenu(): Promise<void> {
+export async function syncRecentFilesMenu(): Promise<void> {
   const entries = await getRecentFileEntries();
   const names = entries.map((e) => e.name);
   const api = electronApi();

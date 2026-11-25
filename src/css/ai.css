@@ -115,12 +115,43 @@
   gap: 3px;
   color: #444;
 }
-.ai-chat-settings input {
+.ai-chat-settings input,
+.ai-chat-settings select {
   height: 28px;
   border: 1px solid #ccd3da;
   border-radius: 4px;
   padding: 0 8px;
   font-size: 12px;
+  background: #fff;
+}
+
+.ai-input-password-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.ai-input-password-wrap input {
+  width: 100%;
+  padding-right: 34px !important;
+}
+.ai-input-eye-btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 26px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: #555;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.ai-input-eye-btn:hover {
+  color: #111;
 }
 
 .ai-chat-input-area {

@@ -1,7 +1,7 @@
 import type { DocumentModel } from './types';
 import { collectProbeItems, computeBreaks } from './probe';
 import { applyToolCall, getDocumentOutline, parseBlockId } from './utils/toolEngine';
-import { callLLMAgent, loadAiSettings, saveAiSettings, type ChatMessage } from './utils/agentClient';
+import { AI_PROVIDER_DEFAULTS, callLLMAgent, loadAiSettings, saveAiSettings, type AiProvider, type ChatMessage } from './utils/agentClient';
 import {
   type AiChatDeps,
   appendMessage,
@@ -26,8 +26,10 @@ export function initAiChat(deps?: Partial<AiChatDeps>) {
   const saveSettingsBtn = document.getElementById('btn-ai-chat-save-settings') as HTMLButtonElement | null;
   const closeSettingsBtn = document.getElementById('btn-ai-chat-close-settings') as HTMLButtonElement | null;
   const baseUrlInput = document.getElementById('ai-setting-baseurl') as HTMLInputElement | null;
+  const providerInput = document.getElementById('ai-setting-provider') as HTMLSelectElement | null;
   const modelInput = document.getElementById('ai-setting-model') as HTMLInputElement | null;
   const apiKeyInput = document.getElementById('ai-setting-apikey') as HTMLInputElement | null;
+  const apiKeyToggleBtn = document.getElementById('btn-ai-apikey-toggle') as HTMLButtonElement | null;
   const resizer = document.getElementById('ai-chat-resizer') as HTMLDivElement | null;
   if (!panel || !input) return;
 
@@ -101,6 +103,7 @@ export function initAiChat(deps?: Partial<AiChatDeps>) {
 
   const syncSettingsUi = () => {
     const s = loadAiSettings();
+    if (providerInput) providerInput.value = s.provider;
     if (baseUrlInput) baseUrlInput.value = s.baseUrl;
     if (modelInput) modelInput.value = s.model;
     if (apiKeyInput) apiKeyInput.value = s.apiKey;
@@ -113,16 +116,33 @@ export function initAiChat(deps?: Partial<AiChatDeps>) {
     if (!settingsBox) return;
     settingsBox.style.display = settingsBox.style.display === 'none' ? 'flex' : 'none';
   });
+  providerInput?.addEventListener('change', () => {
+    const p = (providerInput.value as AiProvider) || 'openai';
+    const defs = AI_PROVIDER_DEFAULTS[p] || AI_PROVIDER_DEFAULTS.openai;
+    if (baseUrlInput) baseUrlInput.value = defs.baseUrl;
+    if (modelInput) modelInput.value = defs.model;
+  });
+
   saveSettingsBtn?.addEventListener('click', () => {
+    const provider = ((providerInput?.value as AiProvider) || 'openai');
+    const defs = AI_PROVIDER_DEFAULTS[provider] || AI_PROVIDER_DEFAULTS.openai;
     saveAiSettings({
-      baseUrl: (baseUrlInput?.value || 'https://api.openai.com/v1').trim(),
-      model: (modelInput?.value || 'gpt-4o-mini').trim(),
+      provider,
+      baseUrl: (baseUrlInput?.value || defs.baseUrl).trim(),
+      model: (modelInput?.value || defs.model).trim(),
       apiKey: (apiKeyInput?.value || '').trim(),
     });
-    appendMessage('assistant', 'AI 설정을 저장했습니다.');
+    appendMessage('assistant', 'AI 설정이 저장되었습니다.');
   });
   closeSettingsBtn?.addEventListener('click', () => {
     if (settingsBox) settingsBox.style.display = 'none';
+  });
+  apiKeyToggleBtn?.addEventListener('click', () => {
+    if (!apiKeyInput) return;
+    const show = apiKeyInput.type === 'password';
+    apiKeyInput.type = show ? 'text' : 'password';
+    const icon = apiKeyToggleBtn.querySelector('i');
+    if (icon) icon.className = show ? 'bi bi-eye-slash' : 'bi bi-eye';
   });
 
   let busy = false;
