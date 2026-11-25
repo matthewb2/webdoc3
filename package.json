@@ -3,9 +3,8 @@
   "private": true,
   "description": "Web-based Word Processor supporting HWP, DOCX, and ODT",
   "author": "MK-SOLUTION",
-  "version": "0.3.3",
-  "type": "module",
-  "main": "electron/main.cjs",
+  "version": "0.4.1",
+  "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
     "dev": "vite",
@@ -22,8 +21,9 @@
     },
     "files": [
       "dist/**/*",
-      "electron/main.cjs",
-      "electron/preload.cjs",
+      "electron/main.js",
+      "electron/preload.js",
+      "electron/spellchecker.js",
       "src/assets/icon.ico",
       "package.json"
     ],
@@ -42,9 +42,11 @@
   },
   "devDependencies": {
     "cross-env": "^10.1.0",
+    "dictionary-ko": "^2.0.0",
     "electron": "26.6.1",
     "electron-builder": "^26.18.0",
     "fflate": "^0.8.3",
+    "nspell": "^2.1.5",
     "typescript": "~6.0.2",
     "vite": "^8.0.12"
   },

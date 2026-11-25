@@ -1,5 +1,5 @@
 import type { CursorState } from '../types';
-import { isImeLocked, endGracePeriod } from './composition';
+import { isActivelyComposing, isInPostCompositionGrace, endGracePeriod } from './composition';
 import {
   cachedParagraphInfo,
   clearCellSelection,
@@ -36,11 +36,18 @@ export function initInputHandler(
 
     if (isInsideTableElement) return;
 
-    if (isImeLocked() || !!(globalThis as any).document?.isComposing) {
+    if (isActivelyComposing()) {
       return;
     }
 
-    if ((e.data != null && e.data !== '' || e.inputType.startsWith('delete') || e.inputType === 'insertParagraph')) {
+    const isRealEdit = (e.data != null && e.data !== '') || e.inputType.startsWith('delete') || e.inputType === 'insertParagraph';
+    if (isInPostCompositionGrace()) {
+      if (isRealEdit) {
+        endGracePeriod();
+      } else {
+        return;
+      }
+    } else if (isRealEdit) {
       endGracePeriod();
     }
 

@@ -1,6 +1,7 @@
 import aboutLogoUrl from './assets/logo.png';
 import { setAiChatOpen } from './handlers/chatHandler';
 import { zoomEditorIn, zoomEditorOut, zoomEditorReset } from './initUI';
+import { runSpellcheck } from './spellcheck';
 
 let openRecentFileByNameFn: ((name: string) => void | Promise<void>) | null = null;
 
@@ -99,6 +100,9 @@ export function handleMenuCommand(command: string) {
       input?.select();
       return;
     }
+    case 'edit:spellcheck':
+      void runSpellcheck();
+      return;
     case 'view:preview':
       (document.getElementById('btn-preview') as HTMLButtonElement | null)?.click();
       return;

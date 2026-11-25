@@ -3,6 +3,7 @@ import type { PageModel } from './layout/layout';
 import { defaultAlign, defaultIndent, defaultLineSpacing } from './settings';
 import { PAGE_GAP, PAGE_HEIGHT, PAGE_WIDTH, pageLayout } from './layout/layoutConstants';
 import { fontFamilyWithFallback } from './utils/fontFallback';
+import { clearSpellcheckHighlights } from './spellcheck';
 
 let rendererContainer!: HTMLDivElement;
 
@@ -544,6 +545,7 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
 
 export function renderVirtualPages(pages: PageModel[], isFinal: boolean) {
   if (!Array.isArray(pages)) return;
+  clearSpellcheckHighlights();
   if (isFinal) {
     cachedPages = pages;
     mountedPages.forEach((el) => el.remove());
@@ -558,6 +560,7 @@ export function renderVirtualPages(pages: PageModel[], isFinal: boolean) {
 
 export function appendStreamPages(newPages: PageModel[]) {
   if (!Array.isArray(newPages) || newPages.length === 0) return;
+  clearSpellcheckHighlights();
   newPages.forEach((p) => cachedPages.push(p));
   ensureSpacers();
   rendererContainer.style.display = '';
@@ -607,12 +610,15 @@ export function updateVisiblePages(forceIdx?: number | number[]) {
     return;
   }
   const [start, end] = visibleRange(forceIdx);
+  let unmounted = false;
   mountedPages.forEach((el, idx) => {
     if (idx < start || idx > end) {
       el.remove();
       mountedPages.delete(idx);
+      unmounted = true;
     }
   });
+  if (unmounted) clearSpellcheckHighlights();
   const pitch = currentPagePitch();
   const z = renderZoom;
   let anchor: Node | null = bottomSpacer;

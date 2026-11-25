@@ -301,3 +301,13 @@ html {
 body.ai-chat-open .table-resize-guide-h {
   right: var(--ai-panel-width);
 }
+
+
+/* 맞춤법 검사 하이라이트 */
+::highlight(spell-errors) {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: #e53935;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
+}

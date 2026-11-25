@@ -33,4 +33,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getSystemFonts: () => {
     return ipcRenderer.invoke('fonts:getSystemFonts');
   },
+  checkParagraphs: (paragraphs: Array<{ id: string; text: string }>, options?: { maxSuggestions?: number; minWordLength?: number }) => {
+    return ipcRenderer.invoke('spellcheck:checkParagraphs', { paragraphs, options });
+  },
+  addUserWord: (word: string, model?: string) => {
+    return ipcRenderer.invoke('spellcheck:addUserWord', { word, model });
+  },
 });

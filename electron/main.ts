@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as fs from 'fs/promises';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { initSpellChecker, checkParagraphs, addUserWord } from './spellchecker';
 
 const execFileAsync = promisify(execFile);
 
@@ -68,6 +69,7 @@ function createApplicationMenu(): void {
         { role: 'selectAll', label: '모두 선택' },
         { type: 'separator' },
         { label: '찾기/바꾸기 탭 표시', accelerator: 'CmdOrCtrl+F', click: (_item, win) => sendMenuCommand(win as BrowserWindow | undefined, 'tab:edit') },
+        { label: '맞춤법 검사', accelerator: 'F7', click: (_item, win) => sendMenuCommand(win as BrowserWindow | undefined, 'edit:spellcheck') },
       ],
     },
     {
@@ -257,9 +259,19 @@ ipcMain.handle('fonts:getSystemFonts', async () => {
 });
 
 
+ipcMain.handle('spellcheck:checkParagraphs', async (_event, payload: { paragraphs?: Array<{ id: string; text: string }>; options?: { maxSuggestions?: number; minWordLength?: number } }) => {
+  const paragraphs = Array.isArray(payload?.paragraphs) ? payload.paragraphs : [];
+  return checkParagraphs(paragraphs, payload?.options);
+});
+
+ipcMain.handle('spellcheck:addUserWord', async (_event, payload: { word?: string; model?: string }) => {
+  const word = typeof payload?.word === 'string' ? payload.word : '';
+  return addUserWord(word, payload?.model);
+});
+
 function createWindow(): void {
   const iconPath = path.join(__dirname, '..', 'src', 'assets', 'icon.ico');
-  const preloadPath = path.join(__dirname, 'preload.cjs');
+  const preloadPath = path.join(__dirname, 'preload.js');
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 900,
@@ -296,8 +308,16 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  setImmediate(() => {
+    try {
+      initSpellChecker();
+    } catch (err) {
+      console.error('Failed to initialize spellchecker:', err);
+    }
+  });
+
   const iconPath = path.join(__dirname, '..', 'src', 'assets', 'icon.ico');
-  const preloadPath = path.join(__dirname, 'preload.cjs');
+  const preloadPath = path.join(__dirname, 'preload.js');
   app.on('web-contents-created', (_event, contents) => {
     contents.setWindowOpenHandler(() => ({
       action: 'allow',

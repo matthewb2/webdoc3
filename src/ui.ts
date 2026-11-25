@@ -43,6 +43,9 @@ export function createAppUI(): void {
                             <button id="btn-replace" class="toolbar-btn" type="button" title="바꾸기"><i class="bi bi-arrow-repeat"></i> 바꾸기</button>
                             <button id="btn-replace-all" class="toolbar-btn" type="button" title="모두 바꾸기"><i class="bi bi-check2-all"></i> 모두 바꾸기</button>
                         </div>
+                        <div class="ribbon-row">
+                            <button id="btn-spellcheck" class="toolbar-btn" type="button" title="맞춤법 검사 (F7)"><i class="bi bi-spellcheck"></i> 맞춤법 검사</button>
+                        </div>
                     </div>
                     <div class="ribbon-group-title">찾기 및 바꾸기</div>
                 </div>

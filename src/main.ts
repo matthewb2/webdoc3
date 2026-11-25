@@ -9,6 +9,7 @@ import { setPageMargins } from './layout/layoutConstants';
 import { collectProbeItems, computeBreaks } from './probe';
 import { appendStreamPages, getCachedPages, initRenderer, renderVirtualPages, updateVisiblePages } from './renderHtml';
 import { activateRibbonTab, clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFindReplace, initFontCombos, initFileOpen, initLineSpacingCombo, initNewDocument, initPageMargins, initRecentFiles, initRibbonTabs, initSave, initSaveAs, initSelectionListener, initShapeInsert, initTableInsert, initTableProperties, initViewOptions, initViewportScrollListener, initWorkerListener, initZoomControls, refreshFontFamilyList, refreshZoomLayout, setAwaitingRender, setCurrentFileName, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncLineSpacingCombo, syncTablePropertiesRibbon } from './initUI';
+import { initSpellcheckListeners } from './spellcheck';
 import { syncStyleButtons,  initStyleButtons, initParagraphStyles } from './handlers/styleButtonsHandler';
 import { initEditorListeners, isComposingActive, hasPendingInputState } from './handlers/index';
 import { initTableSelectionHandler, paintCellSelection } from './handlers/tableSelection';
@@ -82,7 +83,7 @@ async function initWordProcessor() {
     return;
   }
 
-  const defaultDocName = 'table.hwpx';
+  const defaultDocName = 'cellmerge.hwpx';
   const defaultDocUrl = encodeURI(`./${defaultDocName}`);
   try {
     const res = await fetch(defaultDocUrl);
@@ -212,6 +213,7 @@ initSelectionListener(() => {
 });
 
 initEditorListeners(containerEl, worker, savedCursor, () => saveCursorPosition(containerEl, savedCursor), flushPendingRender, () => { pendingPages = null; });
+initSpellcheckListeners();
 initFontCombos(containerEl, worker, savedCursor);
 initColumnCombo(containerEl, worker, savedCursor);
 initAlignCombo(containerEl, worker, savedCursor);

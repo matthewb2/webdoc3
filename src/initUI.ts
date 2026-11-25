@@ -1,5 +1,6 @@
 /* src/initUI.ts */
 import { activateRibbonTab, initRibbonTabs, setRecentFileOpener } from './command';
+import { runSpellcheck } from './spellcheck';
 import type { PageModel } from './layout/layout';
 import type { CursorState, TableBorderStyle } from './types';
 import { defaultAlign, defaultFontFamily, defaultFontSize, defaultLineSpacing, loadSettings, saveSettings, getRecentFiles as getRecentNamesSetting, addRecentFile as addRecentNameSetting } from './settings';
@@ -1122,6 +1123,7 @@ export function initFindReplace(worker: Worker, cursor?: CursorState, container?
   document.getElementById('btn-find-next')?.addEventListener('click', runFind);
   document.getElementById('btn-replace')?.addEventListener('click', runReplace);
   document.getElementById('btn-replace-all')?.addEventListener('click', runReplaceAll);
+  document.getElementById('btn-spellcheck')?.addEventListener('click', () => { void runSpellcheck(); });
   findInput()?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); runFind(); } });
   replaceInput()?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); runReplace(); } });
   findInput()?.addEventListener('input', () => { lastFindFrom = null; lastFindQuery = ''; });

@@ -9,8 +9,16 @@ let graceRaf = 0;
 let compAnchor: { docIdx: number; charIndex: number; charOffset: number; domStartInPara: number } | null = null;
 let onCompositionEndCb: (() => void) | null = null;
 
+export function isActivelyComposing() {
+  return composing || !!(globalThis as any).document?.isComposing;
+}
+
+export function isInPostCompositionGrace() {
+  return postCompositionGrace && !isActivelyComposing();
+}
+
 export function isImeLocked() {
-  return composing || !!(globalThis as any).document?.isComposing || postCompositionGrace;
+  return isActivelyComposing() || postCompositionGrace;
 }
 
 export function hasPendingInputState() {
