@@ -6,7 +6,7 @@
             left: 0;
             right: 0;
             height: var(--ruler-height);
-            background: #f8fafc;
+            background: #f0f3f6;
             border-bottom: 1px solid #d8dde3;
             z-index: 20;
             display: block;
@@ -25,10 +25,18 @@
             position: relative;
             flex: none;
             height: 100%;
-            background: #ffffff;
+            background: #f0f3f6;
             overflow: visible;
             box-sizing: border-box;
             border: none;
+        }
+        .ruler-content-band {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            background: #ffffff;
+            pointer-events: none;
+            z-index: 0;
         }
 
         .ruler-track::before,
@@ -101,6 +109,15 @@
             border-top: 7px solid #1b4f9c;
         }
         .ruler-marker-left-indent {
+            bottom: 0;
+            top: auto;
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-bottom: 7px solid #1b4f9c;
+        }
+        .ruler-marker-right-indent {
             bottom: 0;
             top: auto;
             width: 0;

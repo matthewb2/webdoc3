@@ -1,6 +1,7 @@
 import {
   TRACK_WIDTH,
   marginLeftTrack,
+  contentWidth,
   renderRulerTicks,
   getTargetParagraphContext,
   readIndent,
@@ -25,11 +26,13 @@ export function initRulerHandler(worker?: Worker): void {
 function setupRuler(worker?: Worker): void {
   const leftIndentMarker = document.getElementById('marker-left-indent') as HTMLElement | null;
   const firstLineMarker = document.getElementById('marker-first-line') as HTMLElement | null;
+  const rightIndentMarker = document.getElementById('marker-right-indent') as HTMLElement | null;
   const guideLine = document.getElementById('ruler-guide') as HTMLElement | null;
   const rulerTrack = document.getElementById('ruler-track') as HTMLElement | null;
   const rulerTicksContainer = document.getElementById('ruler-ticks') as HTMLElement | null;
+  const contentBand = document.getElementById('ruler-content-band') as HTMLElement | null;
 
-  if (!leftIndentMarker || !firstLineMarker || !guideLine || !rulerTrack || !rulerTicksContainer) {
+  if (!leftIndentMarker || !firstLineMarker || !rightIndentMarker || !guideLine || !rulerTrack || !rulerTicksContainer || !contentBand) {
     console.warn('[ruler] 눈금자 요소를 찾지 못했습니다.');
     return;
   }
@@ -43,16 +46,28 @@ function setupRuler(worker?: Worker): void {
     return getTargetParagraphContext();
   }
 
+  function updateContentBand(base: number, cw: number, leftIndent: number, rightIndent: number): void {
+    const left = (base + leftIndent) * rulerZoom;
+    const width = Math.max(0, cw - leftIndent - rightIndent) * rulerZoom;
+    contentBand!.style.left = `${left}px`;
+    contentBand!.style.width = `${width}px`;
+  }
+
   function updateMarkersFromContext(ctx: ParagraphContext | null): void {
     const base = marginLeftTrack() + (ctx?.leftOffset ?? 0);
+    const cw = ctx?.contentWidth ?? contentWidth();
     if (!ctx) {
       leftIndentMarker!.style.left = `${marginLeftTrack() * rulerZoom}px`;
       firstLineMarker!.style.left = `${marginLeftTrack() * rulerZoom}px`;
+      rightIndentMarker!.style.left = `${(marginLeftTrack() + cw) * rulerZoom}px`;
+      updateContentBand(marginLeftTrack(), cw, 0, 0);
       return;
     }
-    const { leftIndent, textIndent } = readIndent(ctx.p);
+    const { leftIndent, textIndent, rightIndent } = readIndent(ctx.p);
     leftIndentMarker!.style.left = `${(base + leftIndent) * rulerZoom}px`;
     firstLineMarker!.style.left = `${(base + leftIndent + textIndent) * rulerZoom}px`;
+    rightIndentMarker!.style.left = `${(base + cw - rightIndent) * rulerZoom}px`;
+    updateContentBand(base, cw, leftIndent, rightIndent);
   }
 
   function updateMarkersFromSelection(): void {
@@ -73,6 +88,7 @@ function setupRuler(worker?: Worker): void {
     const p = ctx.p;
     const leftIndent = parseFloat(p.dataset.leftIndent || '0') || 0;
     const textIndent = parseFloat(p.dataset.textIndent || '0') || 0;
+    const rightIndent = parseFloat(p.dataset.rightIndent || '0') || 0;
     const tableIdx = parseInt(p.dataset.tableIdx || '', 10);
     const cellR = parseInt(p.dataset.cellR || '', 10);
     const cellC = parseInt(p.dataset.cellC || '', 10);
@@ -80,13 +96,13 @@ function setupRuler(worker?: Worker): void {
     if (Number.isFinite(tableIdx) && Number.isFinite(cellR) && Number.isFinite(cellC)) {
       worker.postMessage({
         type: 'EDIT_INDENT',
-        payload: { paragraphIndices: [], leftIndent, textIndent, tableCell: { tableIdx, row: cellR, col: cellC, cellPara: Number.isFinite(cellPara) ? cellPara : 0 } },
+        payload: { paragraphIndices: [], leftIndent, textIndent, rightIndent, tableCell: { tableIdx, row: cellR, col: cellC, cellPara: Number.isFinite(cellPara) ? cellPara : 0 } },
       });
       return;
     }
     const idx = parseInt(p.dataset.pIdx || '', 10);
     if (!Number.isFinite(idx)) return;
-    worker.postMessage({ type: 'EDIT_INDENT', payload: { paragraphIndices: [idx], leftIndent, textIndent } });
+    worker.postMessage({ type: 'EDIT_INDENT', payload: { paragraphIndices: [idx], leftIndent, textIndent, rightIndent } });
   }
 
   const onMouseMove = (event: MouseEvent) => {
@@ -105,15 +121,22 @@ function setupRuler(worker?: Worker): void {
     const absValue = (posX - basePx) / rulerZoom;
     const cur = readIndent(ctx.p);
     if (activeMarker === leftIndentMarker) {
-      const newLeft = Math.max(0, Math.min(cw, absValue));
-      applyIndentToDom(ctx.p, newLeft, cur.textIndent);
+      const newLeft = Math.max(0, Math.min(cw - cur.rightIndent, absValue));
+      applyIndentToDom(ctx.p, newLeft, cur.textIndent, cur.rightIndent);
       leftIndentMarker!.style.left = `${(base + newLeft) * rulerZoom}px`;
       firstLineMarker!.style.left = `${(base + newLeft + cur.textIndent) * rulerZoom}px`;
+      updateContentBand(base, cw, newLeft, cur.rightIndent);
     } else if (activeMarker === firstLineMarker) {
-      const relIndent = Math.max(-cur.leftIndent, Math.min(cw - cur.leftIndent, absValue - cur.leftIndent));
-      applyIndentToDom(ctx.p, cur.leftIndent, relIndent);
+      const relIndent = Math.max(-cur.leftIndent, Math.min(cw - cur.leftIndent - cur.rightIndent, absValue - cur.leftIndent));
+      applyIndentToDom(ctx.p, cur.leftIndent, relIndent, cur.rightIndent);
       leftIndentMarker!.style.left = `${(base + cur.leftIndent) * rulerZoom}px`;
       firstLineMarker!.style.left = `${(base + cur.leftIndent + relIndent) * rulerZoom}px`;
+      updateContentBand(base, cw, cur.leftIndent, cur.rightIndent);
+    } else if (activeMarker === rightIndentMarker) {
+      const newRight = Math.max(0, Math.min(cw - Math.max(0, cur.leftIndent), cw - absValue));
+      applyIndentToDom(ctx.p, cur.leftIndent, cur.textIndent, newRight);
+      rightIndentMarker!.style.left = `${(base + cw - newRight) * rulerZoom}px`;
+      updateContentBand(base, cw, cur.leftIndent, newRight);
     }
 
     const markerRect = activeMarker.getBoundingClientRect();
@@ -146,6 +169,7 @@ function setupRuler(worker?: Worker): void {
 
   attachMarkerListener(leftIndentMarker);
   attachMarkerListener(firstLineMarker);
+  attachMarkerListener(rightIndentMarker);
 
   document.addEventListener('selectionchange', updateMarkersFromSelection);
   window.addEventListener('editor-zoom', (event) => {
@@ -158,6 +182,7 @@ function setupRuler(worker?: Worker): void {
 
   leftIndentMarker.style.left = `${marginLeftTrack()}px`;
   firstLineMarker.style.left = `${marginLeftTrack()}px`;
+  rightIndentMarker.style.left = `${(marginLeftTrack() + contentWidth()) * rulerZoom}px`;
   setRulerZoom(1);
   rulerTrack.classList.add('ruler-ready');
   const container = rulerTrack.closest('.ruler-container') as HTMLElement | null;

@@ -83,31 +83,36 @@ export function getTargetParagraph(): HTMLElement | null {
   return getTargetParagraphContext()?.p ?? null;
 }
 
-export function readIndent(p: HTMLElement): { leftIndent: number; textIndent: number } {
+export function readIndent(p: HTMLElement): { leftIndent: number; textIndent: number; rightIndent: number } {
   const dl = parseFloat(p.dataset.leftIndent || '');
   const dt = parseFloat(p.dataset.textIndent || '');
-  const hasData = Number.isFinite(dl) || Number.isFinite(dt);
+  const dr = parseFloat(p.dataset.rightIndent || '');
+  const hasData = Number.isFinite(dl) || Number.isFinite(dt) || Number.isFinite(dr);
   if (hasData) {
     return {
       leftIndent: Number.isFinite(dl) ? dl : 0,
       textIndent: Number.isFinite(dt) ? dt : 0,
+      rightIndent: Number.isFinite(dr) ? dr : 0,
     };
   }
   const legacy = parseFloat(p.dataset.indent || '');
   if (Number.isFinite(legacy) && legacy !== 0) {
-    if (legacy > 0) return { leftIndent: 0, textIndent: legacy };
-    return { leftIndent: -legacy, textIndent: legacy };
+    if (legacy > 0) return { leftIndent: 0, textIndent: legacy, rightIndent: 0 };
+    return { leftIndent: -legacy, textIndent: legacy, rightIndent: 0 };
   }
   const cs = window.getComputedStyle(p);
   const paddingLeft = parseFloat(cs.paddingLeft) || 0;
   const textIndent = parseFloat(cs.textIndent) || 0;
-  return { leftIndent: paddingLeft, textIndent };
+  const paddingRight = parseFloat(cs.paddingRight) || 0;
+  return { leftIndent: paddingLeft, textIndent, rightIndent: paddingRight };
 }
 
-export function applyIndentToDom(p: HTMLElement, leftIndent: number, textIndent: number) {
+export function applyIndentToDom(p: HTMLElement, leftIndent: number, textIndent: number, rightIndent = 0) {
   p.style.paddingLeft = leftIndent ? `${leftIndent}px` : '';
   p.style.textIndent = textIndent ? `${textIndent}px` : '';
+  p.style.paddingRight = rightIndent ? `${rightIndent}px` : '';
   p.dataset.leftIndent = String(leftIndent);
   p.dataset.textIndent = String(textIndent);
+  p.dataset.rightIndent = String(rightIndent);
   delete p.dataset.indent;
 }

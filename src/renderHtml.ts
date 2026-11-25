@@ -223,9 +223,10 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
       p.style.textAlign = effectiveAlign;
       p.dataset.align = effectiveAlign;
 
-      if (item.leftIndent !== undefined || item.textIndent !== undefined) {
+      if (item.leftIndent !== undefined || item.textIndent !== undefined || item.rightIndent !== undefined) {
         const left = item.leftIndent ?? 0;
         const first = item.textIndent ?? 0;
+        const right = item.rightIndent ?? 0;
         if (left) {
           p.style.paddingLeft = `${left}px`;
           p.dataset.leftIndent = String(left);
@@ -233,6 +234,10 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
         if (first) {
           p.style.textIndent = `${first}px`;
           p.dataset.textIndent = String(first);
+        }
+        if (right) {
+          p.style.paddingRight = `${right}px`;
+          p.dataset.rightIndent = String(right);
         }
       } else {
         const effectiveIndent = item.indent ?? defaultIndent();
@@ -464,8 +469,10 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
               p.style.textAlign = effectiveAlign;
               const left = paraItem.leftIndent ?? 0;
               const first = paraItem.textIndent ?? 0;
+              const right = paraItem.rightIndent ?? 0;
               if (left) { p.style.paddingLeft = `${left}px`; p.dataset.leftIndent = String(left); }
               if (first) { p.style.textIndent = `${first}px`; p.dataset.textIndent = String(first); }
+              if (right) { p.style.paddingRight = `${right}px`; p.dataset.rightIndent = String(right); }
               const pChildren: Array<any> = paraItem.children || [];
               const paraMarkSize = typeof (pChildren[0] as any)?.fontSize === 'number' && isFinite((pChildren[0] as any).fontSize)
                 ? (pChildren[0] as any).fontSize
@@ -499,8 +506,10 @@ function createPageElement(pageData: PageModel, pIndex: number): HTMLDivElement 
             p.style.textAlign = effectiveAlign;
             const left = (cell as any).leftIndent ?? 0;
             const first = (cell as any).textIndent ?? 0;
+            const right = (cell as any).rightIndent ?? 0;
             if (left) { p.style.paddingLeft = `${left}px`; p.dataset.leftIndent = String(left); }
             if (first) { p.style.textIndent = `${first}px`; p.dataset.textIndent = String(first); }
+            if (right) { p.style.paddingRight = `${right}px`; p.dataset.rightIndent = String(right); }
             const paraMarkSize = typeof (cellChildren[0] as any)?.fontSize === 'number' && isFinite((cellChildren[0] as any).fontSize)
               ? (cellChildren[0] as any).fontSize
               : 16;

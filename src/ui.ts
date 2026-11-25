@@ -303,9 +303,11 @@ export function createAppUI(): void {
         <div class="ruler-container">
             <div class="ruler-center">
                 <div class="ruler-track" id="ruler-track">
+                    <div id="ruler-content-band" class="ruler-content-band"></div>
                     <div class="ruler-ticks" id="ruler-ticks"></div>
                     <div id="marker-first-line" class="ruler-marker ruler-marker-first-line" title="첫 줄 들여쓰기" style="left: 85px;"></div>
                     <div id="marker-left-indent" class="ruler-marker ruler-marker-left-indent" title="왼쪽 들여쓰기" style="left: 85px;"></div>
+                    <div id="marker-right-indent" class="ruler-marker ruler-marker-right-indent" title="오른쪽 들여쓰기"></div>
                 </div>
             </div>
         </div>

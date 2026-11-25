@@ -398,7 +398,23 @@ export function createDocOps(ctx: DocOpsContext) {
     requestLayout();
   }
 
-  function editIndent(docIndices: number[], payload: { leftIndent?: number; textIndent?: number; tableCell?: { tableIdx: number; row: number; col: number; cellPara?: number } }) {
+  function editIndent(docIndices: number[], payload: { leftIndent?: number; textIndent?: number; rightIndent?: number; tableCell?: { tableIdx: number; row: number; col: number; cellPara?: number } }) {
+    const applyIndent = (target: any) => {
+      if (payload.leftIndent !== undefined) {
+        const v = Number(payload.leftIndent);
+        if (Number.isFinite(v)) target.leftIndent = Math.max(0, Math.min(600, Math.round(v * 100) / 100));
+      }
+      if (payload.textIndent !== undefined) {
+        const v = Number(payload.textIndent);
+        if (Number.isFinite(v)) target.textIndent = Math.max(-600, Math.min(600, Math.round(v * 100) / 100));
+      }
+      if (payload.rightIndent !== undefined) {
+        const v = Number(payload.rightIndent);
+        if (Number.isFinite(v)) target.rightIndent = Math.max(0, Math.min(600, Math.round(v * 100) / 100));
+      }
+      if (payload.leftIndent !== undefined || payload.textIndent !== undefined || payload.rightIndent !== undefined) delete target.indent;
+    };
+
     if (payload.tableCell) {
       const { tableIdx, row, col, cellPara } = payload.tableCell;
       const table = documentState()[tableIdx] as any;
@@ -407,17 +423,7 @@ export function createDocOps(ctx: DocOpsContext) {
         const target: any = (cell.children?.[0]?.type === 'paragraph')
           ? (cell.children[cellPara ?? 0] ?? cell.children[0])
           : cell;
-        if (target) {
-          if (payload.leftIndent !== undefined) {
-            const v = Number(payload.leftIndent);
-            if (Number.isFinite(v)) target.leftIndent = Math.max(0, Math.min(600, Math.round(v * 100) / 100));
-          }
-          if (payload.textIndent !== undefined) {
-            const v = Number(payload.textIndent);
-            if (Number.isFinite(v)) target.textIndent = Math.max(-600, Math.min(600, Math.round(v * 100) / 100));
-          }
-          if (payload.leftIndent !== undefined || payload.textIndent !== undefined) delete target.indent;
-        }
+        if (target) applyIndent(target);
       }
       requestLayout();
       return;
@@ -426,17 +432,7 @@ export function createDocOps(ctx: DocOpsContext) {
     (Array.isArray(docIndices) ? docIndices : []).forEach((docIdx) => {
       const item = documentState()[docIdx];
       if (item?.type !== 'paragraph') return;
-      if (payload.leftIndent !== undefined) {
-        const v = Number(payload.leftIndent);
-        if (Number.isFinite(v)) item.leftIndent = Math.max(0, Math.min(600, Math.round(v * 100) / 100));
-      }
-      if (payload.textIndent !== undefined) {
-        const v = Number(payload.textIndent);
-        if (Number.isFinite(v)) item.textIndent = Math.max(-600, Math.min(600, Math.round(v * 100) / 100));
-      }
-      if (payload.leftIndent !== undefined || payload.textIndent !== undefined) {
-        delete item.indent;
-      }
+      applyIndent(item);
     });
     requestLayout();
   }
