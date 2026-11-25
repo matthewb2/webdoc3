@@ -219,12 +219,38 @@ export function createDocOps(ctx: DocOpsContext) {
       indent: item.indent,
       leftIndent: item.leftIndent,
       textIndent: item.textIndent,
+      rightIndent: item.rightIndent,
       lineSpacing: item.lineSpacing,
       spaceBefore: item.spaceBefore,
       spaceAfter: item.spaceAfter,
     };
-    state[docIdx] = { type: 'paragraph', children: left.length > 0 ? left : [seedRun()], ...paraProps };
-    state.splice(docIdx + 1, 0, { type: 'paragraph', children: right.length > 0 ? right : [seedRun()], ...paraProps });
+
+    const styleSource = item.children[runIndex] ?? item.children[item.children.length - 1] ?? left[left.length - 1] ?? right[0];
+    const carryStyle = (r: TextRun): TextRun => {
+      if (!styleSource) return r;
+      const out: TextRun = { ...r };
+      if (out.fontFamily === undefined && styleSource.fontFamily !== undefined) out.fontFamily = styleSource.fontFamily;
+      if (out.fontSize === undefined && styleSource.fontSize !== undefined) out.fontSize = styleSource.fontSize;
+      if (out.bold === undefined && styleSource.bold !== undefined) out.bold = styleSource.bold;
+      if (out.italic === undefined && styleSource.italic !== undefined) out.italic = styleSource.italic;
+      if (out.underline === undefined && styleSource.underline !== undefined) out.underline = styleSource.underline;
+      if (out.strike === undefined && styleSource.strike !== undefined) out.strike = styleSource.strike;
+      if (out.color === undefined && styleSource.color !== undefined) out.color = styleSource.color;
+      if (out.backgroundColor === undefined && styleSource.backgroundColor !== undefined) out.backgroundColor = styleSource.backgroundColor;
+      return out;
+    };
+
+    const ensureStyledEmptyRun = (runs: TextRun[]): TextRun[] => {
+      if (runs.length === 0) return [carryStyle(seedRun())];
+      const hasText = runs.some((r) => (r.text || '').length > 0);
+      if (hasText) return runs;
+      return [carryStyle(runs[0])];
+    };
+
+    const leftChildren = ensureStyledEmptyRun(left);
+    const rightChildren = ensureStyledEmptyRun(right);
+    state[docIdx] = { type: 'paragraph', children: leftChildren, ...paraProps };
+    state.splice(docIdx + 1, 0, { type: 'paragraph', children: rightChildren, ...paraProps });
     requestLayout();
   }
 

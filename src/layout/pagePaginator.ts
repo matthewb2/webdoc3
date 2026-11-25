@@ -1,5 +1,5 @@
 // src/layout/pagePaginator.ts
-import type { DocumentItem, ParagraphNode, TableNode, TableRowNode } from '../types';
+import type { DocumentItem, ParagraphNode, TableNode, TableRowNode, TextRun } from '../types';
 import { pageLayout } from './layoutConstants';
 import {
   type Glyph,
@@ -133,6 +133,8 @@ function layoutParagraphItem(
       spaceAfter,
       item.leftIndent,
       item.textIndent,
+      item.rightIndent,
+      item.children?.[0],
     );
     if (colFragment && colFragment.children.length > 0) {
       state.currentPage.push(colFragment);
@@ -186,6 +188,8 @@ function layoutParagraphItem(
             undefined,
             item.leftIndent,
             item.textIndent,
+            item.rightIndent,
+            item.children?.[0],
           );
           if (fragment && fragment.children.length > 0) {
             state.currentPage.push(fragment);
@@ -220,6 +224,8 @@ function layoutParagraphItem(
       spaceAfter,
       item.leftIndent,
       item.textIndent,
+      item.rightIndent,
+      item.children?.[0],
     );
     if (fragment && fragment.children.length > 0) {
       state.currentPage.push(fragment);
@@ -462,11 +468,27 @@ function buildParagraphFragment(
   spaceAfter?: number,
   leftIndent?: number,
   textIndent?: number,
+  rightIndent?: number,
+  styleSource?: TextRun,
 ): ParagraphNode | null {
-  // 정렬은 CSS text-align으로 처리한다. 스페이서 런을 넣으면 fragment 텍스트가
-  // 원문과 달라져 커서 오프셋과 편집 인덱스가 어긋나므로 절대 추가하지 않는다.
   const runs = mergeRuns(lines.flatMap(glyphLineToRuns));
   if (runs.length === 0) return null;
+
+  // 빈 줄([])에서 glyphLineToRuns가 스타일 없는 {text:''}를 반환하므로 원본 런 스타일을 보존
+  if (styleSource) {
+    for (const r of runs) {
+      if ((r.text || '').length === 0) {
+        if (r.fontFamily === undefined && styleSource.fontFamily !== undefined) r.fontFamily = styleSource.fontFamily;
+        if (r.fontSize === undefined && styleSource.fontSize !== undefined) r.fontSize = styleSource.fontSize;
+        if (r.bold === undefined && styleSource.bold !== undefined) r.bold = styleSource.bold;
+        if (r.italic === undefined && styleSource.italic !== undefined) r.italic = styleSource.italic;
+        if (r.underline === undefined && styleSource.underline !== undefined) r.underline = styleSource.underline;
+        if (r.strike === undefined && styleSource.strike !== undefined) r.strike = styleSource.strike;
+        if (r.color === undefined && styleSource.color !== undefined) r.color = styleSource.color;
+        if (r.backgroundColor === undefined && styleSource.backgroundColor !== undefined) r.backgroundColor = styleSource.backgroundColor;
+      }
+    }
+  }
 
   const fragment: ParagraphNode = {
     type: 'paragraph',
@@ -479,6 +501,7 @@ function buildParagraphFragment(
   if (columns && columns > 1) fragment.columns = columns;
   if (leftIndent !== undefined) fragment.leftIndent = leftIndent;
   if (textIndent !== undefined) fragment.textIndent = textIndent;
+  if (rightIndent !== undefined) fragment.rightIndent = rightIndent;
   if (indent) fragment.indent = indent;
   if (spaceBefore && spaceBefore > 0) fragment.spaceBefore = spaceBefore;
   if (spaceAfter && spaceAfter > 0) fragment.spaceAfter = spaceAfter;
