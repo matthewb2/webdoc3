@@ -11,7 +11,7 @@ import { appendStreamPages, getCachedPages, initRenderer, renderVirtualPages, up
 import { activateRibbonTab, clearPendingSelection,  initFindReplace, initFileOpen, initLineSpacingCombo, initNewDocument, initPageMargins, initRecentFiles, initRibbonTabs, initSave, initSaveAs, initSelectionListener, initShapeInsert, initTableInsert, initTableProperties, initViewOptions, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, setCurrentFileName, syncLineSpacingCombo, syncTablePropertiesRibbon } from './initUI';
 
 import { refreshFontFamilyList, syncFontCombos, initColumnCombo, initAlignCombo, initFontCombos, syncColumnCombo, syncAlignCombo, initColorControls,syncColorControls } from './handlers/formatControlsHandler';
-import { initSpellcheckListeners } from './spellcheck';
+import { initSpellcheckListeners, runSpellcheck } from './spellcheck';
 import { syncStyleButtons,  initStyleButtons, initParagraphStyles } from './handlers/styleButtonsHandler';
 import { initEditorListeners, isComposingActive, hasPendingInputState } from './handlers/index';
 import { initTableSelectionHandler, paintCellSelection } from './handlers/tableSelection';
@@ -128,6 +128,14 @@ initFileOpen(worker, containerEl);
 let pendingPages: PageModel[] | null = null;
 function logFontDebug() {}
 
+let initialSpellcheckScheduled = false;
+function scheduleInitialSpellcheck() {
+  if (initialSpellcheckScheduled) return;
+  if (!(window as any).electronAPI?.checkParagraphs) return;
+  initialSpellcheckScheduled = true;
+  setTimeout(() => { void runSpellcheck(); }, 300);
+}
+
 function updateCursorPage() {
   const el = document.getElementById('cursor-page');
   if (!el) return;
@@ -161,6 +169,7 @@ function applyReadyPages(pages: PageModel[]) {
     syncStyleButtons();
     syncLineSpacingCombo();
     updateCursorPage();
+    scheduleInitialSpellcheck();
     paintCellSelection(containerEl);
     syncTablePropertiesRibbon(containerEl);
   } else {

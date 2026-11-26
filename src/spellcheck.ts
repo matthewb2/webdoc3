@@ -1,5 +1,5 @@
 ﻿export interface SpellParagraphInput { id: string; text: string }
-export interface SpellErrorItem { start: number; end: number; org: string; suggestions: string[] }
+export interface SpellErrorItem { start: number; end: number; org: string; suggestions: string[]; rule?: 'spelling' | 'spacing' }
 export interface SpellParagraphResult { id: string; errors: SpellErrorItem[] }
 
 interface ParaEntry {
@@ -107,6 +107,7 @@ export async function runSpellcheck(): Promise<SpellParagraphResult[]> {
   }
 
   lastResults = Array.isArray(results) ? results : [];
+  console.log('[spellcheck-debug] results', JSON.stringify(lastResults.map(r => ({id:r.id, errCount:r.errors.length, errors:r.errors}))));
   const byId = new Map(entries.map((e) => [e.id, e]));
   const ranges: Range[] = [];
 

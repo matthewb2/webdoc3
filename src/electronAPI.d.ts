@@ -10,6 +10,7 @@ declare global {
     end: number;
     org: string;
     suggestions: string[];
+    rule?: 'spelling' | 'spacing' | 'grammar';
   }
   interface SpellParagraphResult {
     id: string;
