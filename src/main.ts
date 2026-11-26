@@ -8,7 +8,9 @@ import { defaultFontFamily, defaultUiFontFamily, initSettings, loadSettings } fr
 import { setPageMargins } from './layout/layoutConstants';
 import { collectProbeItems, computeBreaks } from './probe';
 import { appendStreamPages, getCachedPages, initRenderer, renderVirtualPages, updateVisiblePages } from './renderHtml';
-import { activateRibbonTab, clearPendingSelection, initAlignCombo, initColorControls, initColumnCombo, initFindReplace, initFontCombos, initFileOpen, initLineSpacingCombo, initNewDocument, initPageMargins, initRecentFiles, initRibbonTabs, initSave, initSaveAs, initSelectionListener, initShapeInsert, initTableInsert, initTableProperties, initViewOptions, initViewportScrollListener, initWorkerListener, initZoomControls, refreshFontFamilyList, refreshZoomLayout, setAwaitingRender, setCurrentFileName, syncAlignCombo, syncColorControls, syncColumnCombo, syncFontCombos, syncLineSpacingCombo, syncTablePropertiesRibbon } from './initUI';
+import { activateRibbonTab, clearPendingSelection,  initFindReplace, initFileOpen, initLineSpacingCombo, initNewDocument, initPageMargins, initRecentFiles, initRibbonTabs, initSave, initSaveAs, initSelectionListener, initShapeInsert, initTableInsert, initTableProperties, initViewOptions, initViewportScrollListener, initWorkerListener, initZoomControls, refreshZoomLayout, setAwaitingRender, setCurrentFileName, syncLineSpacingCombo, syncTablePropertiesRibbon } from './initUI';
+
+import { refreshFontFamilyList, syncFontCombos, initColumnCombo, initAlignCombo, initFontCombos, syncColumnCombo, syncAlignCombo, initColorControls,syncColorControls } from './handlers/formatControlsHandler';
 import { initSpellcheckListeners } from './spellcheck';
 import { syncStyleButtons,  initStyleButtons, initParagraphStyles } from './handlers/styleButtonsHandler';
 import { initEditorListeners, isComposingActive, hasPendingInputState } from './handlers/index';

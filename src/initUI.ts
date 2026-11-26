@@ -102,14 +102,6 @@ function getFontFamilyList(): string[] {
   return out;
 }
 
-export function refreshFontFamilyList(): void {
-  const familySelect = document.getElementById('font-family-select') as HTMLSelectElement | null;
-  if (!familySelect) return;
-  const current = familySelect.value;
-  fillSelect(familySelect, getFontFamilyList());
-  setSelectValue(familySelect, current || defaultFontFamily());
-}
-
 const FONT_SIZES_PT = [8, 9, 10, 11, 12, 14, 16, 18, 20, 22, 24, 26, 28, 36, 48, 72];
 const pxToPt = (px: number) => Math.round((px * 72 / 96) * 10) / 10;
 const ptToPx = (pt: number) => Math.round((pt * 96 / 72) * 100) / 100;
